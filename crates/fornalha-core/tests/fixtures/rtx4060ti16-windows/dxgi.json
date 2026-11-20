@@ -1,0 +1,18 @@
+[
+  {
+    "nome": "NVIDIA GeForce RTX 4060 Ti",
+    "vendor": 4318,
+    "device": 10245,
+    "vram_total_mb": 16076,
+    "vram_livre_mb": 15210,
+    "driver": "32.0.15.8157"
+  },
+  {
+    "nome": "Microsoft Basic Render Driver",
+    "vendor": 5140,
+    "device": 140,
+    "vram_total_mb": 0,
+    "vram_livre_mb": null,
+    "driver": null
+  }
+]

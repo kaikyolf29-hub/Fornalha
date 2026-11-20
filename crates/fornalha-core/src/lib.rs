@@ -1,0 +1,18 @@
+//! Núcleo da Fornalha.
+//!
+//! Tudo o que não é janela nem bandeja mora aqui, para poder ser testado sem
+//! interface gráfica e sem placa de vídeo.
+//!
+//! `gpu`, `distro`, `janela` e `util` vieram do Ignis (licença MIT, veja AVISOS.md).
+
+pub mod consts;
+pub mod distro;
+pub mod erro;
+pub mod gpu;
+pub mod janela;
+pub mod licencas;
+pub mod niveis;
+pub mod paths;
+pub mod projeto;
+pub mod recibos;
+pub mod util;

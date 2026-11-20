@@ -1,0 +1,133 @@
+{
+  "formato": 1,
+  "atualizado_em": "2026-11-20",
+  "nota": "Tabela do Plano 1 (níveis e modelos). A Fase 1 mede tudo em placa real antes de fechar a tabela. Licenças conferidas nas páginas dos modelos em 20/11/2026; 'nota' diz o que ainda vale reler antes de vender.",
+  "funcoes": [
+    { "id": "cerebro", "nome": "Cérebro (no Ignis)" },
+    { "id": "imagem", "nome": "Imagem" },
+    { "id": "3d", "nome": "3D com textura" },
+    { "id": "rig", "nome": "Rig" },
+    { "id": "animacao", "nome": "Animação" },
+    { "id": "efeitos", "nome": "Efeitos sonoros" },
+    { "id": "musica", "nome": "Música" },
+    { "id": "voz", "nome": "Voz e dublagem" },
+    { "id": "boca", "nome": "Movimento de boca" },
+    { "id": "video", "nome": "Vídeo do trailer" }
+  ],
+  "niveis": {
+    "leve": {
+      "cerebro": ["qwen3-4b"],
+      "imagem": ["flux2-klein-4b-q"],
+      "3d": ["trellis2-512-poucavram", "hunyuan3d-2mini"],
+      "rig": ["rigify-blender"],
+      "animacao": ["biblioteca-cmu"],
+      "efeitos": ["moss-soundeffect-v2"],
+      "musica": ["ace-step-1.5-turbo"],
+      "voz": ["chatterbox-ptbr"],
+      "boca": [],
+      "video": []
+    },
+    "equilibrado": {
+      "cerebro": ["qwen3-8b"],
+      "imagem": ["flux2-klein-4b"],
+      "3d": ["trellis2-512"],
+      "rig": ["unirig", "rigify-blender"],
+      "animacao": ["hy-motion-lite", "biblioteca-cmu"],
+      "efeitos": ["moss-soundeffect-v2"],
+      "musica": ["ace-step-1.5"],
+      "voz": ["chatterbox-ptbr"],
+      "boca": [],
+      "video": ["wan2.2-5b-gguf"]
+    },
+    "qualidade": {
+      "cerebro": ["qwen3-14b"],
+      "imagem": ["z-image-turbo-fp8", "flux2-klein-4b"],
+      "3d": ["trellis2-1024-poucavram"],
+      "rig": ["unirig", "rigify-blender"],
+      "animacao": ["hy-motion-1.0-q", "biblioteca-cmu"],
+      "efeitos": ["moss-soundeffect-v2"],
+      "musica": ["ace-step-1.5-xl-turbo"],
+      "voz": ["chatterbox-ptbr"],
+      "boca": ["audio2face-3d"],
+      "video": ["wan2.2-14b-gguf"]
+    },
+    "maximo": {
+      "cerebro": ["qwen3-32b"],
+      "imagem": ["z-image", "flux2-klein-4b"],
+      "3d": ["trellis2-1536"],
+      "rig": ["unirig", "rigify-blender"],
+      "animacao": ["hy-motion-1.0", "biblioteca-cmu"],
+      "efeitos": ["moss-soundeffect-v2"],
+      "musica": ["ace-step-1.5-xl"],
+      "voz": ["chatterbox-ptbr"],
+      "boca": ["audio2face-3d"],
+      "video": ["wan2.2-14b"]
+    }
+  },
+  "modelos": [
+    { "id": "qwen3-4b", "nome": "Qwen3 4B", "funcao": "cerebro", "onde": "ignis", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Qwen/Qwen3-4B", "uso_comercial": "sim", "vram_mb": 3500 },
+    { "id": "qwen3-8b", "nome": "Qwen3 8B", "funcao": "cerebro", "onde": "ignis", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Qwen/Qwen3-8B", "uso_comercial": "sim", "vram_mb": 6000 },
+    { "id": "qwen3-14b", "nome": "Qwen3 14B", "funcao": "cerebro", "onde": "ignis", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Qwen/Qwen3-14B", "uso_comercial": "sim", "vram_mb": 10000 },
+    { "id": "qwen3-32b", "nome": "Qwen3 32B", "funcao": "cerebro", "onde": "ignis", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Qwen/Qwen3-32B", "uso_comercial": "sim", "vram_mb": 20000 },
+
+    { "id": "flux2-klein-4b-q", "nome": "FLUX.2 klein 4B (quantizado)", "funcao": "imagem", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B", "uso_comercial": "sim", "vram_mb": 5000 },
+    { "id": "flux2-klein-4b", "nome": "FLUX.2 klein 4B", "funcao": "imagem", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B", "uso_comercial": "sim", "vram_mb": 9000, "nota": "Também edita com várias imagens de referência." },
+    { "id": "z-image-turbo-fp8", "nome": "Z-Image Turbo (FP8)", "funcao": "imagem", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Tongyi-MAI/Z-Image-Turbo", "uso_comercial": "sim", "vram_mb": 10000 },
+    { "id": "z-image", "nome": "Z-Image (completo)", "funcao": "imagem", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Tongyi-MAI/Z-Image", "uso_comercial": "sim", "vram_mb": 16000, "nota": "Conferir a licença da versão completa na página do modelo antes de vender." },
+    { "id": "flux2-dev", "nome": "FLUX.2 dev", "funcao": "imagem", "onde": "comfyui", "licenca": "FLUX.2 [dev] Non-Commercial License", "url_licenca": "https://huggingface.co/black-forest-labs/FLUX.2-dev", "uso_comercial": "nao" },
+    { "id": "flux2-klein-9b", "nome": "FLUX.2 klein 9B", "funcao": "imagem", "onde": "comfyui", "licenca": "Licença não comercial da Black Forest Labs", "url_licenca": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B", "uso_comercial": "nao" },
+    { "id": "qwen-image-2.1", "nome": "Qwen-Image 2.1", "funcao": "imagem", "onde": "comfyui", "licenca": "Licença de pesquisa", "url_licenca": "https://huggingface.co/Qwen", "uso_comercial": "nao" },
+
+    { "id": "trellis2-512-poucavram", "nome": "TRELLIS.2 512³ (pouca VRAM, lento)", "funcao": "3d", "onde": "worker", "licenca": "MIT", "url_licenca": "https://huggingface.co/microsoft/TRELLIS.2-4B", "uso_comercial": "sim", "requer_cuda": true, "vram_mb": 7500, "dependencias": ["nvdiffrast"] },
+    { "id": "trellis2-512", "nome": "TRELLIS.2 512³", "funcao": "3d", "onde": "worker", "licenca": "MIT", "url_licenca": "https://huggingface.co/microsoft/TRELLIS.2-4B", "uso_comercial": "sim", "requer_cuda": true, "vram_mb": 11000, "dependencias": ["nvdiffrast"] },
+    { "id": "trellis2-1024-poucavram", "nome": "TRELLIS.2 1024³ (pouca VRAM)", "funcao": "3d", "onde": "worker", "licenca": "MIT", "url_licenca": "https://huggingface.co/microsoft/TRELLIS.2-4B", "uso_comercial": "sim", "requer_cuda": true, "vram_mb": 15000, "dependencias": ["nvdiffrast"] },
+    { "id": "trellis2-1536", "nome": "TRELLIS.2 1536³ (completo)", "funcao": "3d", "onde": "worker", "licenca": "MIT", "url_licenca": "https://huggingface.co/microsoft/TRELLIS.2-4B", "uso_comercial": "sim", "requer_cuda": true, "vram_mb": 24000, "dependencias": ["nvdiffrast"] },
+    { "id": "hunyuan3d-2mini", "nome": "Hunyuan3D-2mini (só forma)", "funcao": "3d", "onde": "comfyui", "licenca": "Tencent Hunyuan 3D 2.0 Community License", "url_licenca": "https://huggingface.co/tencent/Hunyuan3D-2mini", "uso_comercial": "condicional", "aceite": "tencent-hunyuan", "vram_mb": 5000 },
+
+    { "id": "rigify-blender", "nome": "Rigify e pesos automáticos do Blender", "funcao": "rig", "onde": "blender", "licenca": "Blender (GPL); o rig gerado é seu", "url_licenca": "https://www.blender.org/about/license/", "uso_comercial": "sim" },
+    { "id": "unirig", "nome": "UniRig", "funcao": "rig", "onde": "worker", "licenca": "MIT", "url_licenca": "https://huggingface.co/VAST-AI/UniRig", "uso_comercial": "sim", "requer_cuda": true, "vram_mb": 8000 },
+
+    { "id": "biblioteca-cmu", "nome": "Biblioteca própria (2.605 capturas da CMU) e retarget", "funcao": "animacao", "onde": "biblioteca", "licenca": "Base de captura de movimento da CMU (livre, inclusive comercial)", "url_licenca": "http://mocap.cs.cmu.edu/faqs.php", "uso_comercial": "sim" },
+    { "id": "hy-motion-lite", "nome": "HY-Motion Lite", "funcao": "animacao", "onde": "comfyui", "licenca": "Tencent Hunyuan Community License", "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0", "uso_comercial": "condicional", "aceite": "tencent-hunyuan", "vram_mb": 4000 },
+    { "id": "hy-motion-1.0-q", "nome": "HY-Motion 1.0 (codificador de texto quantizado)", "funcao": "animacao", "onde": "comfyui", "licenca": "Tencent Hunyuan Community License", "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0", "uso_comercial": "condicional", "aceite": "tencent-hunyuan", "vram_mb": 10000 },
+    { "id": "hy-motion-1.0", "nome": "HY-Motion 1.0 (completo)", "funcao": "animacao", "onde": "comfyui", "licenca": "Tencent Hunyuan Community License", "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0", "uso_comercial": "condicional", "aceite": "tencent-hunyuan", "vram_mb": 16000 },
+
+    { "id": "moss-soundeffect-v2", "nome": "MOSS-SoundEffect v2.0", "funcao": "efeitos", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0", "uso_comercial": "sim" },
+    { "id": "audiogen", "nome": "AudioGen", "funcao": "efeitos", "onde": "comfyui", "licenca": "CC BY-NC 4.0", "url_licenca": "https://huggingface.co/facebook/audiogen-medium", "uso_comercial": "nao" },
+    { "id": "stable-audio-open", "nome": "Stable Audio Open", "funcao": "efeitos", "onde": "comfyui", "licenca": "Stability AI Community License", "url_licenca": "https://huggingface.co/stabilityai/stable-audio-open-1.0", "uso_comercial": "condicional", "teto_receita_usd": 1000000 },
+
+    { "id": "ace-step-1.5-turbo", "nome": "ACE-Step 1.5 turbo", "funcao": "musica", "onde": "comfyui", "licenca": "MIT", "url_licenca": "https://github.com/ACE-Step/ACE-Step-1.5", "uso_comercial": "sim", "nota": "O repositório dos pesos ainda não traz o arquivo LICENSE; vale reler antes de vender." },
+    { "id": "ace-step-1.5", "nome": "ACE-Step 1.5", "funcao": "musica", "onde": "comfyui", "licenca": "MIT", "url_licenca": "https://github.com/ACE-Step/ACE-Step-1.5", "uso_comercial": "sim", "nota": "O repositório dos pesos ainda não traz o arquivo LICENSE; vale reler antes de vender." },
+    { "id": "ace-step-1.5-xl-turbo", "nome": "ACE-Step 1.5 XL turbo", "funcao": "musica", "onde": "comfyui", "licenca": "MIT", "url_licenca": "https://huggingface.co/ACE-Step/acestep-v15-xl-base", "uso_comercial": "sim", "nota": "O repositório dos pesos ainda não traz o arquivo LICENSE; vale reler antes de vender." },
+    { "id": "ace-step-1.5-xl", "nome": "ACE-Step 1.5 XL", "funcao": "musica", "onde": "comfyui", "licenca": "MIT", "url_licenca": "https://huggingface.co/ACE-Step/acestep-v15-xl-base", "uso_comercial": "sim", "nota": "O repositório dos pesos ainda não traz o arquivo LICENSE; vale reler antes de vender." },
+
+    { "id": "chatterbox-ptbr", "nome": "Chatterbox Multilingual (português do Brasil)", "funcao": "voz", "onde": "comfyui", "licenca": "MIT", "url_licenca": "https://huggingface.co/ResembleAI/chatterbox", "uso_comercial": "sim", "obrigacoes": ["O áudio sai com uma marca d'água inaudível (Perth), que não deve ser removida."] },
+    { "id": "omnivoice", "nome": "OmniVoice (o do Ignis)", "funcao": "voz", "onde": "ignis", "licenca": "CC BY-NC 4.0", "url_licenca": "https://huggingface.co/k2-fsa/OmniVoice", "uso_comercial": "nao", "nota": "Serve para testar falas; dublagem de jogo à venda usa o Chatterbox." },
+
+    { "id": "audio2face-3d", "nome": "Audio2Face-3D v3.0", "funcao": "boca", "onde": "worker", "licenca": "NVIDIA Open Model License", "url_licenca": "https://huggingface.co/nvidia/Audio2Face-3D-v3.0", "uso_comercial": "sim", "requer_cuda": true, "nota": "O Audio2Emotion tem termos próprios: só pode ser usado junto com o Audio2Face." },
+
+    { "id": "wan2.2-5b-gguf", "nome": "Wan 2.2 5B (GGUF)", "funcao": "video", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B", "uso_comercial": "sim", "vram_mb": 8000 },
+    { "id": "wan2.2-14b-gguf", "nome": "Wan 2.2 14B (GGUF)", "funcao": "video", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B", "uso_comercial": "sim", "vram_mb": 12000 },
+    { "id": "wan2.2-14b", "nome": "Wan 2.2 14B (completo)", "funcao": "video", "onde": "comfyui", "licenca": "Apache 2.0", "url_licenca": "https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B", "uso_comercial": "sim", "vram_mb": 24000 },
+    { "id": "ltx-2", "nome": "LTX-2", "funcao": "video", "onde": "comfyui", "licenca": "LTX-2 Community License (paga a partir de US$ 10 milhões de receita)", "url_licenca": "https://huggingface.co/Lightricks/LTX-2", "uso_comercial": "condicional", "teto_receita_usd": 10000000 },
+
+    { "id": "meshy-gratis", "nome": "Meshy (plano grátis, modo turbo)", "funcao": "3d", "onde": "api", "licenca": "CC BY 4.0 (plano grátis)", "url_licenca": "https://www.meshy.ai/terms", "uso_comercial": "sim", "obrigacoes": ["Asset em CC BY 4.0: a Fornalha coloca o crédito da Meshy nos créditos do jogo."] },
+    { "id": "meshy-pago", "nome": "Meshy (plano pago, modo turbo)", "funcao": "3d", "onde": "api", "licenca": "Termos da Meshy (plano pago)", "url_licenca": "https://www.meshy.ai/terms", "uso_comercial": "sim" },
+    { "id": "mixamo", "nome": "Mixamo", "funcao": "animacao", "onde": "api", "licenca": "Termos da Adobe para o Mixamo", "url_licenca": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html", "uso_comercial": "sim", "obrigacoes": ["O arquivo original do Mixamo nunca vai para pacote de assets nem loja: só dentro do jogo compilado."] }
+  ],
+  "dependencias": {
+    "nvdiffrast": {
+      "nome": "nvdiffrast",
+      "licenca": "NVIDIA Source Code License (só pesquisa e avaliação)",
+      "url_licenca": "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt",
+      "uso_comercial": "nao",
+      "como_resolver": "Fase 1: assar a textura sem o nvdiffrast (no Blender, por exemplo). Depois disso, esta dependência sai do catálogo."
+    }
+  },
+  "grupos_de_aceite": {
+    "tencent-hunyuan": {
+      "nome": "Licença comunitária da Tencent (Hunyuan)",
+      "texto": "Uso comercial permitido, com regras de território (a licença não vale na União Europeia, no Reino Unido e na Coreia do Sul) e de número de usuários. Leia a licença antes de aceitar. Sem aceite, a Fornalha usa as alternativas: a biblioteca de animações e, no 3D, o TRELLIS.2 (quando a textura sem o nvdiffrast ficar pronta, na Fase 1)."
+    }
+  }
+}

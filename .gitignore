@@ -1,0 +1,8 @@
+/target
+**/target
+/app/src-tauri/gen/schemas
+/dist
+node_modules/
+.DS_Store
+*.log
+/testes-dados

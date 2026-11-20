@@ -1,0 +1,12 @@
+{
+  "name": "fornalha-teste-mcp",
+  "private": true,
+  "type": "module",
+  "description": "Teste de ponta a ponta do MCP da Fornalha com o SDK oficial (o mesmo do Claude Code)",
+  "scripts": {
+    "teste": "node teste.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}

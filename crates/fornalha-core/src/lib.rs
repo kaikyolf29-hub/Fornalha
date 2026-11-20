@@ -5,14 +5,20 @@
 //!
 //! `gpu`, `distro`, `janela` e `util` vieram do Ignis (licença MIT, veja AVISOS.md).
 
+pub mod api;
+pub mod config;
 pub mod consts;
 pub mod distro;
 pub mod erro;
+pub mod ferramentas;
 pub mod gpu;
+pub mod ignis;
 pub mod janela;
 pub mod licencas;
+pub mod mcp;
 pub mod niveis;
 pub mod paths;
 pub mod projeto;
 pub mod recibos;
+pub mod servico;
 pub mod util;

@@ -6,3 +6,4 @@ node_modules/
 .DS_Store
 *.log
 /testes-dados
+/testes/mcp-e2e/node_modules

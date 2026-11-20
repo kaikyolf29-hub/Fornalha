@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/fornalha-core",
+    "crates/fornalha-cli",
 ]
 
 [workspace.package]

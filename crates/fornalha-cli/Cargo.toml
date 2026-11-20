@@ -1,0 +1,18 @@
+[package]
+name = "fornalha-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Linha de comando da Fornalha: MCP por stdio, API local sem janela e diagnóstico"
+
+[[bin]]
+name = "fornalha-cli"
+path = "src/main.rs"
+
+[dependencies]
+fornalha-core = { path = "../fornalha-core" }
+tokio.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

@@ -876,10 +876,22 @@ pub async fn animar(f: &Fornalha, a: ArgsAnimacao, quem: &str) -> Resultado<Valu
         Some(o) => {
             json!({"tarefa": "retarget", "entrada": arquivo, "origem": f.resolver_no_projeto(&p, o), "saida": arquivo, "animacoes": a.animacoes})
         }
-        None => json!({"tarefa": "animar", "entrada": arquivo, "saida": arquivo, "animacoes": a.animacoes}),
+        None => {
+            let mut t = json!({"tarefa": "animar", "entrada": arquivo, "saida": arquivo, "animacoes": a.animacoes});
+            if let Some(an) = crate::pacotes::info(&f.paths, crate::pacotes::Pacote::Animacoes) {
+                t["animacoes_de"] = an["bibliotecas"].clone();
+            }
+            t
+        }
     };
     let r = forjar(f, &tarefa).await?;
-    let modelo = if a.origem.is_some() { "forja-3d" } else { "biblioteca-fornalha" };
+    let modelo = if a.origem.is_some() {
+        "forja-3d"
+    } else if r.get("novas").is_some() {
+        "biblioteca-quaternius"
+    } else {
+        "biblioteca-fornalha"
+    };
     recibo(f, &p, &arquivo, modelo, None, None, json!({"animacoes": a.animacoes, "origem": a.origem}), quem).await?;
     f.avisar_ponte(vec![rel(&p.raiz, &arquivo)]);
     Ok(json!({"arquivo": arquivo, "estatisticas": r["estatisticas"]}))

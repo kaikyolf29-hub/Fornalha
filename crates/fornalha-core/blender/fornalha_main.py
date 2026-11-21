@@ -349,17 +349,25 @@ def tarefa_movimento(t):
     arm = next((o for o in objs if o.type == "ARMATURE"), None)
     if arm is None:
         raise ValueError("o modelo não tem esqueleto: use create_skeleton antes")
-    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - {b.name for b in arm.data.bones}
-    if faltando:
-        raise ValueError(f"o esqueleto não é o padrão da Fornalha (faltam {sorted(faltando)})")
+    ossos = {b.name for b in arm.data.bones}
+    jogo = {"pelvis", "spine_01", "head", "upperarm_l", "upperarm_r", "thigh_l", "thigh_r"} <= ossos
+    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - ossos
+    if faltando and not jogo:
+        raise ValueError(f"o esqueleto não é o padrão da Fornalha nem o de jogo (faltam {sorted(faltando)})")
     fc_placa.guardar_acoes(arm)
     with open(t["movimento"], encoding="utf-8") as f:
         mov = _json.load(f)
     nome = t.get("nome_animacao") or "movimento"
-    act, quadros, _ = fc_placa.aplicar_movimento(arm, mov, nome, bool(t.get("laco", False)), bool(t.get("no_lugar", True)))
+    laco, no_lugar = bool(t.get("laco", False)), bool(t.get("no_lugar", True))
+    if jogo:
+        act, quadros = fc_placa.movimento_por_retarget(arm, mov, nome, laco, no_lugar)
+        nomes = {"LeftHand": "hand_l", "RightHand": "hand_r", "LeftFoot": "foot_l", "RightFoot": "foot_r", "Head": "head"}
+    else:
+        act, quadros, _ = fc_placa.aplicar_movimento(arm, mov, nome, laco, no_lugar)
+        nomes = {k: k for k in ("LeftHand", "RightHand", "LeftFoot", "RightFoot", "Head")}
     conferir = {}
-    for osso in ("LeftHand", "RightHand", "LeftFoot", "RightFoot", "Head"):
-        conferir[osso] = {"inicio": fc_placa.posicao_do_osso(arm, osso, 1, act), "fim": fc_placa.posicao_do_osso(arm, osso, quadros, act)}
+    for chave, osso in nomes.items():
+        conferir[chave] = {"inicio": fc_placa.posicao_do_osso(arm, osso, 1, act), "fim": fc_placa.posicao_do_osso(arm, osso, quadros, act)}
     arm.animation_data.action = act
     saida = t["saida"]
     tamanho = c.exportar_glb(saida, objs)
@@ -408,7 +416,23 @@ def tarefa_animar(t):
     arm = next((o for o in objs if o.type == "ARMATURE"), None)
     if arm is None:
         raise ValueError("o modelo não tem esqueleto: use create_skeleton antes")
-    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - {b.name for b in arm.data.bones}
+    ossos = {b.name for b in arm.data.bones}
+    if {"pelvis", "spine_01", "head", "upperarm_l", "thigh_l"} <= ossos:
+        # esqueleto de jogo (humano realista): animações de captura do pacote
+        if not t.get("animacoes_de"):
+            raise ValueError("este personagem usa as animações de captura: baixe o pacote de animações (Máquina → Pacotes)")
+        import fc_retarget
+
+        import fc_placa
+
+        fc_placa.guardar_acoes(arm)
+        acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"))
+        saida = t["saida"]
+        tamanho = c.exportar_glb(saida, objs)
+        malhas = [o for o in objs if o.type == "MESH"]
+        todas = [a for a in bpy.data.actions if a.use_fake_user]
+        return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "estatisticas": estatisticas(malhas, arm, todas), "novas": [a.name for a in acoes]}
+    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - ossos
     if faltando:
         raise ValueError(f"o esqueleto não é o padrão da Fornalha (faltam {sorted(faltando)})")
     for a in list(bpy.data.actions):

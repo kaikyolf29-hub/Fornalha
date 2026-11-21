@@ -43,8 +43,18 @@ _CMU = {"Hips": "pelvis", "LowerBack": "spine_01", "Spine": "spine_02", "Spine1"
         "RightUpLeg": "thigh_r", "RightLeg": "calf_r", "RightFoot": "foot_r", "RightToeBase": "ball_r"}
 
 
+_SMPL = {"smpl_pelvis": "pelvis", "smpl_left_hip": "thigh_l", "smpl_right_hip": "thigh_r", "smpl_spine1": "spine_01",
+         "smpl_left_knee": "calf_l", "smpl_right_knee": "calf_r", "smpl_spine2": "spine_02", "smpl_left_ankle": "foot_l",
+         "smpl_right_ankle": "foot_r", "smpl_spine3": "spine_03", "smpl_left_foot": "ball_l", "smpl_right_foot": "ball_r",
+         "smpl_neck": "neck_01", "smpl_left_collar": "clavicle_l", "smpl_right_collar": "clavicle_r", "smpl_head": "head",
+         "smpl_left_shoulder": "upperarm_l", "smpl_right_shoulder": "upperarm_r", "smpl_left_elbow": "lowerarm_l",
+         "smpl_right_elbow": "lowerarm_r", "smpl_left_wrist": "hand_l", "smpl_right_wrist": "hand_r"}
+
+
 def nome_padrao(n):
     """Qualquer convenção conhecida → nome do esqueleto de jogo (ou None)."""
+    if n in _SMPL:
+        return _SMPL[n]
     if n.startswith("DEF-"):
         return _mapa_ual1(n)
     curto = n.split(":")[-1]

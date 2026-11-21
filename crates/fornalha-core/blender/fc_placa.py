@@ -196,6 +196,84 @@ def aplicar_movimento(arm, mov, nome, laco, no_lugar=True, fps=30):
     return act, quadros, H
 
 
+# Esqueleto SMPL em T-pose (coordenadas do Blender: Z para cima, olhando -Y), para
+# passar o movimento para QUALQUER esqueleto pelo retarget (poses de descanso diferentes).
+SMPL_NOMES = ["smpl_pelvis", "smpl_left_hip", "smpl_right_hip", "smpl_spine1", "smpl_left_knee", "smpl_right_knee", "smpl_spine2",
+              "smpl_left_ankle", "smpl_right_ankle", "smpl_spine3", "smpl_left_foot", "smpl_right_foot", "smpl_neck", "smpl_left_collar",
+              "smpl_right_collar", "smpl_head", "smpl_left_shoulder", "smpl_right_shoulder", "smpl_left_elbow", "smpl_right_elbow",
+              "smpl_left_wrist", "smpl_right_wrist"]
+SMPL_PAI = [-1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 12, 13, 14, 16, 17, 18, 19]
+SMPL_FILHO = {0: 3, 1: 4, 2: 5, 3: 6, 4: 7, 5: 8, 6: 9, 7: 10, 8: 11, 9: 12, 12: 15, 13: 16, 14: 17, 16: 18, 17: 19, 18: 20, 19: 21}
+SMPL_JUNTAS = [(0, 0, 0.93), (0.07, 0, 0.86), (-0.07, 0, 0.86), (0, 0, 1.03), (0.08, 0, 0.48), (-0.08, 0, 0.48), (0, 0, 1.16),
+               (0.08, 0, 0.08), (-0.08, 0, 0.08), (0, 0, 1.24), (0.08, -0.12, 0.02), (-0.08, -0.12, 0.02), (0, 0, 1.44), (0.07, 0, 1.38),
+               (-0.07, 0, 1.38), (0, 0, 1.54), (0.18, 0, 1.40), (-0.18, 0, 1.40), (0.44, 0, 1.40), (-0.44, 0, 1.40), (0.68, 0, 1.40),
+               (-0.68, 0, 1.40)]
+_PONTA = {10: (0, -0.06, 0), 11: (0, -0.06, 0), 15: (0, 0, 0.12), 20: (0.08, 0, 0), 21: (-0.08, 0, 0)}
+
+
+def esqueleto_smpl():
+    dados = bpy.data.armatures.new("smpl_temp")
+    arm = bpy.data.objects.new("smpl_temp", dados)
+    bpy.context.scene.collection.objects.link(arm)
+    bpy.context.view_layer.objects.active = arm
+    for o in bpy.context.scene.objects:
+        o.select_set(o == arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    ebs = []
+    for j, nome in enumerate(SMPL_NOMES):
+        eb = dados.edit_bones.new(nome)
+        eb.head = Vector(SMPL_JUNTAS[j])
+        eb.tail = Vector(SMPL_JUNTAS[SMPL_FILHO[j]]) if j in SMPL_FILHO else Vector(SMPL_JUNTAS[j]) + Vector(_PONTA[j])
+        ebs.append(eb)
+    for j, p in enumerate(SMPL_PAI):
+        if p >= 0:
+            ebs[j].parent = ebs[p]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return arm
+
+
+def movimento_por_retarget(alvo, mov, nome, laco, no_lugar=True):
+    """SMPL → esqueleto SMPL temporário (rotações locais em eixos do mundo) → retarget para o alvo."""
+    import fc_retarget
+
+    temp = esqueleto_smpl()
+    rot = mov["rotacoes"]
+    trans = mov.get("translacao") or [[0.0, 0.0, 0.0]] * len(rot)
+    C = Quaternion((1, 0, 0), math.radians(90)) if mov.get("eixo_cima", "Y").upper() == "Y" else Quaternion()
+    Ci = C.inverted()
+    ad = temp.animation_data_create()
+    fonte = bpy.data.actions.new("smpl_fonte")
+    ad.action = fonte
+    for pb in temp.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+    t0 = C @ Vector(trans[0])
+    for k, juntas in enumerate(rot):
+        for j, nome_osso in enumerate(SMPL_NOMES):
+            if j >= len(juntas):
+                continue
+            pb = temp.pose.bones[nome_osso]
+            pb.rotation_quaternion = _local(pb, C @ _eixo_angulo(juntas[j]) @ Ci)
+            pb.keyframe_insert("rotation_quaternion", frame=k + 1)
+        d = C @ Vector(trans[k]) - t0
+        if no_lugar:
+            d.x = 0.0
+            d.y = 0.0
+        pel = temp.pose.bones["smpl_pelvis"]
+        pel.location = pel.bone.matrix_local.to_3x3().inverted() @ d
+        pel.keyframe_insert("location", frame=k + 1)
+    try:
+        fonte.frame_start, fonte.frame_end = 1, len(rot)
+        fonte.use_frame_range = True
+    except Exception:
+        pass
+    rt = fc_retarget.Retarget(temp, alvo)
+    acao = rt.gravar(fonte, nome, laco)
+    bpy.data.objects.remove(temp, do_unlink=True)
+    bpy.data.actions.remove(fonte)
+    quadros = int(acao.frame_range[1] - acao.frame_range[0]) + 1
+    return acao, quadros
+
+
 def posicao_do_osso(arm, osso, quadro, acao):
     arm.animation_data.action = acao
     bpy.context.scene.frame_set(quadro)

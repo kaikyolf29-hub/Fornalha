@@ -18,6 +18,39 @@ O app é para **Windows e Linux** (nada específico do Matsu OS, a pedido do cri
 | 4 · Agente completo | 33 ferramentas no MCP, "crie um inimigo novo" testado na engine, pedido livre pelo cérebro, fila da noite | pronta |
 | 5 · Venda | Trailer, chave de ativação, atualização privada | não começou (só quando o criador pedir) |
 
+## Rodada de qualidade (Fornalha 3D, 21/11/2026, a pedido do criador)
+Meta do criador: personagens, armaduras, armas, cenário e movimento no nível das referências
+(templário, cavaleiro de placas, rosto realista, captura de movimento fluida tipo GTA/Resident Evil).
+- **Pacotes de conteúdo CC0** (Máquina → Pacotes, ou `fornalha-cli baixar-pacote`): MakeHuman
+  (malha base, formas, esqueleto de jogo, pele, olhos, cabelo), Quaternius Universal Animation
+  Library 1 e 2 (89 animações de jogo) e ambientCG (texturas PBR e céus HDRI). Baixam **só no clique
+  da pessoa**; o núcleo continua sem HTTPS de saída (o download é um script Python à parte).
+- **Humano realista**: corpo e rosto do MakeHuman lidos por código próprio (o código do MPFB não roda;
+  a sessão barrou executar extensão baixada e o caminho por dados é mais seguro), pele com SSS e poros
+  no render, olhos, sobrancelhas, cílios, dentes, cabelo, esqueleto de jogo (nomes Unreal) e pesos.
+- **Roupa medieval PBR**: cota de malha, sobreveste com cruz, cinto, botas, luvas, capa com pregas.
+- **Armadura de placas** (`cavaleiro_placas`): placas rígidas por osso, superfície convexa sobre o
+  corpo, borda chanfrada, lâminas com rebites (ombreiras, faldas, sapatos, dedos), elmo com fendas e
+  respiros; espada longa com lâmina em losango e escudo de pipa com a cruz.
+- **Movimento**: retarget de captura (Quaternius; também lê Mixamo e CMU em BVH) entre poses de descanso
+  diferentes; 15 animações por personagem. No jogo: sequência de golpes com memória de comando, pique,
+  no ar e aterrissar, **capa simulada por mola** (SpringBoneSimulator3D) e **ragdoll** na morte.
+- **Render do jogo**: céu HDRI, AgX, SSAO/SSIL, SDFGI, névoa volumétrica e TAA (Forward+).
+- **Janela**: nome exibido Fornalha 3D, pacotes em Máquina, visualizador 3D girável na Galeria.
+- Provado aqui: personagem realista criado pelo MCP, montado na Godot 4.6.1 e testado (0 erros, o
+  jogador andou ~12 m, inimigos derrotados caindo pela física, "pode vender").
+
+Falta para chegar nas referências (próximas rodadas):
+1. **Cenário**: terreno com relevo, vegetação espalhada, construções medievais de verdade (base de pedra,
+   enxaimel, telhado), objetos e névoa. Hoje o mundo já sai em PBR, mas ainda é um blockout simples.
+2. **Armadura**: bordas viradas com rebites no peitoral, viseira trabalhada, desgaste/ferrugem nas
+   bordas "assado" em textura (hoje a cor final só existe no render; o glTF leva a textura base).
+3. **Rosto**: detalhe de pele (poros, rugas por idade) assado em mapa normal; cabelo melhor.
+4. **Mais movimento**: 100STYLE (CC BY 4.0, 100 estilos de andar) e CMU (lutas), importar Mixamo baixado
+   pela pessoa, pés firmes no chão (TwoBoneIK3D), mistura de locomoção por velocidade.
+5. **Máximo com placa NVIDIA**: TRELLIS.2 / Step1X-3D (Apache 2.0) para peças únicas a partir da arte.
+6. Futuro (criador): captura de movimento pelo Kinect ou por webcam.
+
 ## O que está pronto
 - **Núcleo** (`crates/fornalha-core`):
   - `projeto`, `licencas` + `manifest/modelos.json`, `niveis`, `recibos`, `api`, `mcp` (Fase 0);
@@ -67,6 +100,13 @@ A Fornalha resolve sem ele (veja Decisões) e o catálogo continua bloqueando o 
 comercial até a verificação passar na máquina. Outras notas: ACE-Step 1.5 é MIT, mas o repositório
 dos pesos ainda não traz o LICENSE; HY-Motion e Hunyuan3D têm a regra de território da Tencent
 (não vale na União Europeia, no Reino Unido e na Coreia do Sul).
+
+## Decisões que são do criador
+- **Rede**: o CLAUDE.md diz que a Fornalha só fala com 127.0.0.1. Os pacotes CC0 e os modelos de placa
+  baixam de sites de fora **só quando você clica** (nada é enviado). Se preferir, eles podem ir dentro
+  do instalador (fica ~500 MB maior).
+- **Nome do instalador**: a janela e a bandeja já dizem Fornalha 3D; o instalador e a pasta continuam
+  "Fornalha" para não mudar caminhos antes da Fase 5.
 
 ## Pedidos para o Ignis
 Já entregues no Ignis 0.4.0 e usados pela Fornalha: voz comercial (Chatterbox), imagem (Z-Image

@@ -41,3 +41,32 @@ async fn ignis_desligado_nao_trava() {
     assert!(e.erro.is_some());
     assert!(inicio.elapsed() < std::time::Duration::from_secs(3));
 }
+
+#[tokio::test]
+async fn estado_do_ignis_fica_guardado_por_alguns_segundos() {
+    // Cada tela pergunta o estado; no Windows, porta fechada demora quase 1 s para responder.
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    let pedidos = Arc::new(AtomicUsize::new(0));
+    let p2 = pedidos.clone();
+    let app = axum::Router::new().route(
+        "/motor/estado",
+        get(move || {
+            p2.fetch_add(1, Ordering::SeqCst);
+            async { Json(json!({"fase": "pronto"})) }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let porta = l.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+
+    let cache = ignis::Cache::new(std::time::Duration::from_secs(10));
+    assert!(cache.consultar(porta).await.conectado);
+    assert!(cache.consultar(porta).await.conectado);
+    assert_eq!(pedidos.load(Ordering::SeqCst), 1, "a segunda consulta usa o guardado");
+
+    let curto = ignis::Cache::new(std::time::Duration::ZERO);
+    curto.consultar(porta).await;
+    curto.consultar(porta).await;
+    assert_eq!(pedidos.load(Ordering::SeqCst), 3, "sem tempo de guarda, pergunta sempre");
+}

@@ -13,6 +13,8 @@ use crate::consts::APP_ID;
 pub struct Paths {
     pub config_dir: PathBuf,
     pub data_dir: PathBuf,
+    /// Tudo numa pasta só (`FORNALHA_HOME` ou testes): os projetos também ficam lá dentro.
+    pub isolada: bool,
 }
 
 impl Paths {
@@ -23,13 +25,13 @@ impl Paths {
         }
         let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join(APP_ID);
         let data_dir = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")).join(APP_ID);
-        Self { config_dir, data_dir }
+        Self { config_dir, data_dir, isolada: false }
     }
 
     /// Tudo debaixo de uma pasta (testes e modo portátil).
     pub fn under(base: impl AsRef<Path>) -> Self {
         let base = base.as_ref();
-        Self { config_dir: base.join("config"), data_dir: base.join("dados") }
+        Self { config_dir: base.join("config"), data_dir: base.join("dados"), isolada: true }
     }
 
     pub fn config_file(&self) -> PathBuf {
@@ -41,7 +43,7 @@ impl Paths {
 
     /// Pasta padrão onde os projetos novos são criados: Documentos/Fornalha.
     pub fn pasta_projetos_padrao(&self) -> PathBuf {
-        if std::env::var_os("FORNALHA_HOME").is_some() {
+        if self.isolada {
             return self.data_dir.join("projetos");
         }
         dirs::document_dir().or_else(dirs::home_dir).unwrap_or_else(|| self.data_dir.clone()).join("Fornalha")
@@ -81,4 +83,17 @@ pub fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> std::io::Resul
     let mut bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
     bytes.push(b'\n');
     write_atomic(path, &bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pasta_isolada_guarda_os_projetos_dentro_dela() {
+        // Testes e modo portátil nunca podem criar projetos nos Documentos da pessoa.
+        let tmp = tempfile::tempdir().unwrap();
+        let p = Paths::under(tmp.path());
+        assert!(p.pasta_projetos_padrao().starts_with(tmp.path()), "{}", p.pasta_projetos_padrao().display());
+    }
 }

@@ -63,3 +63,27 @@ pub async fn consultar(porta: u16) -> EstadoIgnis {
         erro: None,
     }
 }
+
+/// Guarda a última resposta do Ignis por um tempo, para as telas não esperarem a cada clique.
+pub struct Cache {
+    validade: Duration,
+    ultimo: tokio::sync::Mutex<Option<(std::time::Instant, u16, EstadoIgnis)>>,
+}
+
+impl Cache {
+    pub fn new(validade: Duration) -> Self {
+        Self { validade, ultimo: tokio::sync::Mutex::new(None) }
+    }
+
+    pub async fn consultar(&self, porta: u16) -> EstadoIgnis {
+        let mut u = self.ultimo.lock().await;
+        if let Some((quando, p, e)) = u.as_ref() {
+            if *p == porta && quando.elapsed() < self.validade {
+                return e.clone();
+            }
+        }
+        let e = consultar(porta).await;
+        *u = Some((std::time::Instant::now(), porta, e.clone()));
+        e
+    }
+}

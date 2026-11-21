@@ -29,6 +29,7 @@ Pronto da Fase 0 ("o Claude Code cria um projeto novo pelo MCP"):
 
 ## Provado vs. falta provar
 - Provado aqui (Linux, sem placa): todos os testes, o app abrindo numa tela virtual (janela, bandeja, API, criar projeto clicando, aceite de licença, fechar para a bandeja, instância única), MCP pelo executável do app.
+- Memória em repouso (Linux, release, janela fechada): ~21 MB próprios (Private_Dirty); ~107 MB de RSS contando o código do GTK/WebKit mapeado do disco. A medida do Windows vem do teste do criador.
 - Provado no CI: veja o último run de **CI** e **Instaladores** (Windows instalado de verdade, com foto da janela).
 - Falta provar (só na máquina do criador): detecção da RX 580 e da placa nova reais, bandeja do Windows, cantos e Aero Snap do Windows 11, Claude Code dele criando o projeto.
 

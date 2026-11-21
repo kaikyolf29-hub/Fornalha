@@ -283,7 +283,7 @@ fn nivel_arg(n: Option<&str>) -> Resultado<Option<Nivel>> {
 pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado<Value> {
     match nome {
         "get_status" => {
-            let ignis = crate::ignis::consultar(f.porta_ignis()).await;
+            let ignis = f.estado_ignis().await;
             let sugestao = f.sugestao().await;
             let atual = f.projeto_atual().and_then(|r| projeto::abrir(&r).ok());
             Ok(json!({

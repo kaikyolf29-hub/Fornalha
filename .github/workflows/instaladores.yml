@@ -78,7 +78,7 @@ jobs:
           Start-Sleep -Seconds 10
           $procs = Get-CimInstance Win32_Process -Filter "Name='fornalha.exe'" | Select-Object ProcessId, CommandLine
           $procs | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
-          ./scripts/foto-da-tela.ps1 janela-windows.png
+          try { ./scripts/foto-da-tela.ps1 janela-windows.png } catch { Write-Host "sem foto da tela: $_" }
           if (-not ($procs | Where-Object { $_.CommandLine -like '*--janela*' })) { throw "a janela não abriu" }
           Get-ChildItem (Join-Path $env:FORNALHA_HOME 'dados\registros') -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 20 }
 

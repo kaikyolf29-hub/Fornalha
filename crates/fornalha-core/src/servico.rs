@@ -25,6 +25,7 @@ pub struct Fornalha {
     projeto_atual: Mutex<Option<PathBuf>>,
     /// Porta escolhida só para esta execução (ex.: `fornalha-cli servir --porta`).
     porta_fixa: Mutex<Option<u16>>,
+    ignis: crate::ignis::Cache,
 }
 
 impl Fornalha {
@@ -39,6 +40,7 @@ impl Fornalha {
             deteccao_fixa: false,
             projeto_atual: Mutex::new(None),
             porta_fixa: Mutex::new(None),
+            ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
         })
     }
 
@@ -55,6 +57,7 @@ impl Fornalha {
             deteccao_fixa: true,
             projeto_atual: Mutex::new(None),
             porta_fixa: Mutex::new(None),
+            ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
         })
     }
 
@@ -75,6 +78,11 @@ impl Fornalha {
     /// Usa outra porta só nesta execução, sem mudar a configuração.
     pub fn fixar_porta(&self, porta: u16) {
         *self.porta_fixa.lock().unwrap() = Some(porta);
+    }
+
+    /// Estado do Ignis (guardado por 10 s).
+    pub async fn estado_ignis(&self) -> crate::ignis::EstadoIgnis {
+        self.ignis.consultar(self.porta_ignis()).await
     }
 
     pub fn porta_ignis(&self) -> u16 {

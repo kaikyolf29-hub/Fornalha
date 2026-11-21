@@ -349,8 +349,22 @@ pub struct OpcoesTeste {
     pub video: bool,
 }
 
-/// run_test: abre o jogo em modo de teste e devolve o relatório.
+/// run_test: abre o jogo em modo de teste e devolve o relatório. Se a janela
+/// não abrir (máquina sem placa nem OpenGL), roda de novo sem janela.
 pub async fn testar(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Value> {
+    match testar_uma_vez(engine, raiz, pasta_saida, op).await {
+        Err(e) if e.codigo == "jogo_nao_rodou" && !op.sem_janela => {
+            let sem = OpcoesTeste { sem_janela: true, video: false, ..op.clone() };
+            let mut rel = testar_uma_vez(engine, raiz, pasta_saida, &sem).await?;
+            rel["modo"] = json!("sem janela (a janela da engine não abriu nesta máquina)");
+            rel["aviso_janela"] = json!(e.mensagem);
+            Ok(rel)
+        }
+        outro => outro,
+    }
+}
+
+async fn testar_uma_vez(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Value> {
     std::fs::create_dir_all(pasta_saida).map_err(|e| Erro::io(pasta_saida, e))?;
     let _ = std::fs::remove_file(pasta_saida.join("relatorio.json"));
     let r = caminho_str(raiz);

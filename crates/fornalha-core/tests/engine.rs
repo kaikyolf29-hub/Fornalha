@@ -104,7 +104,7 @@ async fn do_zero_ao_jogo_rodando_na_engine() {
     let total = rel["inimigos"]["total"].as_u64().unwrap();
     assert!(rel["inimigos"]["vivos"].as_u64().unwrap() < total, "o jogador derrotou o inimigo que chegou perto: {}", rel["inimigos"]);
     assert!(rel["assets"].as_array().unwrap().iter().any(|a| a["arquivo"] == "World/blockout.glb"));
-    if tem_tela {
+    if tem_tela && !rel["modo"].as_str().unwrap_or("").starts_with("sem janela") {
         assert!(!rel["capturas"].as_array().unwrap().is_empty(), "capturas do jogo");
     }
     assert_eq!(rel["passou"], Value::Bool(true));

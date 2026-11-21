@@ -36,6 +36,9 @@ const FERRAMENTAS = [
   "get_status", "create_project", "open_project", "list_projects", "get_project", "update_project",
   "detect_gpu", "list_quality_levels", "choose_model", "list_models", "record_receipt",
   "list_receipts", "check_licenses", "export_credits",
+  "create_character", "generate_concept", "generate_3d", "create_material", "create_skeleton", "generate_animation",
+  "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_code",
+  "import_to_engine", "run_test",
 ];
 
 const PASTAS = ["GameDesign", "World", "Characters", "Enemies", "Items", "Weapons", "Animations",
@@ -90,6 +93,13 @@ async function roteiro(client, nomeCliente, quemEsperado, home) {
   const creditos = await client.callTool({ name: "export_credits", arguments: {} });
   confere(fs.existsSync(path.join(raiz, "ai", "creditos-e-licencas.md")) && creditos.structuredContent?.assets_com_ia === 1,
     "export_credits grava o relatório");
+
+  const musica = await client.callTool({ name: "generate_music", arguments: { situacao: "vila", compassos: 4 } });
+  confere(musica.structuredContent?.loop === true && fs.existsSync(path.join(raiz, "Audio", "musica", "vila.wav")), "generate_music grava a trilha em loop");
+  const sfx = await client.callTool({ name: "generate_sfx", arguments: { efeitos: ["passo_grama", "golpe"], variacoes: 2 } });
+  confere(sfx.structuredContent?.arquivos?.length === 4, "generate_sfx grava os efeitos com variações");
+  const codigo = await client.callTool({ name: "generate_code", arguments: {} });
+  confere(fs.existsSync(path.join(raiz, "Scripts", "fornalha", "jogador.gd")) && fs.existsSync(path.join(raiz, "project.godot")), "generate_code escreve o jogo para a engine");
 
   const semProjeto = await client.callTool({ name: "open_project", arguments: { caminho: path.join(home, "nao-existe") } });
   confere(semProjeto.isError === true, "erro de ferramenta volta com isError");

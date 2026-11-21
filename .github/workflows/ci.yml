@@ -65,3 +65,58 @@ jobs:
       - name: Detecção da placa na máquina do CI
         shell: bash
         run: cargo run -q -p fornalha-cli -- detectar
+
+  geracoes:
+    name: Gerações de verdade (${{ matrix.nome }}) — Blender, Godot e o jogo
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: Linux
+            os: ubuntu-24.04
+          - nome: Windows
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: geracoes
+
+      - name: Bibliotecas do Blender e tela virtual (Linux)
+        if: runner.os == 'Linux'
+        timeout-minutes: 20
+        run: ./scripts/apt-instalar.sh xvfb xauth libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libegl1 libxkbcommon0 libsm6 libgl1-mesa-dri unzip
+
+      - name: Cache do Blender e da Godot
+        uses: actions/cache@v4
+        with:
+          path: ~/ferramentas
+          key: ferramentas-${{ runner.os }}-blender-5.2.4-godot-4.6.1
+
+      - name: Baixar o Blender e a Godot
+        shell: bash
+        run: ./scripts/baixar-ferramentas.sh "$HOME/ferramentas"
+
+      - name: Gerações (Forja, engine e o pronto da Fase 4 pelo MCP)
+        shell: bash
+        env:
+          FORNALHA_TESTE_SAIDA: ${{ github.workspace }}/geracoes
+          FORNALHA_TESTE_VIDEO: "1"
+          RUST_BACKTRACE: "1"
+        run: |
+          mkdir -p geracoes
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a -s "-screen 0 1280x800x24" cargo test -p fornalha-core --test forja --test engine --test geracao -- --test-threads 1 --nocapture
+          else
+            cargo test -p fornalha-core --test forja --test engine --test geracao -- --test-threads 1 --nocapture
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geracoes-${{ matrix.nome }}
+          path: geracoes/
+          retention-days: 30

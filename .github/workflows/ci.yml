@@ -112,7 +112,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/pacotes
-          key: pacotes-v1-${{ runner.os }}
+          key: pacotes-v2-${{ runner.os }}
 
       - name: Baixar os pacotes de conteúdo (como o botão Baixar da janela)
         shell: bash

@@ -34,6 +34,46 @@ def _mover(obj, pos, rot_z=0.0):
     return obj
 
 
+def _dist_segmento(p, a, b):
+    ab = b - a
+    t = max(0.0, min(1.0, (p - a).dot(ab) / max(ab.length_squared, 1e-9)))
+    return (a + ab * t - p).length
+
+
+def terreno(extensao, posicoes, rnd, material, segmentos=150):
+    """Chão com relevo: plano nas áreas e nos caminhos, morros em volta. A colisão segue o relevo."""
+    import bmesh
+
+    fases = [rnd.uniform(0, math.tau) for _ in range(8)]
+    freq = [0.021, 0.037, 0.055, 0.083]
+
+    def altura(x, y):
+        p = Vector((x, y, 0))
+        perto = min([(p - c_).length - (RAIO_AREA + 7) for c_ in posicoes] +
+                    [_dist_segmento(p, Vector((0, 0, 0)), c_) - 4.5 for c_ in posicoes[1:]] + [1e9])
+        f = max(0.0, min(1.0, perto / 18.0))
+        f = f * f * (3 - 2 * f)
+        h = 0.0
+        for i, fr in enumerate(freq):
+            h += math.sin(x * fr + fases[i]) * math.cos(y * fr * 1.13 + fases[i + 4]) / (i + 1)
+        borda = max(0.0, (max(abs(x), abs(y)) - extensao * 0.7) / (extensao * 0.3))
+        return f * (h * 3.2 + 2.2) + borda * borda * 9.0
+
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=segmentos, y_segments=segmentos, size=extensao)
+    for v in bm.verts:
+        v.co.z = altura(v.co.x, v.co.y)
+    malha = bpy.data.meshes.new("chao-col")
+    bm.to_mesh(malha)
+    bm.free()
+    obj = bpy.data.objects.new("chao-col", malha)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(material)
+    for poly in malha.polygons:
+        poly.use_smooth = True
+    return obj, altura
+
+
 def area_vila(id_, centro, rnd, mats, objs, inimigos):
     for i in range(7):
         ang = i / 7 * math.tau + rnd.uniform(-0.15, 0.15)
@@ -146,7 +186,19 @@ def criar_mundo(p):
         ang = (i - 1) / n * math.tau + math.pi / 2
         posicoes.append(Vector((math.cos(ang) * 46, math.sin(ang) * 46, 0)))
     extensao = max((v.length for v in posicoes), default=0) + RAIO_AREA * 2 + 10
-    objs.append(_bloco("chao", (0, 0, -0.25), (extensao * 2, extensao * 2, 0.5), c.material("grama", c.cor_hex(mats["grama"]), 0.95)))
+    chao, altura = terreno(extensao, posicoes, rnd, c.material("grama", c.cor_hex(mats["grama"]), 0.95))
+    objs.append(chao)
+    # vegetação e pedras espalhadas pelos morros (fora das áreas e dos caminhos)
+    for i in range(70):
+        x, y = rnd.uniform(-extensao, extensao) * 0.92, rnd.uniform(-extensao, extensao) * 0.92
+        p_ = Vector((x, y, 0))
+        if min((p_ - c_).length for c_ in posicoes) < RAIO_AREA + 9 or min([_dist_segmento(p_, Vector((0, 0, 0)), c_) for c_ in posicoes[1:]] + [1e9]) < 6:
+            continue
+        if rnd.random() < 0.72:
+            o = fc_armas.criar_objeto({"tipo": "arvore", "id": f"mato_arvore_{i}-col", "seed": rnd.randint(0, 9999), "escala": rnd.uniform(0.9, 1.4), "cor_folha": mats["folha"]})
+        else:
+            o = fc_armas.criar_objeto({"tipo": "pedra", "id": f"mato_pedra_{i}-col", "seed": rnd.randint(0, 9999), "escala": rnd.uniform(1.0, 3.0)})
+        objs.append(_mover(o, (x, y, altura(x, y) - 0.15), rnd.uniform(0, math.tau)))
     caminho = c.material("caminho", c.cor_hex(mats["caminho"]), 1.0)
     for i, pos in enumerate(posicoes[1:], 1):
         meio = pos / 2

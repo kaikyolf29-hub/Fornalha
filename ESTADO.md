@@ -41,8 +41,10 @@ Meta do criador: personagens, armaduras, armas, cenário e movimento no nível d
   jogador andou ~12 m, inimigos derrotados caindo pela física, "pode vender").
 
 Falta para chegar nas referências (próximas rodadas):
-1. **Cenário**: terreno com relevo, vegetação espalhada, construções medievais de verdade (base de pedra,
-   enxaimel, telhado), objetos e névoa. Hoje o mundo já sai em PBR, mas ainda é um blockout simples.
+1. **Cenário**: já tem terreno com relevo (colisão acompanha), árvores (pinheiros e folhosas com casca),
+   pedras, casas medievais (térreo de pedra, enxaimel, empena, telhado de telha, chaminé, janelas) e tudo
+   em PBR com grama, terra, pedra, reboco, vigas e telha. Falta: castelo/muralha, interiores, objetos de
+   rua (carroças, bancas), grama em tufos, água e uma vila com ruas em vez do anel atual.
 2. **Armadura**: bordas viradas com rebites no peitoral, viseira trabalhada, desgaste/ferrugem nas
    bordas "assado" em textura (hoje a cor final só existe no render; o glTF leva a textura base).
 3. **Rosto**: detalhe de pele (poros, rugas por idade) assado em mapa normal; cabelo melhor.

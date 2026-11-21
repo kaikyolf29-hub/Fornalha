@@ -142,6 +142,26 @@ def tarefa_mundo(t):
         bpy.context.scene.render.filepath = base + ".mapa.png"
         bpy.ops.render.render(write_still=True)
         arquivos["mapa"] = base + ".mapa.png"
+        # vista da rua: na altura dos olhos, entrando na primeira área
+        cam.data.type = "PERSP"
+        cam.data.lens = 28
+        cam.location = Vector((2.5, -15.0, 1.75))
+        alvo = Vector((0.0, 4.0, 2.2))
+        cam.rotation_euler = (alvo - cam.location).to_track_quat("-Z", "Y").to_euler()
+        bpy.context.scene.render.resolution_x, bpy.context.scene.render.resolution_y = 1280, 720
+        bpy.context.scene.cycles.samples = max(24, int(t.get("amostras", 16)))
+        bpy.context.scene.render.filepath = base + ".rua.png"
+        mundo = bpy.context.scene.world
+        if mundo and mundo.node_tree and mundo.node_tree.nodes.get("ceu_hdri"):
+            # na rua o céu aparece (não o fundo escuro de estúdio)
+            mix = next((n for n in mundo.node_tree.nodes if n.type == "MIX_SHADER"), None)
+            if mix:
+                mix.inputs[0].default_value = 0.0
+                for l in list(mundo.node_tree.links):
+                    if l.to_node == mix and l.to_socket == mix.inputs[0]:
+                        mundo.node_tree.links.remove(l)
+        bpy.ops.render.render(write_still=True)
+        arquivos["rua"] = base + ".rua.png"
     info = {
         "areas": [dict(a, centro=GODOT(a["centro"])) for a in areas],
         "spawn_jogador": GODOT(bpy.data.objects["spawn_jogador"].location),

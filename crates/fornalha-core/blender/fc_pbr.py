@@ -21,6 +21,11 @@ BIBLIOTECA = {
     "pedra": ("Bricks113A", 0.6, 0.0),
     "telha": ("RoofingTiles014B", 0.8, 0.0),
     "terra": ("Ground106", 0.35, 0.0),
+    "grama": ("Grass004", 0.4, 0.0),
+    "chao_floresta": ("Ground037", 0.35, 0.0),
+    "casca": ("Bark014", 1.5, 0.0),
+    "reboco": ("Plaster007", 0.6, 0.0),
+    "viga": ("WoodFloor064", 1.0, 0.0),
     "rocha": ("Rock051", 0.5, 0.0),
 }
 

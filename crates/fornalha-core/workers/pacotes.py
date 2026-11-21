@@ -22,7 +22,8 @@ ANIMACOES = {
     "ual2": "https://opengameart.org/sites/default/files/universal_animation_library_2standard.zip",
 }
 MATERIAIS = ["Metal038", "Metal056C", "Metal048C", "Chainmail004", "Leather037", "Leather026", "Fabric031", "Fabric019",
-             "Planks037A", "PavingStones153", "Bricks113A", "RoofingTiles014B", "Ground106", "Rock051"]
+             "Planks037A", "PavingStones153", "Bricks113A", "RoofingTiles014B", "Ground106", "Rock051",
+             "Grass004", "Ground037", "Bark014", "Plaster007", "WoodFloor064"]
 CEUS = ["DayEnvironmentHDRI113", "DaySkyHDRI069A"]
 MAPAS = ("_Color.jpg", "_NormalGL.jpg", "_Roughness.jpg", "_Metalness.jpg", "_AmbientOcclusion.jpg", "_Opacity.jpg", "_HDR.exr")
 

@@ -671,10 +671,17 @@ function pintarAjustes() {
   if (!info) { $("versao").textContent = "Fora do aplicativo (modo navegador)."; return; }
   $("estilo-janela").value = info.estilo_janela || "auto";
   $("ajuste-pasta").textContent = info.pasta_projetos;
+  const n = info.noite || { inicio_hora: 23, fim_hora: 7 };
+  $("noite-inicio").value = n.inicio_hora; $("noite-fim").value = n.fim_hora;
   $("versao").textContent = `Fornalha ${info.versao} · ${info.exe}`;
 }
 $("estilo-janela").addEventListener("change", async (e) => {
   try { await api("POST", "/janela/ajustes", { estilo_janela: e.target.value }); if (window.montarBotoesJanela) window.montarBotoesJanela(e.target.value); } catch (err) { mensagem(err.message, "erro"); }
+});
+for (const id of ["noite-inicio", "noite-fim"]) $(id).addEventListener("change", async () => {
+  const inicio_hora = Math.min(23, Math.max(0, parseInt($("noite-inicio").value || "23", 10)));
+  const fim_hora = Math.min(23, Math.max(0, parseInt($("noite-fim").value || "7", 10)));
+  try { await api("POST", "/janela/ajustes", { noite: { inicio_hora, fim_hora } }); info.noite = { inicio_hora, fim_hora }; mensagem("Horário da noite salvo."); } catch (err) { mensagem(err.message, "erro"); }
 });
 $("ajuste-escolher-pasta").addEventListener("click", async () => {
   const p = await escolherPasta("Pasta dos projetos novos");

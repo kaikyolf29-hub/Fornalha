@@ -182,6 +182,8 @@
       <section class="painel lista">
         <div class="item"><div><strong>Botões da janela</strong><small>Minimizar, maximizar e fechar no jeito do seu sistema.</small></div>
           <select id="estilo-janela"><option value="auto">Automático</option><option value="windows">Windows</option><option value="gnome">GNOME</option><option value="kde">KDE</option><option value="mac">Mac</option></select></div>
+        <div class="item"><div><strong>Fila da noite</strong><small>As tarefas "para a noite" rodam só neste horário (hora do computador).</small></div>
+          <div class="lado">das <input type="number" id="noite-inicio" min="0" max="23" class="hora"> às <input type="number" id="noite-fim" min="0" max="23" class="hora"> h</div></div>
         <div class="item"><div><strong>Pasta dos projetos novos</strong><small class="mono" id="ajuste-pasta"></small></div><button class="botao" id="ajuste-escolher-pasta">Trocar</button></div>
         <div class="item"><div><strong>Registros</strong><small>Arquivos de diagnóstico da Fornalha.</small></div><button class="botao" id="abrir-registros">Abrir a pasta</button></div>
       </section>

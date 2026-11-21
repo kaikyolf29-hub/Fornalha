@@ -178,6 +178,7 @@ mod nucleo {
             "pasta_projetos": f.pasta_projetos(),
             "pasta_projetos_escolhida": cfg.pasta_projetos.is_some(),
             "nivel_da_maquina": cfg.nivel,
+            "noite": cfg.noite,
             "estilo_janela": cfg.estilo_janela.unwrap_or_else(|| "auto".into()),
             "estudio": cfg.estudio,
             "grupos_de_aceite": f.catalogo.grupos_de_aceite,
@@ -201,6 +202,15 @@ mod nucleo {
                     .into_response();
             }
             r = r.and(f.definir_nivel_da_maquina(nivel));
+        }
+        if let Some(n) = v.get("noite") {
+            match serde_json::from_value::<fornalha_core::config::Noite>(n.clone()) {
+                Ok(noite) => r = r.and(f.definir_noite(noite)),
+                Err(_) => {
+                    return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"codigo": "argumento_invalido", "mensagem": "Horário da noite inválido."}})))
+                        .into_response()
+                }
+            }
         }
         if let Some(e) = v.get("estilo_janela") {
             let estilo = e.as_str().filter(|s| fornalha_core::janela::ESTILOS.contains(s) && *s != "auto").map(String::from);

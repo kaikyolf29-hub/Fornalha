@@ -317,3 +317,4 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .passos li { margin: 2px 0; }
 .passos small { color: var(--ferro); }
 .amostra { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-left: 4px; border: 1px solid var(--rebite); }
+.hora { width: 56px; font: inherit; padding: 4px 6px; border: 1px solid var(--rebite); border-radius: 6px; background: var(--bancada); color: inherit; }

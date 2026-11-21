@@ -6,12 +6,13 @@ Estes arquivos vieram do Ignis (https://github.com/kaikydev1-jpg/Ignis) e
 continuam sob a licença MIT abaixo:
 
 - `crates/fornalha-core/src/gpu/` (detecção da placa de vídeo)
-- `crates/fornalha-core/src/distro.rs` (reconhecer o sistema e o Matsu OS)
+- `crates/fornalha-core/src/distro.rs` (reconhecer o sistema Linux)
 - `crates/fornalha-core/src/janela.rs` (estilo dos botões da janela)
 - `crates/fornalha-core/src/util.rs` (parte das utilidades)
 - `crates/fornalha-core/tests/fixtures/`, `tests/comum/` e `tests/deteccao.rs`
-- a casca do aplicativo em `app/` (bandeja, janela em processo separado,
-  barra de título integrada e fontes)
+- a casca do aplicativo em `app/src-tauri` (bandeja, janela em processo
+  separado e a lógica da barra de título integrada); o visual da janela
+  (`app/ui`) é próprio da Fornalha
 
 ```
 MIT License
@@ -37,6 +38,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Fonte Atkinson Hyperlegible Next
+## Fonte Archivo
 
-`app/ui/fontes/` — SIL Open Font License 1.1 (texto em `app/ui/fontes/OFL.txt`).
+`app/ui/fontes/archivo.woff2` — The Archivo Project Authors, SIL Open Font
+License 1.1 (texto em `app/ui/fontes/OFL-Archivo.txt`).
+
+## Programas e modelos que a Fornalha usa, mas não leva dentro dela
+
+- **Blender** (GPL) e **Godot** (MIT) / **Erethea Engine**: rodam como programas
+  separados, por linha de comando. Os arquivos que eles geram são do estúdio.
+- **Modelos de placa** (TRELLIS.2 e UniRig, MIT; HY-Motion, licença comunitária
+  da Tencent): baixados dos repositórios oficiais para a pasta de dados da
+  Fornalha, só quando a pessoa instala pela janela. O nvdiffrast (licença só de
+  pesquisa) não é instalado nem carregado.
+- **Ignis**: programa separado, falado só por 127.0.0.1.

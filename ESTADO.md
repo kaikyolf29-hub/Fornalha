@@ -3,69 +3,89 @@
 > Toda retomada começa por aqui. Atualizado antes de cada pausa.
 
 ## Situação (21/11/2026)
-**Fase 0 (base) pronta no código e nos testes.** Falta o teste do criador na máquina dele
-(TESTE_DO_CRIADOR.md). Nenhuma versão oficial publicada (venda e atualização privada são da Fase 5);
-instaladores de teste saem em Actions → Instaladores.
+**Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI
+do Windows e do Linux.** Falta o teste do criador na máquina dele (TESTE_DO_CRIADOR.md) e falta
+provar, numa placa NVIDIA de verdade, os três modelos de placa (TRELLIS.2, UniRig, HY-Motion).
+Fase 5 (venda e atualização privada) não começou: só quando o criador pedir.
+O app é para **Windows e Linux** (nada específico do Matsu OS, a pedido do criador).
 
-Pronto da Fase 0 ("o Claude Code cria um projeto novo pelo MCP"):
-- provado com o **SDK oficial do MCP** (o mesmo do Claude Code), por stdio (`fornalha --mcp` e `fornalha-cli mcp`) e por HTTP (`/mcp`), no Linux e no CI do Windows;
-- provado com o **Claude Code 2.1 de verdade** (`claude mcp list` → "Connected" nos dois transportes);
-- falta: o criador pedir no Claude Code dele e ver o projeto aparecer.
+| Fase | O que entrega | Situação |
+|---|---|---|
+| 0 · Base | Bíblia, recibos, placa e 4 níveis, API local e MCP | pronta |
+| 1 · Primeiro personagem | Conceito (Ignis), 3D com esqueleto e animações (Forja no Blender), engine | pronta sem placa; TRELLIS.2/UniRig ligados, falta prova em placa NVIDIA |
+| 2 · Mundo, armas e estilo | Blockout pela bíblia, armas na mão, objetos com colisão, checagem do guia visual (cores) | pronta; checagem de forma/conteúdo espera o modelo de visão do Ignis |
+| 3 · Áudio | Efeitos por evento, música por área em laço, dublagem pt-BR (Chatterbox no Ignis) e boca | pronta |
+| 4 · Agente completo | 33 ferramentas no MCP, "crie um inimigo novo" testado na engine, pedido livre pelo cérebro, fila da noite | pronta |
+| 5 · Venda | Trailer, chave de ativação, atualização privada | não começou (só quando o criador pedir) |
 
 ## O que está pronto
-- **Núcleo** (`crates/fornalha-core`), testado sem placa e sem janela:
-  - `projeto`: bíblia do jogo (`game.project.json`), pastas padrão, validação, JSON Merge Patch, campos desconhecidos preservados;
-  - `licencas` + `manifest/modelos.json`: catálogo da tabela do plano (39 modelos), roteador por licença, placa (CUDA) e nível, com queda para o nível de baixo e motivo de cada recusa;
-  - `niveis`: sugestão pela placa principal (limites 11/15/22 GB), aceleradores (CUDA, ROCm, Vulkan), tabela dos 4 níveis;
-  - `recibos`: recibo por asset em `ai/recibos.jsonl` (SHA-256, modelo, licença, prompt, seed, quem pediu), pendências antes de vender, relatório `ai/creditos-e-licencas.md` com a parte da Steam, asset "autoral";
-  - `ferramentas` + `servico`: 14 ferramentas, uma lista só para janela, API e MCP;
-  - `api`: `/fornalha/estado`, `/fornalha/ferramentas`, `POST /fornalha/ferramentas/{nome}`, `/mcp`; só 127.0.0.1, recusa Host/Origin de fora;
-  - `mcp`: JSON-RPC 2.0, versões 2025-11-25, 2025-06-18, 2025-03-26 e 2024-11-05, sessões no HTTP, quem pediu vem do cliente (o agente não se passa pela pessoa);
-  - `ignis`: lê `/motor/estado` e `/motor/versao` do Ignis (porta 11470);
-  - do Ignis (MIT): `gpu/`, `distro`, `janela`, parte de `util`, com os testes e fixtures.
-- **App** (`app/`, Tauri 2): bandeja, janela em processo separado, instância única, barra de título integrada (Windows 11, GNOME, KDE, Mac, Matsu OS), telas Início, Projetos, Placa e níveis, Licenças, Agentes e Ajustes; `fornalha --mcp`.
-- **CLI** (`crates/fornalha-cli`): `mcp`, `servir --porta`, `detectar`, `chamar`, `ferramentas`.
-- **CI**: `ci.yml` (fmt, clippy, testes e MCP de ponta a ponta no Windows e no Linux) e `instaladores.yml` (NSIS; .deb, .rpm e AppImage; instala, abre o app, confere janela e API, testa o MCP do instalado e tira foto da tela).
+- **Núcleo** (`crates/fornalha-core`):
+  - `projeto`, `licencas` + `manifest/modelos.json`, `niveis`, `recibos`, `api`, `mcp` (Fase 0);
+  - `externas`: acha e roda o **Blender**, a **Godot** e a **Erethea Engine** (caminho escolhido, variável de ambiente, pastas padrão do Windows e do Linux, Steam, PATH);
+  - `forja` + `blender/*.py`: a **Forja** — personagem low-poly de 7 tipos com esqueleto padrão (nomes do perfil humanoide da Godot), pesos, arma na mão e 9 animações (parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer); 7 armas e 9 objetos com colisão; mundo em blockout com 15 tipos de área, caminhos e pontos de nascimento; limpar malha de fora; esqueleto em malha de fora; copiar animações; recolorir pela paleta; **assar textura** (cor por vértice → textura, sem o nvdiffrast); **movimento SMPL** → animação no esqueleto padrão; prévia, folha de modelo e vídeo;
+  - `engine` + `godot/*.gd`: projeto Godot/Erethea com o código do jogo (jogador em terceira pessoa, inimigo com perseguir/atacar/morrer, HUD, sons), cenas montadas pela própria engine, plugin de ponte no editor, `run_test` (o jogador anda, pula e ataca sozinho; erros, FPS, polígonos, capturas e vídeo); sem tela, roda sem janela;
+  - `audio`: síntese de 14 efeitos com variações, compositor de música por situação com laço sem emenda, WAV normalizado e curva da boca;
+  - `ignis`: cérebro (ficha e plano em JSON com `json_schema`), imagem (Z-Image Turbo) e voz (Chatterbox) do Ignis 0.4.0;
+  - `geracao`: as gerações encadeadas, todas com recibo;
+  - `workers` + `workers/*.py`: **modelos de placa** — TRELLIS.2 (imagem → 3D, cor tirada dos voxels e textura assada no Blender), UniRig (esqueleto de criatura), HY-Motion (texto → movimento), cada um num ambiente Python só dele, instalados pela janela ou pela linha de comando; sem placa ou sem instalar, a Fornalha usa a Forja, o esqueleto padrão e a biblioteca;
+  - `fila`: **fila da noite** (agora ou das 23h às 7h, uma tarefa por vez, sobrevive a fechar o app);
+  - `plano`: **pedido livre** → plano pelo cérebro (conferido contra o esquema de cada ferramenta) ou por regras com o Ignis fechado → fila;
+  - `estilo`: **checagem do guia visual** — cores de cada png e glb contra a paleta da bíblia.
+- **App** (`app/`, Tauri 2): visual próprio (grafite, cobre e brasa; fonte Archivo), estações Projeto, Forjar (moldes, pedido livre, fila), Galeria (prévias e guia visual), Testar, Licenças, Máquina (placa, programas, modelos de placa, níveis), Agentes e Ajustes; bandeja, janela em processo separado, instância única, `fornalha --mcp`.
+- **CLI** (`crates/fornalha-cli`): `mcp`, `servir`, `detectar`, `chamar`, `ferramentas`, `modelos`, `instalar-modelo`.
+- **CI**: `ci.yml` (fmt, clippy, testes, MCP com o SDK oficial e o job **Gerações de verdade** no Windows e no Linux, com Blender 5.2.4 e Godot 4.6.1 baixados e artefato com o projeto gerado) e `instaladores.yml`.
 
 ## Provado vs. falta provar
-- Provado aqui (Linux, sem placa): todos os testes, o app abrindo numa tela virtual (janela, bandeja, API, criar projeto clicando, aceite de licença, fechar para a bandeja, instância única), MCP pelo executável do app.
-- Memória em repouso (Linux, release, janela fechada): ~21 MB próprios (Private_Dirty); ~107 MB de RSS contando o código do GTK/WebKit mapeado do disco. A medida do Windows vem do teste do criador.
-- Provado no CI (21/11, commit b7226fd, runs 44861580290 e 44861580301, todos verdes):
-  - fmt, clippy e 142 testes no Windows e no Linux; MCP de ponta a ponta com o SDK oficial;
-  - **Windows 11 de verdade:** o instalador NSIS (3 MB) instala por usuário sem administrador em `%LOCALAPPDATA%\Fornalha`; `fornalha.exe --mcp` passa em todas as verificações do SDK (o executável de janela atende o stdio); o app abre com os dois processos (núcleo e `--janela`), a API responde, o MCP por HTTP no app aberto passa, e a foto mostra a janela com a barra integrada no estilo do Windows 11;
-  - Linux: .deb instalado, app aberto numa tela virtual com janela, MCP pelo executável instalado e pela AppImage.
-- Falta provar (só na máquina do criador): detecção da RX 580 e da placa nova reais, bandeja do Windows, cantos e Aero Snap do Windows 11, Claude Code dele criando o projeto.
+- **Provado no CI** (Windows Server e Ubuntu, sem placa):
+  - run 44892635516 (commit b8a36cc), job "Gerações de verdade (Windows)": a Forja fez herói, orc, espada e mundo; a Godot 4.6.1 montou as cenas e rodou o jogo — jogador andou 8,17 m, o inimigo perseguiu, **0 erros**, 5 capturas e vídeo; `check_licenses` → pode vender; artefato `geracoes-Windows` com 130 arquivos. O mesmo no Linux;
+  - run 44908546429 (commit f2c14c3), tudo verde: os testes dos **workers de placa** de ponta a ponta com modelos de mentira de mesma interface (TRELLIS.2 → textura assada → recibo; HY-Motion → animação nova; verificação "sem nvdiffrast" liberando o TRELLIS.2 em projeto comercial);
+  - instaladores (NSIS no Windows; .deb, .rpm e AppImage no Linux) instalados e abertos a cada commit.
+- **Provado aqui** (Linux, sem placa): o Ignis 0.4.0 de verdade — voz pela Chatterbox, ficha pelo Qwen3, imagem de conceito pela Z-Image no processador, e o **plano de um pedido livre feito pelo Qwen3 0.6B** (orc → música → montar → testar, com argumentos conferidos); o jogo com janela numa tela virtual; o painel da janela.
+- **Falta provar** (só na máquina do criador ou numa placa NVIDIA):
+  - TRELLIS.2, UniRig e HY-Motion **de verdade** (instalação, a geração, a orientação da malha do TRELLIS.2, o formato de saída do HY-Motion e se o TRELLIS.2 roda com o nvdiffrast substituído);
+  - Erethea Engine de verdade (o CI testa a Godot 4.6.1; a Fornalha procura a Erethea e usa a mesma linha de comando);
+  - detecção da RX 580 e da placa nova, bandeja e Aero Snap do Windows 11, memória em repouso, Claude Code do criador.
 
-## Decisões (do plano, 20/11/2026) e as tomadas na Fase 0
-- Nome Fornalha; engine do Plano 2 é a Erethea Engine (até lá, Godot: `engine: "godot"` na bíblia).
-- Windows primeiro; nada que impeça o Linux (o CI já roda nos dois).
-- Repositório público sem licença aberta (todos os direitos reservados).
-- Porta da API e do MCP: **11480** (a do Ignis é 11470). *Decisão da Fase 0.*
-- Projeto novo nasce **comercial** (só entra modelo que deixa vender). *Decisão da Fase 0.*
-- Recibos em **JSON Lines** (`ai/recibos.jsonl`), legível e bom para Git, em vez de banco SQLite. *Decisão da Fase 0.*
-- Aceite de licença com condição e receita do estúdio: **só a pessoa, pela janela**. *Decisão da Fase 0.*
-- Nomes das ferramentas em inglês (como no plano), argumentos e textos em português.
+## Decisões
+- Do plano (20/11): nome Fornalha; Windows primeiro, Linux também; repositório público sem licença aberta; engine Godot ou **Erethea Engine** (opção na bíblia e em Máquina).
+- Fase 0: porta 11480; projeto nasce comercial; recibos em JSON Lines; aceite de licença e receita só pela janela; nomes das ferramentas em inglês, textos em português.
+- Fases 1–4 (21/11):
+  - **Forja** no Blender como gerador 3D que roda em qualquer computador (o plano previa só modelos de placa; sem a Forja, a RX 580 não teria 3D);
+  - biblioteca de animações **procedural** da Fornalha (no lugar das capturas da CMU, que não entraram);
+  - efeitos e música por **síntese própria** quando não há modelo de áudio liberado;
+  - **TRELLIS.2 sem o nvdiffrast**: a cor sai dos voxels e a textura é assada no Blender; o nvdiffrast recebe um substituto vazio; em projeto comercial o TRELLIS.2 só entra depois que a verificação da instalação comprova, na máquina, que ele não foi carregado;
+  - UniRig só para criaturas que não são humanoides (humanoide usa o esqueleto padrão, que recebe as animações);
+  - HY-Motion precisa de CUDA e do aceite da licença da Tencent na janela;
+  - fila da noite das 23h às 7h (muda em Ajustes/config), uma tarefa por vez;
+  - plano do cérebro sempre conferido: argumento que não existe sai, o obrigatório que falta vem das regras, arquivo que não existe sai;
+  - checagem do guia visual por cor (ΔE em Lab, 40% dos pixels coloridos na paleta); forma e conteúdo esperam o modelo de visão.
 
-## Achado que muda o plano: TRELLIS.2 e o nvdiffrast
-Os pesos do TRELLIS.2 são MIT, mas a etapa de textura usa o **nvdiffrast** (NVIDIA Source Code
-License: só pesquisa e avaliação). Por isso o catálogo marca o TRELLIS.2 como bloqueado em projeto
-comercial até a Fase 1 assar a textura sem o nvdiffrast (no Blender, por exemplo). Até lá, o único
-3D liberado para venda é o Hunyuan3D-2mini (só forma), com o aceite da licença da Tencent (que não
-vale na União Europeia, no Reino Unido e na Coreia do Sul).
-Outras notas do catálogo: ACE-Step 1.5 é MIT, mas o repositório dos pesos ainda não traz o LICENSE;
-o Audio2Emotion (junto do Audio2Face) só pode ser usado com o Audio2Face; HY-Motion e Hunyuan3D têm a
-mesma regra de território da Tencent.
+## Achado: TRELLIS.2 e o nvdiffrast
+Os pesos do TRELLIS.2 são MIT, mas a textura oficial usa o **nvdiffrast** (licença só de pesquisa).
+A Fornalha resolve sem ele (veja Decisões) e o catálogo continua bloqueando o TRELLIS.2 em projeto
+comercial até a verificação passar na máquina. Outras notas: ACE-Step 1.5 é MIT, mas o repositório
+dos pesos ainda não traz o LICENSE; HY-Motion e Hunyuan3D têm a regra de território da Tencent
+(não vale na União Europeia, no Reino Unido e na Coreia do Sul).
 
 ## Pedidos para o Ignis
-Os 8 do plano continuam valendo (voz comercial com Chatterbox, imagem pelo Vulkan, reserva de placa,
-`uso_comercial` nos modelos, aceleradores e VRAM em `/motor/estado`, `response_format` com
-`json_schema`, modelo de visão leve, dois modelos carregados). Detalhe que a Fase 0 sugere para o
-pedido 5, para a integração ser direta:
+Já entregues no Ignis 0.4.0 e usados pela Fornalha: voz comercial (Chatterbox), imagem (Z-Image
+Turbo), reserva da placa, `uso_comercial` nos modelos, aceleradores em `/motor/estado` e
+`response_format` com `json_schema`. Continuam valendo:
+1. **Cabeçalho do WAV da voz:** o `/v1/audio/speech` devolve o WAV com o cabeçalho de stream (tamanhos
+   do RIFF e do `data` errados). A importação da Godot trava com esse arquivo. A Fornalha já reescreve
+   o cabeçalho, mas o certo é o Ignis gravar os tamanhos reais quando a resposta não é streaming.
+2. **Modelo de visão leve** (pedido 7 do plano): para a checagem do guia visual olhar forma e conteúdo
+   (o "evitar" da bíblia), não só as cores.
+3. **Dois modelos carregados** (pedido 8 do plano): o cérebro e a imagem juntos, para o pedido livre
+   não descarregar um para usar o outro.
 
-> Em `/motor/estado`, um campo `aceleradores: {"cuda": bool, "rocm": bool, "vulkan": bool}` e, em
-> `placa`, `vram_total_mb` e `vram_livre_mb` (números em MB). A Fornalha usa exatamente esse formato
-> internamente (`niveis::Aceleradores`) e passa a perguntar ao Ignis em vez de detectar de novo.
+## Notas para a Erethea Engine
+A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.exe` em
+`%LOCALAPPDATA%\Erethea` (ou o caminho escolhido em Máquina, ou `FORNALHA_ERETHEA`) e usa
+`--headless --import`, `--script`, `--write-movie` e o plugin de ponte do editor. Se a Erethea mudar
+algum desses, avise aqui.
 
 ## Próximo passo
 1. Criador: rodar o TESTE_DO_CRIADOR.md no Windows (e, se quiser, no Linux).
-2. Fase 1 (primeiro personagem): workers Python (TRELLIS.2, UniRig), ComfyUI sem janela, Blender por linha de comando, textura sem nvdiffrast, 3 animações da biblioteca, exportar glTF para a Godot.
+2. Com a placa NVIDIA nova: instalar os modelos de placa em Máquina e rodar a parte 9 do teste.
+3. Fase 5 só quando o criador pedir.

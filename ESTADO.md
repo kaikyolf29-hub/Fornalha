@@ -30,7 +30,10 @@ Pronto da Fase 0 ("o Claude Code cria um projeto novo pelo MCP"):
 ## Provado vs. falta provar
 - Provado aqui (Linux, sem placa): todos os testes, o app abrindo numa tela virtual (janela, bandeja, API, criar projeto clicando, aceite de licença, fechar para a bandeja, instância única), MCP pelo executável do app.
 - Memória em repouso (Linux, release, janela fechada): ~21 MB próprios (Private_Dirty); ~107 MB de RSS contando o código do GTK/WebKit mapeado do disco. A medida do Windows vem do teste do criador.
-- Provado no CI: veja o último run de **CI** e **Instaladores** (Windows instalado de verdade, com foto da janela).
+- Provado no CI (21/11, commit b7226fd, runs 44861580290 e 44861580301, todos verdes):
+  - fmt, clippy e 142 testes no Windows e no Linux; MCP de ponta a ponta com o SDK oficial;
+  - **Windows 11 de verdade:** o instalador NSIS (3 MB) instala por usuário sem administrador em `%LOCALAPPDATA%\Fornalha`; `fornalha.exe --mcp` passa em todas as verificações do SDK (o executável de janela atende o stdio); o app abre com os dois processos (núcleo e `--janela`), a API responde, o MCP por HTTP no app aberto passa, e a foto mostra a janela com a barra integrada no estilo do Windows 11;
+  - Linux: .deb instalado, app aberto numa tela virtual com janela, MCP pelo executável instalado e pela AppImage.
 - Falta provar (só na máquina do criador): detecção da RX 580 e da placa nova reais, bandeja do Windows, cantos e Aero Snap do Windows 11, Claude Code dele criando o projeto.
 
 ## Decisões (do plano, 20/11/2026) e as tomadas na Fase 0

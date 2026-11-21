@@ -44,7 +44,7 @@ async fn modelo_de_placa(f: &Fornalha, p: &Projeto, funcao: &str, avisos: &mut V
 }
 
 /// Ficha do personagem → humano realista (MakeHuman + roupa medieval + arma).
-fn humano_da_ficha(ficha: &Value) -> Value {
+fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
     let texto = format!(
         "{} {} {}",
         ficha["descricao"].as_str().unwrap_or(""),
@@ -76,15 +76,27 @@ fn humano_da_ficha(ficha: &Value) -> Value {
     .map(String::from)
     .or_else(|| ficha["cor_pele"].as_str().map(String::from));
     let inimigo = ficha["inimigo"] == true;
+    let armadura = ficha["armadura"].as_str().unwrap_or("leve");
     let estilo = if tem(&["rei", "rainha", "nobre", "príncipe", "principe", "princesa", "lorde", "duque"]) {
         "nobre"
+    } else if tem(&["templ", "cruzad", "teutônic", "teutonic", "hospitalár", "hospitalar"]) {
+        "templario"
+    } else if armadura == "placas" || tem(&["armadura de placas", "armadura completa", "placas de aço", "full plate"]) {
+        "cavaleiro_placas"
     } else {
-        match ficha["armadura"].as_str().unwrap_or("leve") {
+        match armadura {
             "pesada" => "cavaleiro",
             "nenhuma" => "campones",
             _ if inimigo => "mercenario",
             _ => "soldado",
         }
+    };
+    let pesado = matches!(estilo, "cavaleiro" | "templario" | "cavaleiro_placas");
+    // atlas da armadura com o desgaste assado: maior no nível mais alto
+    let textura = match nivel {
+        crate::niveis::Nivel::Leve => 0,
+        crate::niveis::Nivel::Equilibrado => 1024,
+        _ => 2048,
     };
     let arma = ficha["arma"].as_str().unwrap_or("nenhuma");
     json!({
@@ -92,13 +104,14 @@ fn humano_da_ficha(ficha: &Value) -> Value {
         "macro": {"genero": if feminino { 0.0 } else { 1.0 }, "idade": if velho { 0.88 } else { 0.55 }, "musculo": musculo, "peso": peso,
                   "altura": altura, "proporcoes": 0.75},
         "tom_de_pele": pele,
-        "cabelo": if estilo == "cavaleiro" { "nenhum" } else if feminino { "long01" } else { "short02" },
+        "cabelo": if pesado { "nenhum" } else if feminino { "long01" } else { "short02" },
         "cor_cabelo": ficha["cor_cabelo"],
-        "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(estilo == "cavaleiro"),
+        "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(matches!(estilo, "cavaleiro" | "templario")),
                   "cores": {"principal": ficha["cor_roupa"], "secundaria": ficha["cor_roupa_secundaria"], "detalhe": "#3d2a1c",
-                            "emblema": if estilo == "cavaleiro" && !inimigo { "cruz" } else { "nenhum" }}},
+                            "emblema": if matches!(estilo, "cavaleiro" | "templario") && !inimigo { "cruz" } else { "nenhum" },
+                            "textura": textura}},
         "arma": arma,
-        "escudo": estilo == "cavaleiro" && arma == "espada",
+        "escudo": matches!(estilo, "cavaleiro" | "cavaleiro_placas") && arma == "espada",
     })
 }
 
@@ -317,7 +330,7 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
                 "nome": {"type": "string"}, "descricao": {"type": "string"},
                 "tipo": {"type": "string", "enum": forja::TIPOS_DE_PERSONAGEM},
                 "arma": {"type": "string", "enum": forja::ARMAS},
-                "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada"]},
+                "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada", "placas"]},
                 "porte": {"type": "string", "enum": ["magro", "medio", "forte"]},
                 "cor_roupa": {"type": "string"}, "cor_roupa_secundaria": {"type": "string"}, "cor_cabelo": {"type": "string"},
                 "capa": {"type": "boolean"}, "capuz": {"type": "boolean"}, "fala": {"type": "string"}
@@ -468,7 +481,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             tarefa["folha"] = json!(true);
             tarefa["video"] = json!(a.video.unwrap_or(false));
             tarefa["amostras"] = json!(24);
-            tarefa["humano"] = humano_da_ficha(&ficha);
+            tarefa["humano"] = humano_da_ficha(&ficha, nivel);
             match forjar(f, &tarefa).await {
                 Ok(rr) => {
                     modelo_3d = "humano-fornalha".into();

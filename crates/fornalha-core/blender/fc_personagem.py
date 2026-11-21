@@ -83,6 +83,8 @@ def construir_corpo(p, H, w):
     escuro = c.material("olhos", (0.02, 0.02, 0.025), 0.4)
     boca = c.material("boca", (0.25, 0.04, 0.05), 0.6)
     armadura = p.get("armadura", "leve")
+    if armadura == "placas":
+        armadura = "pesada"  # a Forja simples não tem placas separadas: usa a armadura pesada
     k = c.Construtor()
 
     xl = 0.06 * H * w

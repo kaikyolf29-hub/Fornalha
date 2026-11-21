@@ -170,15 +170,39 @@ def escudo_pipa(prefixo, cor_campo="#d8d2c4", cor_cruz="#8a1f1a"):
     # cruz pintada (um pouco à frente do campo)
     tinta = fc_pbr.material(f"{prefixo}_escudo_cruz", "tecido", cor_cruz, escala=12.0)
     partes = [campo, borda]
-    for (cx, cz, sx, sz) in ((0.0, alt * 0.47, 0.12, alt * 0.86), (0.0, alt * 0.68, larg * 0.9, 0.12)):
-        bm = bmesh.new()
-        q = [(-sx / 2, cz - sz / 2), (sx / 2, cz - sz / 2), (sx / 2, cz + sz / 2), (-sx / 2, cz + sz / 2)]
-        vs = [bm.verts.new((x, curva(x) - 0.0015, z)) for x, z in q]
-        bm.faces.new(vs)
-        bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=6, use_grid_fill=True)
-        for v in bm.verts:
-            v.co.y = curva(v.co.x) - 0.0015
-        partes.append(_obj(bm, f"{prefixo}_escudo_cruz_{len(partes)}", tinta))
+    # a cruz é recortada pelo contorno do escudo (menor 8%): nada de pintura saindo pela ponta
+    def dentro(x, z, k=0.9):
+        cx_, cz_ = 0.0, alt / 2
+        pol = [((px - cx_) * k + cx_, (pz - cz_) * k + cz_) for px, pz in pontos]
+        d = False
+        for i in range(len(pol)):
+            (x1, z1), (x2, z2) = pol[i], pol[i - 1]
+            if (z1 > z) != (z2 > z) and x < (x2 - x1) * (z - z1) / ((z2 - z1) or 1e-9) + x1:
+                d = not d
+        return d
+
+    braco_v, braco_h = 0.11, 0.11
+    cruz_z = alt * 0.68
+
+    def na_cruz(x, z):
+        return (abs(x) <= braco_v / 2 or abs(z - cruz_z) <= braco_h / 2) and dentro(x, z)
+
+    passo = 0.01
+    bm = bmesh.new()
+    vmap = {}
+
+    def vert(i, j):
+        if (i, j) not in vmap:
+            x, z = i * passo, j * passo
+            vmap[(i, j)] = bm.verts.new((x, curva(x) - 0.0015, z))
+        return vmap[(i, j)]
+
+    for i in range(int(-larg / 2 / passo) - 1, int(larg / 2 / passo) + 1):
+        for j in range(0, int(alt / passo) + 1):
+            x, z = (i + 0.5) * passo, (j + 0.5) * passo
+            if na_cruz(x, z):
+                bm.faces.new((vert(i, j), vert(i + 1, j), vert(i + 1, j + 1), vert(i, j + 1)))
+    partes.append(_obj(bm, f"{prefixo}_escudo_cruz", tinta))
     bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=10, radius=0.06, location=(0, -0.01, alt * 0.66))
     umbo = bpy.context.active_object
     umbo.scale = (1, 0.45, 1)

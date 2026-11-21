@@ -28,6 +28,8 @@ var _ragdoll: PhysicalBoneSimulator3D
 
 @onready var modelo: Node3D = $Modelo
 @onready var braco: SpringArm3D = $BracoCamera
+var _malhas: Array[GeometryInstance3D] = []
+var _transparencia := 0.0
 
 
 func _ready() -> void:
@@ -36,6 +38,7 @@ func _ready() -> void:
 	_criar_controles()
 	anim = _achar_animacoes(modelo)
 	_ragdoll = preload("res://Scripts/fornalha/fisica.gd").preparar(modelo, self)
+	_juntar_malhas(modelo)
 	if anim:
 		anim.animation_finished.connect(_fim_da_animacao)
 		_tocar("parado")
@@ -109,6 +112,25 @@ func _physics_process(dt: float) -> void:
 		_acao("esquivar")
 	move_and_slide()
 	_animar(direcao, correndo, dt)
+	_esmaecer_perto_da_camera(dt)
+
+
+func _juntar_malhas(no: Node) -> void:
+	if no is GeometryInstance3D:
+		_malhas.append(no)
+	for f in no.get_children():
+		_juntar_malhas(f)
+
+
+## Com a câmera colada no personagem (parede atrás), o corpo fica transparente em vez de tapar a tela.
+func _esmaecer_perto_da_camera(dt: float) -> void:
+	var dist := braco.get_hit_length()
+	var alvo := clampf((1.1 - dist) / 0.6, 0.0, 0.85)
+	if is_equal_approx(alvo, _transparencia):
+		return
+	_transparencia = move_toward(_transparencia, alvo, dt * 4.0)
+	for m in _malhas:
+		m.transparency = _transparencia
 
 
 func pular() -> void:

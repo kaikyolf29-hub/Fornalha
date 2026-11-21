@@ -92,14 +92,22 @@ func _personagem(p: Dictionary) -> String:
 		braco.name = "BracoCamera"
 		braco.position.y = altura * 0.85
 		braco.rotation.x = -0.32
-		braco.spring_length = 4.0
-		braco.margin = 0.2
+		braco.spring_length = 3.4
+		braco.margin = 0.25
+		# esfera em vez de raio: a câmera não atravessa quina de parede
+		var esfera := SphereShape3D.new()
+		esfera.radius = 0.22
+		braco.shape = esfera
 		braco.collision_mask = CAMADA_MUNDO
 		raiz.add_child(braco)
 		_dono(braco, raiz)
 		var cam := Camera3D.new()
 		cam.name = "Camera"
 		cam.fov = 65.0
+		cam.near = 0.08
+		# por cima do ombro (como nos jogos de ação em terceira pessoa): perto de parede a câmera
+		# fica ao lado da cabeça, não dentro dela
+		cam.position.x = 0.45
 		braco.add_child(cam)
 		_dono(cam, raiz)
 	else:

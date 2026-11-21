@@ -52,6 +52,56 @@ def disponivel(nome):
     return _mapa(os.path.join(_PASTA["raiz"], ident), ident, ("Color",)) is not None
 
 
+_CACHE_FINAL = {}
+
+
+def _cor_final(img, tom, fator, modo, caminho_ao):
+    """Imagem nova = textura tingida (como o nó Mix) × oclusão. Fica empacotada no glb."""
+    if img is None or (not tom and not caminho_ao):
+        return None
+    chave = (img.name, tom, round(fator, 3), modo, caminho_ao)
+    if chave in _CACHE_FINAL:
+        return _CACHE_FINAL[chave]
+    import numpy as np
+
+    w, h = img.size
+    if not w or not h:
+        return None
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(-1, 4)
+    rgb = px[:, :3]
+    if tom:
+        if modo != "MIX":
+            fator = max(fator, 0.92)  # pano pintado: quase toda a cor vem do tom pedido
+        t = np.array([int(tom.lstrip("#")[i:i + 2], 16) / 255.0 for i in (0, 2, 4)], dtype=np.float32)
+        if modo == "MIX":
+            alvo = np.broadcast_to(t, rgb.shape)
+        else:  # COLOR: mantém o desenho claro/escuro da textura, mas na média vira a cor pedida
+            pesos_l = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+            lum = (rgb @ pesos_l)[:, None]
+            media = max(float(lum.mean()), 1e-4)
+            # contraste do desenho reduzido para cores claras (pano branco não fica cinza manchado)
+            lum_t = float(t @ pesos_l)
+            contraste = 1.0 - 0.6 * max(0.0, lum_t - 0.5) / 0.5
+            rel = 1.0 + (lum / media - 1.0) * contraste
+            alvo = np.clip(rel * t, 0.0, 1.0)
+        rgb = rgb * (1 - fator) + alvo * fator
+    if caminho_ao and os.path.isfile(caminho_ao):
+        ao_img = bpy.data.images.load(caminho_ao, check_existing=True)
+        if tuple(ao_img.size) == (w, h):
+            ao = np.empty(w * h * 4, dtype=np.float32)
+            ao_img.pixels.foreach_get(ao)
+            ao = ao.reshape(-1, 4)[:, :1]
+            rgb = rgb * (1 - 0.8 + 0.8 * ao)
+    px[:, :3] = rgb
+    nova = bpy.data.images.new(f"{img.name}_final_{len(_CACHE_FINAL)}", w, h, alpha=False)
+    nova.pixels.foreach_set(px.ravel())
+    nova.pack()
+    _CACHE_FINAL[chave] = nova
+    return nova
+
+
 def material(nome, tipo, tom=None, escala=None, rugosidade_extra=0.0, mistura_tom=0.75):
     """Material PBR; sem as texturas, cai para uma cor lisa (o asset continua saindo)."""
     mat = bpy.data.materials.new(nome)
@@ -81,30 +131,17 @@ def material(nome, tipo, tom=None, escala=None, rugosidade_extra=0.0, mistura_to
         nt.links.new(mapa.outputs["Vector"], no.inputs["Vector"])
         return no
 
-    cor = textura(_mapa(pasta, ident, ("Color",)))
-    saida_cor = cor.outputs["Color"]
     if metal and not tom:
         # as texturas de metal do pacote são escuras para aço; puxa para o refletir de aço de verdade
         tom, mistura_tom = "#c9cbd1", 0.55
-    if tom:
-        mist = nt.nodes.new("ShaderNodeMix")
-        mist.data_type = "RGBA"
-        mist.blend_type = "MIX" if metal else "COLOR"
-        mist.inputs["Factor"].default_value = mistura_tom
-        nt.links.new(saida_cor, mist.inputs["A"])
-        mist.inputs["B"].default_value = (*c.cor_hex(tom), 1.0)
-        saida_cor = mist.outputs["Result"]
+    caminho_cor = _mapa(pasta, ident, ("Color",))
     oclusao = _mapa(pasta, ident, ("AmbientOcclusion",))
-    if oclusao:
-        ao = textura(oclusao, cor=False)
-        mult = nt.nodes.new("ShaderNodeMix")
-        mult.data_type = "RGBA"
-        mult.blend_type = "MULTIPLY"
-        mult.inputs["Factor"].default_value = 0.8
-        nt.links.new(saida_cor, mult.inputs["A"])
-        nt.links.new(ao.outputs["Color"], mult.inputs["B"])
-        saida_cor = mult.outputs["Result"]
-    nt.links.new(saida_cor, bsdf.inputs["Base Color"])
+    cor = textura(caminho_cor)
+    # o tingido e a oclusão vão direto nos pixels: o glTF (e a engine) recebe a cor final
+    final = _cor_final(cor.image, tom, mistura_tom, "MIX" if metal else "COLOR", oclusao)
+    if final is not None:
+        cor.image = final
+    nt.links.new(cor.outputs["Color"], bsdf.inputs["Base Color"])
     rug = _mapa(pasta, ident, ("Roughness",))
     if rug:
         nt.links.new(textura(rug, cor=False).outputs["Color"], bsdf.inputs["Roughness"])

@@ -202,7 +202,7 @@ pub fn lista() -> Vec<Ferramenta> {
                     "descricao": {"type": "string"},
                     "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"]},
                     "arma": {"type": "string", "enum": ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo", "nenhuma"]},
-                    "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada"]},
+                    "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada", "placas"]},
                     "porte": {"type": "string", "enum": ["magro", "medio", "forte"]},
                     "cor_roupa": {"type": "string"}, "cor_roupa_secundaria": {"type": "string"}, "cor_pele": {"type": "string"}, "cor_cabelo": {"type": "string"},
                     "capa": {"type": "boolean"}, "capuz": {"type": "boolean"},

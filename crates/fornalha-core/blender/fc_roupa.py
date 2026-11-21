@@ -67,7 +67,7 @@ class Alfaiate:
         return obj
 
     def casca(self, nome, ossos, folga, espessura, material, limiar=0.5, filtro=None, grupos_extra=(), cobrir=0.85, subdividir=0,
-              suavizar=0, filtro_extra=None):
+              suavizar=0, filtro_extra=None, preparo=None):
         """Peça que veste as regiões dos ossos. filtro(centro_xyz) escolhe parte da região."""
         h = self.h
         s = self.soma(ossos)
@@ -105,6 +105,8 @@ class Alfaiate:
             m.factor = 0.9
             m.iterations = suavizar
             bpy.ops.object.modifier_apply(modifier=m.name)
+        if preparo:
+            preparo(obj)
         self._aplicar(obj, espessura, subdividir)
         self._vestir(obj)
         if cobrir:
@@ -148,6 +150,88 @@ class Alfaiate:
 
     def ossos(self, nome):
         return self.h.arm.data.bones[nome]
+
+    def estampa(self, base, nome, filtro, material, afastar=0.0018, cortes=3):
+        """Desenho costurado/pintado por cima de uma peça (cruz, brasão): copia a face de FORA da peça
+        onde o desenho cai, subdivide, recorta fino pelo filtro, alisa o contorno e afasta 1-2 mm."""
+        import fc_armadura
+
+        bm = bmesh.new()
+        bm.from_mesh(base.data)
+        bm.normal_update()
+        centro = Vector(np.mean([v.co[:] for v in bm.verts], axis=0)) if bm.verts else Vector()
+        fora = []
+        for f in bm.faces:
+            c = f.calc_center_median()
+            radial = Vector((c.x - centro.x, c.y - centro.y, 0))
+            if f.normal.dot(radial) > 0 and filtro((c.x, c.y, c.z), folga=0.03):
+                fora.append(f)
+        apagar = [f for f in bm.faces if f not in set(fora)]
+        bmesh.ops.delete(bm, geom=apagar, context="FACES")
+        # só a camada de fora (a de dentro do pano tem normal para dentro e já saiu); subdivide e recorta
+        bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=cortes, use_grid_fill=True)
+        bm.faces.ensure_lookup_table()
+        fora_fino = [f for f in bm.faces if not filtro(tuple(f.calc_center_median()), folga=0.0)]
+        bmesh.ops.delete(bm, geom=fora_fino, context="FACES")
+        soltos = [v for v in bm.verts if not v.link_faces]
+        bmesh.ops.delete(bm, geom=soltos, context="VERTS")
+        malha = bpy.data.meshes.new(f"{self.prefixo}_{nome}")
+        bm.to_mesh(malha)
+        bm.free()
+        obj = bpy.data.objects.new(malha.name, malha)
+        bpy.context.scene.collection.objects.link(obj)
+        for g in base.vertex_groups:
+            obj.vertex_groups.new(name=g.name)
+        # pesos: copia do vértice mais perto da peça base
+        from mathutils.kdtree import KDTree
+
+        kd = KDTree(len(base.data.vertices))
+        for v in base.data.vertices:
+            kd.insert(v.co, v.index)
+        kd.balance()
+        nomes = {g.index: g.name for g in base.vertex_groups}
+        for v in malha.vertices:
+            _, i, _ = kd.find(v.co)
+            for ge in base.data.vertices[i].groups:
+                obj.vertex_groups[nomes[ge.group]].add([v.index], ge.weight, "REPLACE")
+        fc_armadura.limpar_dentes(obj)
+        fc_armadura.alisar_borda(obj, iteracoes=10)
+        bm = bmesh.new()
+        bm.from_mesh(malha)
+        bm.normal_update()
+        for v in bm.verts:
+            v.co += v.normal * afastar
+        bm.to_mesh(malha)
+        bm.free()
+        for p_ in malha.polygons:
+            p_.use_smooth = True
+        obj.data.materials.append(material)
+        self._uv(obj)
+        self._vestir(obj)
+        return obj
+
+    def alongar_barra(self, obj, comprimento, bico=0.55, abrir=0.04, abaixo_de=None):
+        """Estica a barra da saia/sobreveste para baixo (com bico no meio e abrindo um pouco)."""
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bordas = [e for e in bm.edges if e.is_boundary and all(abaixo_de is None or v.co.z < abaixo_de for v in e.verts)]
+        if not bordas:
+            bm.free()
+            return
+        res = bmesh.ops.extrude_edge_only(bm, edges=bordas)
+        novos = [g for g in res["geom"] if isinstance(g, bmesh.types.BMVert)]
+        cx = np.mean([v.co.x for v in novos])
+        cy = np.mean([v.co.y for v in novos])
+        for v in novos:
+            dx = abs(v.co.x - cx)
+            L = max(0.05, comprimento - bico * max(0.0, dx - 0.02) ** 1.2)
+            radial = Vector((v.co.x - cx, v.co.y - cy, 0))
+            v.co.z -= L
+            if radial.length > 1e-6:
+                v.co += radial.normalized() * abrir * (L / comprimento)
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
 
     # -------------------------------------------------- peças modeladas
 
@@ -314,6 +398,56 @@ class Alfaiate:
         self.h.esconder_sob_roupa(sorted(self.cobertos))
 
 
+def _fivela(a, nome, centro, material, pesos, larg=0.05, alt=0.042, prof=0.006, aro=0.007):
+    """Fivela de metal (moldura com a lingueta), de frente para -Y, presa aos ossos."""
+    bm = bmesh.new()
+    fora = [(-larg / 2, -alt / 2), (larg / 2, -alt / 2), (larg / 2, alt / 2), (-larg / 2, alt / 2)]
+    dentro = [(x - math.copysign(aro, x), z - math.copysign(aro, z)) for x, z in fora]
+    vf = [bm.verts.new((centro.x + x, centro.y, centro.z + z)) for x, z in fora]
+    vd = [bm.verts.new((centro.x + x, centro.y, centro.z + z)) for x, z in dentro]
+    for i in range(4):
+        j = (i + 1) % 4
+        bm.faces.new((vf[i], vf[j], vd[j], vd[i]))
+    # lingueta no meio
+    q = [(-0.0018, -alt / 2 + aro), (0.0018, -alt / 2 + aro), (0.0018, alt / 2 - aro * 0.3), (-0.0018, alt / 2 - aro * 0.3)]
+    bm.faces.new([bm.verts.new((centro.x + x, centro.y - 0.002, centro.z + z)) for x, z in q])
+    ext = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:])
+    for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
+        v.co.y -= prof
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    malha = bpy.data.meshes.new(f"{a.prefixo}_{nome}")
+    bm.to_mesh(malha)
+    bm.free()
+    obj = bpy.data.objects.new(malha.name, malha)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    for o in bpy.context.scene.objects:
+        o.select_set(o == obj)
+    bev = obj.modifiers.new("borda", "BEVEL")
+    bev.width = 0.0012
+    bev.segments = 2
+    bpy.ops.object.modifier_apply(modifier=bev.name)
+    for p_ in malha.polygons:
+        p_.use_smooth = True
+    obj.data.materials.append(material)
+    a._uv(obj)
+    a._peso_fixo(obj, pesos)
+    a._vestir(obj)
+    return obj
+
+
+def _frente_do_corpo(a, z, ossos=TRONCO, folga=0.0):
+    """Ponto da frente do corpo (menor y) na altura z, no meio."""
+    h = a.h
+    s = a.soma(ossos)
+    sel = (s > 0.4) & (np.abs(h.coords[:, 2] - z) < 0.02) & (np.abs(h.coords[:, 0]) < 0.04)
+    if not sel.any():
+        return Vector((0, -0.12, z))
+    y = float(h.coords[sel][:, 1].min())
+    return Vector((0, y - folga, z))
+
+
+
 def _mat(nome, tipo, tom=None, escala=None):
     return fc_pbr.material(nome, tipo, tom, escala)
 
@@ -321,13 +455,68 @@ def _mat(nome, tipo, tom=None, escala=None):
 def vestir(h, prefixo, estilo, cores, capa=True):
     """estilo: cavaleiro, soldado, campones, nobre, mercenario. cores: principal, secundaria, detalhe."""
     a = Alfaiate(h, prefixo)
-    p = cores.get("principal", "#8a1f1a")
-    sec = cores.get("secundaria", "#d8d2c4")
-    det = cores.get("detalhe", "#4a3020")
+    p = cores.get("principal") or "#8a1f1a"
+    sec = cores.get("secundaria") or ("#e9e5db" if estilo == "templario" else "#d8d2c4")
+    det = cores.get("detalhe") or "#4a3020"
     chao_joelho = h.arm.data.bones["calf_l"].head_local.z
     cintura = h.arm.data.bones["spine_01"].head_local.z
     abaixo_do_joelho = lambda co: co[2] < chao_joelho - 0.06
-    if estilo == "cavaleiro_placas":
+    if estilo == "templario":
+        import fc_armadura
+
+        # cota de malha inteira (camisa, calças e coifa), sobreveste longa com a cruz pátea,
+        # cintos de couro com fivelas de latão, placas nos membros, elmo de barril e manto
+        malha_mat = _mat(f"{prefixo}_cota", "cota_de_malha")
+        a.casca("cota", TRONCO + BRACOS + ["neck_01"], 0.007, 0.004, malha_mat, limiar=0.45)
+        a.casca("calcas", PERNAS, 0.006, 0.004, malha_mat)
+        quadril = h.arm.data.bones["pelvis"].head_local.z
+        peito = h.arm.data.bones["spine_03"].head_local.z
+
+        def barra(co):
+            # bainha em bico na frente e atrás; laterais abertas abaixo do quadril
+            if abs(co[0]) > 0.115 and co[2] < quadril - 0.06:
+                return False
+            return co[2] > chao_joelho - 0.2 + 0.55 * max(0.0, abs(co[0]) - 0.02) ** 1.2
+
+        tronco_y = float(np.mean(h.coords[a.soma(["spine_02", "spine_03"]) > 0.6][:, 1]))
+
+        def caimento(o):
+            # o pano cai do peito para baixo sem marcar o corpo, e a barra desce até o meio da canela
+            fc_armadura.moldar(o, (0.0, tronco_y, 0.0), (0.0, 0.0, 1.0), sigma_ang=3.0, sigma_fatia=2.5)
+            a.alongar_barra(o, 0.24, abaixo_de=chao_joelho + 0.12)
+
+        sob = a.casca("sobreveste", TRONCO, 0.024, 0.004, _mat(f"{prefixo}_sobreveste", "tecido_grosso", sec), limiar=0.5,
+                      grupos_extra=["helper-skirt"], suavizar=12, filtro_extra=barra, preparo=caimento)
+        frente_y = _frente_do_corpo(a, peito).y
+
+        def patea(co, cz, L, a0, a1, folga=0.0):
+            dx, dz = abs(co[0]), abs(co[2] - cz)
+            if co[1] > frente_y + 0.06:
+                return False
+            L2 = L + folga
+            vert = dz <= L2 and dx <= a0 + folga + (a1 - a0) * min(1.0, dz / L) ** 1.6
+            hor = dx <= L * 0.92 + folga and dz <= a0 + folga + (a1 - a0) * min(1.0, dx / (L * 0.92)) ** 1.6
+            return vert or hor
+
+        if sob is not None and cores.get("emblema", "cruz") != "nenhum":
+            tinta = _mat(f"{prefixo}_cruz", "tecido", p, escala=40.0)
+            a.estampa(sob, "cruz", lambda co, folga=0.0: patea(co, peito + 0.02, 0.11, 0.022, 0.064, folga), tinta)
+            a.estampa(sob, "cruz_barra", lambda co, folga=0.0: patea(co, chao_joelho + 0.05, 0.045, 0.008, 0.026, folga), tinta, cortes=5)
+        couro_v = _mat(f"{prefixo}_cinto", "couro", "#7c1a14")
+        latao = _mat(f"{prefixo}_latao", "ouro")
+        z_cinto = cintura - 0.05
+        a.casca("cinto", TRONCO, 0.036, 0.006, couro_v, filtro=lambda co: abs(co[2] - z_cinto) < 0.02, cobrir=0, suavizar=6)
+        z_quad = cintura - 0.14
+        a.casca("cinto_espada", TRONCO + ["thigh_l", "thigh_r"], 0.04, 0.006, couro_v, limiar=0.3,
+                filtro=lambda co: abs((co[2] - z_quad) - 0.32 * co[0]) < 0.017 and co[2] > quadril - 0.1, cobrir=0, suavizar=6)
+        _fivela(a, "fivela", _frente_do_corpo(a, z_cinto, folga=0.044), latao, {"spine_01": 0.6, "pelvis": 0.4})
+        _fivela(a, "fivela_2", _frente_do_corpo(a, z_quad, TRONCO + ["thigh_l", "thigh_r"], folga=0.048) + Vector((0.05, 0, 0.016)), latao,
+                {"pelvis": 1.0}, larg=0.04, alt=0.034)
+        a.pecas.extend(fc_armadura.armadura_templario(a, prefixo, cores.get("acabamento", "aco"), com_elmo=cores.get("elmo", True),
+                                                      textura=cores.get("textura")))
+        if capa:
+            a.capa(_mat(f"{prefixo}_capa", "tecido_grosso", sec), comprimento=1.15)
+    elif estilo == "cavaleiro_placas":
         import fc_armadura
 
         # cota de malha por baixo (aparece nas juntas), gibão e saia de malha, e a armadura de placas por cima
@@ -335,7 +524,8 @@ def vestir(h, prefixo, estilo, cores, capa=True):
         a.casca("calcas", PERNAS, 0.006, 0.004, _mat(f"{prefixo}_calcas", "cota_de_malha"))
         a.casca("cinto", TRONCO, 0.05, 0.01, _mat(f"{prefixo}_cinto", "couro_escuro"), filtro=lambda co: abs(co[2] - (cintura - 0.07)) < 0.025,
                 cobrir=0, suavizar=10)
-        a.pecas.extend(fc_armadura.armadura_de_placas(a, prefixo, cores.get("acabamento", "aco_escuro"), com_elmo=cores.get("elmo", True)))
+        a.pecas.extend(fc_armadura.armadura_de_placas(a, prefixo, cores.get("acabamento", "aco"), com_elmo=cores.get("elmo", True),
+                                                      textura=cores.get("textura")))
         if capa:
             a.capa(_mat(f"{prefixo}_capa", "tecido", p))
     elif estilo in ("cavaleiro", "soldado"):

@@ -18,6 +18,7 @@ var _espera := 0.0
 var _origem := Vector3.ZERO
 
 @onready var modelo: Node3D = $Modelo
+var _ragdoll: PhysicalBoneSimulator3D
 
 
 func _ready() -> void:
@@ -25,6 +26,7 @@ func _ready() -> void:
 	vida = vida_max
 	_origem = global_position
 	anim = _achar(modelo)
+	_ragdoll = preload("res://Scripts/fornalha/fisica.gd").preparar(modelo, self)
 	_tocar("parado")
 
 
@@ -89,7 +91,12 @@ func receber_dano(quanto: int) -> void:
 	vida = max(vida - quanto, 0)
 	if vida == 0:
 		estado = Estado.MORTO
-		_tocar("morrer", true)
+		var jog := get_tree().get_first_node_in_group("jogador") as Node3D
+		var empurrao := Vector3.ZERO
+		if jog:
+			empurrao = (global_position - jog.global_position).normalized() * 40.0 + Vector3.UP * 8.0
+		if not preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, empurrao):
+			_tocar("morrer", true)
 		var sons := get_node_or_null("/root/Sons")
 		if sons:
 			sons.tocar("morte", global_position)

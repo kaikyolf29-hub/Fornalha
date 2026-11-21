@@ -52,3 +52,15 @@ License 1.1 (texto em `app/ui/fontes/OFL-Archivo.txt`).
   Fornalha, só quando a pessoa instala pela janela. O nvdiffrast (licença só de
   pesquisa) não é instalado nem carregado.
 - **Ignis**: programa separado, falado só por 127.0.0.1.
+
+## Visualizador 3D da janela
+
+`app/ui/vendor/model-viewer.min.js` — Google `<model-viewer>` 4.0.0 (Apache 2.0),
+que inclui three.js (MIT) e Lit (BSD-3-Clause). Fica dentro do app; não acessa a internet.
+
+## Pacotes de conteúdo (baixados só quando a pessoa pede)
+
+- **MakeHuman** (malha base, formas, esqueletos, pesos, pele, olhos, cabelo, roupas): CC0.
+  A Fornalha lê só os dados; o código do MPFB (GPL) não é usado.
+- **Quaternius Universal Animation Library 1 e 2**: CC0.
+- **ambientCG** (texturas PBR e céus HDRI): CC0.

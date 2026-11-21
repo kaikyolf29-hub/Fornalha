@@ -43,6 +43,65 @@ async fn modelo_de_placa(f: &Fornalha, p: &Projeto, funcao: &str, avisos: &mut V
     }
 }
 
+/// Ficha do personagem → humano realista (MakeHuman + roupa medieval + arma).
+fn humano_da_ficha(ficha: &Value) -> Value {
+    let texto = format!(
+        "{} {} {}",
+        ficha["descricao"].as_str().unwrap_or(""),
+        ficha["papel"].as_str().unwrap_or(""),
+        ficha["nome"].as_str().unwrap_or("")
+    )
+    .to_lowercase();
+    let tem = |ps: &[&str]| ps.iter().any(|p| texto.contains(p));
+    let feminino = tem(&["mulher", "guerreira", "feminin", "rainha", "princesa", "bruxa", "feiticeira", "camponesa", "ferreira", "dama"]);
+    let velho = tem(&["velho", "velha", "anci", "idos"]);
+    let tipo = ficha["tipo"].as_str().unwrap_or("humano");
+    let (musculo, peso) = match ficha["porte"].as_str().unwrap_or("medio") {
+        "forte" => (0.85, 0.62),
+        "magro" => (0.35, 0.35),
+        _ => (0.6, 0.5),
+    };
+    let altura = match tipo {
+        "anao" | "goblin" => 0.0,
+        "orc" | "demonio" => 1.0,
+        "elfo" => 0.8,
+        _ => 0.55,
+    };
+    let pele = match tipo {
+        "orc" => Some("#6f8f4e"),
+        "goblin" => Some("#8fae5a"),
+        "demonio" => Some("#8e3b32"),
+        _ => None,
+    }
+    .map(String::from)
+    .or_else(|| ficha["cor_pele"].as_str().map(String::from));
+    let inimigo = ficha["inimigo"] == true;
+    let estilo = if tem(&["rei", "rainha", "nobre", "príncipe", "principe", "princesa", "lorde", "duque"]) {
+        "nobre"
+    } else {
+        match ficha["armadura"].as_str().unwrap_or("leve") {
+            "pesada" => "cavaleiro",
+            "nenhuma" => "campones",
+            _ if inimigo => "mercenario",
+            _ => "soldado",
+        }
+    };
+    let arma = ficha["arma"].as_str().unwrap_or("nenhuma");
+    json!({
+        "id": ficha["id"],
+        "macro": {"genero": if feminino { 0.0 } else { 1.0 }, "idade": if velho { 0.88 } else { 0.55 }, "musculo": musculo, "peso": peso,
+                  "altura": altura, "proporcoes": 0.75},
+        "tom_de_pele": pele,
+        "cabelo": if estilo == "cavaleiro" { "nenhum" } else if feminino { "long01" } else { "short02" },
+        "cor_cabelo": ficha["cor_cabelo"],
+        "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(estilo == "cavaleiro"),
+                  "cores": {"principal": ficha["cor_roupa"], "secundaria": ficha["cor_roupa_secundaria"], "detalhe": "#3d2a1c",
+                            "emblema": if estilo == "cavaleiro" && !inimigo { "cruz" } else { "nenhum" }}},
+        "arma": arma,
+        "escudo": estilo == "cavaleiro" && arma == "espada",
+    })
+}
+
 /// Altura de cada tipo de personagem (a mesma da Forja), para pôr a malha de fora em escala.
 fn altura_do_tipo(tipo: &str) -> f64 {
     match tipo {
@@ -390,6 +449,27 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     } else if let Some(m) = crate::licencas::escolher(&f.catalogo, "3d", nivel, &f.contexto(Some(&p)).await).ok().and_then(|e| e.modelo) {
         if Worker::do_modelo(&m.id) == Some(Worker::Trellis2) {
             avisos.push("O TRELLIS.2 faz o 3D a partir da imagem de conceito, que não saiu: usei a Forja da Fornalha.".into());
+        }
+    }
+    if r.is_null() && ficha["tipo"] != "esqueleto" {
+        // humano realista: MakeHuman (CC0) + roupas e armaduras PBR + animações de captura
+        if let Some(base) = crate::pacotes::para_a_forja(&f.paths) {
+            let mut tarefa = base;
+            tarefa["tarefa"] = json!("humano");
+            tarefa["saida"] = json!(glb);
+            tarefa["folha"] = json!(true);
+            tarefa["video"] = json!(a.video.unwrap_or(false));
+            tarefa["amostras"] = json!(24);
+            tarefa["humano"] = humano_da_ficha(&ficha);
+            match forjar(f, &tarefa).await {
+                Ok(rr) => {
+                    modelo_3d = "humano-fornalha".into();
+                    r = rr;
+                }
+                Err(e) => avisos.push(format!("O humano realista falhou ({}): usei a Forja simples.", e.mensagem)),
+            }
+        } else {
+            avisos.push("Sem os pacotes de conteúdo (Máquina → Pacotes), o personagem sai da Forja simples. Baixe o MakeHuman, as animações e os materiais para o nível realista.".into());
         }
     }
     if r.is_null() {
@@ -1021,11 +1101,30 @@ pub struct ArgsEngine {
     pub inimigo_perto: Option<bool>,
 }
 
-pub async fn importar_na_engine(f: &Fornalha, a: ArgsEngine, _quem: &str) -> Resultado<Value> {
+pub async fn importar_na_engine(f: &Fornalha, a: ArgsEngine, quem: &str) -> Resultado<Value> {
     let p = f.projeto(a.projeto.as_deref())?;
     let mut avisos = Vec::new();
     let eng = engine_do_projeto(f, &p, &mut avisos).await?;
     let preparo = engine::preparar_projeto(&p, eng.versao.as_deref().unwrap_or(""))?;
+    // céu HDRI do pacote de materiais (CC0) para a luz e os reflexos do jogo
+    if let Some(ceu) = crate::pacotes::materiais_da_forja(&f.paths).and_then(|m| m["ceu"].as_str().map(PathBuf::from)) {
+        let destino = p.raiz.join("World/ceu.exr");
+        if ceu.is_file() && !destino.is_file() {
+            std::fs::create_dir_all(p.raiz.join("World")).map_err(|e| Erro::io(&destino, e))?;
+            std::fs::copy(&ceu, &destino).map_err(|e| Erro::io(&destino, e))?;
+            recibo(
+                f,
+                &p,
+                &destino,
+                "materiais-ambientcg",
+                None,
+                None,
+                json!({"fonte": ceu.file_name().map(|n| n.to_string_lossy().into_owned())}),
+                quem,
+            )
+            .await?;
+        }
+    }
     let manifesto = engine::escrever_manifesto(&p.raiz, a.jogador.as_deref(), a.inimigo_perto.unwrap_or(false))?;
     if manifesto["personagens"].as_array().is_none_or(|v| v.is_empty()) {
         avisos.push("Ainda não há personagem nem inimigo: crie com create_character para o jogo ter quem jogar.".into());

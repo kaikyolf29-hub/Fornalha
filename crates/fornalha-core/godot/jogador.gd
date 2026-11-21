@@ -20,6 +20,11 @@ var acao := ""          # animação de ação em andamento (atacar, defender, e
 var morto := false
 var entrada_teste := Vector2.ZERO   # o teste automático da Fornalha mexe aqui
 var _tempo_passo := 0.0
+const GOLPES := ["atacar", "atacar_2", "atacar_3"]
+var _combo := 0
+var _proximo_golpe := false   # clicou durante o golpe: emenda o próximo (memória de comando)
+var _no_ar := false
+var _ragdoll: PhysicalBoneSimulator3D
 
 @onready var modelo: Node3D = $Modelo
 @onready var braco: SpringArm3D = $BracoCamera
@@ -30,6 +35,7 @@ func _ready() -> void:
 	vida = vida_max
 	_criar_controles()
 	anim = _achar_animacoes(modelo)
+	_ragdoll = preload("res://Scripts/fornalha/fisica.gd").preparar(modelo, self)
 	if anim:
 		anim.animation_finished.connect(_fim_da_animacao)
 		_tocar("parado")
@@ -87,7 +93,7 @@ func _physics_process(dt: float) -> void:
 	direcao = direcao.normalized() if direcao.length() > 0.05 else Vector3.ZERO
 	var correndo := Input.is_action_pressed("correr")
 	var v := velocidade_corrida if correndo else velocidade
-	if acao in ["atacar", "defender"]:
+	if acao in GOLPES or acao == "defender":
 		v *= 0.25
 	velocity.x = direcao.x * v
 	velocity.z = direcao.z * v
@@ -113,12 +119,24 @@ func pular() -> void:
 
 
 func atacar() -> void:
-	if acao == "atacar" or morto:
+	if morto:
 		return
+	if acao in GOLPES:
+		_proximo_golpe = true
+		return
+	_golpe(0)
+
+
+func _golpe(i: int) -> void:
+	_combo = i
+	var nome: String = GOLPES[i] if anim and anim.has_animation(GOLPES[i]) else "atacar"
 	_mirar_no_mais_perto()
-	_acao("atacar")
+	_acao(nome)
 	_som("golpe", global_position)
-	await get_tree().create_timer(0.38).timeout
+	var espera := 0.38
+	if anim and anim.has_animation(nome):
+		espera = clamp(anim.get_animation(nome).length * 0.45, 0.15, 0.5)
+	await get_tree().create_timer(espera).timeout
 	var frente := Vector3(sin(modelo.rotation.y), 0.0, cos(modelo.rotation.y))
 	for inimigo in get_tree().get_nodes_in_group("inimigos"):
 		var para: Vector3 = (inimigo as Node3D).global_position - global_position
@@ -154,7 +172,8 @@ func receber_dano(quanto: int) -> void:
 	vida_mudou.emit(vida, vida_max)
 	if vida == 0:
 		morto = true
-		_tocar("morrer")
+		if not preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, Vector3.UP * 6.0):
+			_tocar("morrer")
 	else:
 		_acao("dano")
 
@@ -167,19 +186,33 @@ func _acao(nome: String) -> void:
 func _fim_da_animacao(nome: StringName) -> void:
 	if String(nome) == acao:
 		acao = ""
+		if _proximo_golpe and String(nome) in GOLPES:
+			_proximo_golpe = false
+			_golpe((_combo + 1) % GOLPES.size())
 
 
 func _animar(direcao: Vector3, correndo: bool, dt: float) -> void:
-	if acao != "" and acao != "pular":
-		return
 	if not is_on_floor():
+		_no_ar = true
+		if acao == "" or (acao == "pular" and anim and not anim.is_playing()):
+			acao = ""
+			_tocar("no_ar")
+		return
+	if _no_ar:
+		_no_ar = false
+		if anim and anim.has_animation("aterrissar") and direcao == Vector3.ZERO:
+			_acao("aterrissar")
+			return
+	if acao != "" and acao != "pular":
 		return
 	if direcao == Vector3.ZERO:
 		acao = ""
 		_tocar("parado")
 	else:
 		acao = ""
-		_tocar("correr" if correndo else "andar")
+		# andar normal no ritmo de corrida leve; Shift é o pique
+		var passo := "correr_rapido" if correndo and anim and anim.has_animation("correr_rapido") else ("correr" if correndo else "andar")
+		_tocar(passo)
 		_tempo_passo -= dt
 		if _tempo_passo <= 0.0:
 			_tempo_passo = 0.32 if correndo else 0.45

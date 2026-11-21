@@ -24,6 +24,7 @@ pub mod janela;
 pub mod licencas;
 pub mod mcp;
 pub mod niveis;
+pub mod pacotes;
 pub mod paths;
 pub mod plano;
 pub mod projeto;

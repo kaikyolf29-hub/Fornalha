@@ -17,6 +17,8 @@ Uso:
   fornalha-cli chamar <ferramenta> [json]  chama uma ferramenta
   fornalha-cli ferramentas                 lista as ferramentas
   fornalha-cli modelos                     modelos de placa (TRELLIS.2, UniRig, HY-Motion)
+  fornalha-cli pacotes                     pacotes de conteúdo (MakeHuman, animações, materiais)
+  fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
   fornalha-cli versao
 
@@ -81,6 +83,18 @@ async fn main() {
         Some("modelos") => {
             println!("{}", serde_json::to_string_pretty(&fornalha_core::workers::estado(&paths)).unwrap_or_default());
             0
+        }
+        Some("pacotes") => {
+            println!("{}", serde_json::to_string_pretty(&fornalha_core::pacotes::estado(&paths)).unwrap_or_default());
+            0
+        }
+        Some("baixar-pacote") => {
+            use fornalha_core::pacotes::{self, Pacote};
+            let Some(p) = args.get(1).and_then(|id| Pacote::de_id(id)) else {
+                eprintln!("Diga qual: makehuman, animacoes ou materiais.");
+                std::process::exit(2);
+            };
+            imprimir(pacotes::baixar_e_esperar(&paths, p).await)
         }
         Some("instalar-modelo") => {
             use fornalha_core::workers::{self, Worker};

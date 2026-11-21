@@ -22,7 +22,9 @@ func _init() -> void:
 		var cena := _personagem(p)
 		if cena != "":
 			cenas_personagens[p["id"]] = cena
-	var mundo := _mundo(m.get("mundo", {}))
+	var w_info: Dictionary = m.get("mundo", {})
+	w_info["ceu"] = m.get("ceu", "")
+	var mundo := _mundo(w_info)
 	_principal(m, mundo, cenas_personagens)
 	print("FORNALHA_MONTAR ", JSON.stringify({"ok": erros.is_empty(), "cenas": feitas, "erros": erros}))
 	quit(0 if erros.is_empty() else 1)
@@ -120,26 +122,50 @@ func _mundo(w: Dictionary) -> String:
 			_dono(blocos, raiz)
 	var sol := DirectionalLight3D.new()
 	sol.name = "Sol"
-	sol.rotation_degrees = Vector3(-50, -35, 0)
-	sol.light_energy = 1.2
+	sol.rotation_degrees = Vector3(-42, -35, 0)
+	sol.light_energy = 1.6
 	sol.shadow_enabled = true
+	sol.shadow_blur = 1.5
+	sol.light_angular_distance = 0.6
+	sol.directional_shadow_max_distance = 120.0
 	raiz.add_child(sol)
 	_dono(sol, raiz)
 	var ambiente := WorldEnvironment.new()
 	ambiente.name = "Ambiente"
 	var env := Environment.new()
 	var ceu := Sky.new()
-	var mat := ProceduralSkyMaterial.new()
-	mat.sky_top_color = Color("#3d5f8f")
-	mat.sky_horizon_color = Color("#c9b49a")
-	mat.ground_horizon_color = Color("#6b5a48")
-	ceu.sky_material = mat
+	var hdri: String = w.get("ceu", "")
+	if hdri != "" and ResourceLoader.exists(hdri):
+		# céu HDRI de verdade (pacote CC0): ilumina e reflete nos metais
+		var pano := PanoramaSkyMaterial.new()
+		pano.panorama = load(hdri)
+		ceu.sky_material = pano
+	else:
+		var mat := ProceduralSkyMaterial.new()
+		mat.sky_top_color = Color("#3d5f8f")
+		mat.sky_horizon_color = Color("#c9b49a")
+		mat.ground_horizon_color = Color("#6b5a48")
+		ceu.sky_material = mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = ceu
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.0
+	# qualidade de jogo moderno (Forward+; no modo compatibilidade a engine ignora o que não tem)
+	env.ssao_enabled = true
+	env.ssao_radius = 1.2
+	env.ssil_enabled = true
+	env.sdfgi_enabled = true
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
 	env.fog_enabled = true
-	env.fog_density = 0.004
+	env.fog_density = 0.003
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.008
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.05
+	env.adjustment_saturation = 1.05
 	ambiente.environment = env
 	raiz.add_child(ambiente)
 	_dono(ambiente, raiz)

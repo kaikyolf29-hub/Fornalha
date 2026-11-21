@@ -56,12 +56,14 @@
       "3d": [
         "trellis2-512-poucavram",
         "hunyuan3d-2mini",
+        "humano-fornalha",
         "forja-3d"
       ],
       "rig": [
         "rigify-blender"
       ],
       "animacao": [
+        "biblioteca-quaternius",
         "biblioteca-fornalha"
       ],
       "efeitos": [
@@ -90,6 +92,7 @@
       ],
       "3d": [
         "trellis2-512",
+        "humano-fornalha",
         "forja-3d"
       ],
       "rig": [
@@ -98,6 +101,7 @@
       ],
       "animacao": [
         "hy-motion-lite",
+        "biblioteca-quaternius",
         "biblioteca-fornalha"
       ],
       "efeitos": [
@@ -129,6 +133,7 @@
       ],
       "3d": [
         "trellis2-1024-poucavram",
+        "humano-fornalha",
         "forja-3d"
       ],
       "rig": [
@@ -137,6 +142,7 @@
       ],
       "animacao": [
         "hy-motion-1.0-q",
+        "biblioteca-quaternius",
         "biblioteca-fornalha"
       ],
       "efeitos": [
@@ -169,6 +175,7 @@
       ],
       "3d": [
         "trellis2-1536",
+        "humano-fornalha",
         "forja-3d"
       ],
       "rig": [
@@ -177,6 +184,7 @@
       ],
       "animacao": [
         "hy-motion-1.0",
+        "biblioteca-quaternius",
         "biblioteca-fornalha"
       ],
       "efeitos": [
@@ -678,6 +686,36 @@
       "url_licenca": "https://github.com/kaikyolf29-hub/Fornalha",
       "uso_comercial": "sim",
       "nota": "Abre a boca pelo volume da fala; o Audio2Face-3D entra com placa NVIDIA."
+    },
+    {
+      "id": "humano-fornalha",
+      "nome": "Humano realista da Fornalha (MakeHuman + roupas e armaduras PBR)",
+      "funcao": "3d",
+      "onde": "fornalha",
+      "licenca": "CC0 (MakeHuman, ambientCG) + gerado pela Fornalha",
+      "url_licenca": "https://static.makehumancommunity.org/about/license.html",
+      "uso_comercial": "sim",
+      "nota": "Corpo, rosto e pele do MakeHuman (CC0), roupas e armaduras feitas pela Fornalha com materiais PBR do ambientCG (CC0). Precisa dos pacotes de conteúdo; roda sem placa."
+    },
+    {
+      "id": "biblioteca-quaternius",
+      "nome": "Animações de captura (Quaternius Universal Animation Library 1 e 2)",
+      "funcao": "animacao",
+      "onde": "biblioteca",
+      "licenca": "CC0",
+      "url_licenca": "https://quaternius.com/packs/universalanimationlibrary2.html",
+      "uso_comercial": "sim",
+      "nota": "89 animações limpas de jogo (andar, correr, pular, rolar, combos de espada, escudo, socos, golpe, morte, zumbi), passadas para o esqueleto do personagem."
+    },
+    {
+      "id": "materiais-ambientcg",
+      "nome": "Materiais PBR e céus HDRI (ambientCG)",
+      "funcao": "imagem",
+      "onde": "biblioteca",
+      "licenca": "CC0",
+      "url_licenca": "https://docs.ambientcg.com/license",
+      "uso_comercial": "sim",
+      "nota": "Texturas de aço, cota de malha, couro, tecido, pedra, madeira e céus HDRI, em domínio público (CC0)."
     }
   ],
   "dependencias": {

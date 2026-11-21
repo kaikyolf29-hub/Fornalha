@@ -11,7 +11,7 @@
     "withGlobalTauri": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src ipc: http://ipc.localhost blob: data:; worker-src 'self' blob:"
     }
   },
   "bundle": {
@@ -27,7 +27,7 @@
     "category": "DeveloperTool",
     "publisher": "Fornalha",
     "copyright": "Todos os direitos reservados",
-    "shortDescription": "Fábrica de jogos 3D com IA local",
+    "shortDescription": "Fornalha 3D: fábrica de jogos 3D com IA local",
     "longDescription": "Cria o que um jogo 3D precisa usando a placa de vídeo do próprio computador, com modelos que deixam vender o jogo, recibo de licença por asset e uma API e servidor MCP para o Claude Code, o Codex ou qualquer agente.",
     "licenseFile": "../../LICENSE",
     "windows": {

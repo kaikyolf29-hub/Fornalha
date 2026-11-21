@@ -25,7 +25,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Json;
 use fornalha_core::config::Estudio;
-use fornalha_core::consts::{APP_NAME, APP_VERSION};
+use fornalha_core::consts::{APP_NAME, APP_VERSION, NOME_EXIBIDO};
 use fornalha_core::niveis::Nivel;
 use fornalha_core::paths::Paths;
 use fornalha_core::servico::Fornalha;
@@ -272,6 +272,18 @@ mod nucleo {
         }
     }
 
+    /// Baixar um pacote de conteúdo CC0: só a pessoa, pela janela (fala com sites de fora).
+    async fn baixar_pacote(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        use fornalha_core::pacotes::{self, Pacote};
+        let Some(p) = v["id"].as_str().and_then(Pacote::de_id) else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Pacote desconhecido."}}))).into_response();
+        };
+        match pacotes::baixar(&c.fornalha.paths, p).await {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
     /// Canal exclusivo da janela: a mesma API (como "pessoa") + rotas que só a pessoa usa.
     async fn servir_canal_janela(app: AppHandle) {
         let st = app.state::<Estado>();
@@ -285,6 +297,7 @@ mod nucleo {
                     .route("/janela/estudio", post(definir_estudio))
                     .route("/janela/ajustes", post(definir_ajustes))
                     .route("/janela/modelo-de-placa", post(modelo_de_placa))
+                    .route("/janela/pacote", post(baixar_pacote))
                     .with_state(canal),
             )
             .layer(middleware::from_fn_with_state(senha, checar_senha));
@@ -302,7 +315,7 @@ mod nucleo {
     }
 
     fn montar_bandeja(app: &AppHandle, porta: u16) -> tauri::Result<()> {
-        let abrir = MenuItem::with_id(app, "abrir", "Abrir Fornalha", true, None::<&str>)?;
+        let abrir = MenuItem::with_id(app, "abrir", "Abrir Fornalha 3D", true, None::<&str>)?;
         let api = MenuItem::with_id(app, "api", format!("API e MCP em 127.0.0.1:{porta}"), false, None::<&str>)?;
         let sair = MenuItem::with_id(app, "sair", "Sair", true, None::<&str>)?;
         let sep1 = PredefinedMenuItem::separator(app)?;
@@ -311,7 +324,7 @@ mod nucleo {
         let icone = app.default_window_icon().cloned().ok_or_else(|| tauri::Error::AssetNotFound("ícone".into()))?;
         TrayIconBuilder::with_id(BANDEJA)
             .icon(icone)
-            .tooltip(APP_NAME)
+            .tooltip(NOME_EXIBIDO)
             .menu(&menu)
             .show_menu_on_left_click(false)
             .on_menu_event(|app, ev| match ev.id().as_ref() {
@@ -486,7 +499,8 @@ mod janela {
         use base64::Engine;
         let real = dentro_de_projeto(std::path::Path::new(&caminho)).ok_or("arquivo fora de um projeto da Fornalha")?;
         let tamanho = std::fs::metadata(&real).map_err(|e| e.to_string())?.len();
-        if tamanho > 25 * 1024 * 1024 {
+        let eh_modelo = real.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb"));
+        if tamanho > if eh_modelo { 160 } else { 25 } * 1024 * 1024 {
             return Err("arquivo grande demais para a prévia".into());
         }
         let mime = match real.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
@@ -495,6 +509,7 @@ mod janela {
             "webp" => "image/webp",
             "wav" => "audio/wav",
             "mp4" => "video/mp4",
+            "glb" => "model/gltf-binary",
             "json" | "md" => "text/plain",
             _ => "application/octet-stream",
         };
@@ -591,7 +606,7 @@ mod janela {
                 tracing::info!(?sistema, "botões da janela");
                 app.manage(SistemaJanela(sistema));
                 let w = WebviewWindowBuilder::new(app, JANELA, WebviewUrl::App("index.html".into()))
-                    .title(APP_NAME)
+                    .title(NOME_EXIBIDO)
                     .inner_size(1080.0, 740.0)
                     .min_inner_size(800.0, 560.0)
                     // Barra de título integrada: o topo da própria Fornalha faz o papel

@@ -212,6 +212,14 @@ def exportar_glb(caminho, selecionados=None, animacoes=True):
 
 # ---------------- prévia (render) ----------------
 
+CEU = {"hdri": None, "forca": 2.2}
+
+
+def definir_ceu(caminho, forca=2.2):
+    CEU["hdri"] = caminho if caminho and os.path.isfile(caminho) else None
+    CEU["forca"] = forca
+
+
 def _preparar_render(largura, altura, amostras=24):
     cena = bpy.context.scene
     cena.render.engine = "CYCLES"
@@ -226,6 +234,12 @@ def _preparar_render(largura, altura, amostras=24):
     cena.render.resolution_percentage = 100
     cena.render.film_transparent = False
     cena.render.image_settings.file_format = "PNG"
+    try:
+        cena.view_settings.view_transform = "AgX"
+        cena.view_settings.look = "AgX - Medium High Contrast"
+        cena.view_settings.exposure = 0.35
+    except Exception:
+        pass
     mundo = cena.world or bpy.data.worlds.new("mundo")
     cena.world = mundo
     try:
@@ -238,14 +252,29 @@ def _preparar_render(largura, altura, amostras=24):
         if fundo is not None:
             fundo.inputs[0].default_value = (0.045, 0.04, 0.05, 1.0)
             fundo.inputs[1].default_value = 1.0
+            if CEU["hdri"] and not arv.nodes.get("ceu_hdri"):
+                # o céu ilumina e reflete nos metais; a câmera continua vendo o fundo escuro
+                env = arv.nodes.new("ShaderNodeTexEnvironment")
+                env.name = "ceu_hdri"
+                env.image = bpy.data.images.load(CEU["hdri"], check_existing=True)
+                luz = arv.nodes.new("ShaderNodeBackground")
+                luz.inputs[1].default_value = CEU["forca"]
+                arv.links.new(env.outputs["Color"], luz.inputs["Color"])
+                caminho_luz = arv.nodes.new("ShaderNodeLightPath")
+                mistura = arv.nodes.new("ShaderNodeMixShader")
+                saida = next(n for n in arv.nodes if n.type == "OUTPUT_WORLD")
+                arv.links.new(caminho_luz.outputs["Is Camera Ray"], mistura.inputs[0])
+                arv.links.new(luz.outputs["Background"], mistura.inputs[1])
+                arv.links.new(fundo.outputs["Background"], mistura.inputs[2])
+                arv.links.new(mistura.outputs["Shader"], saida.inputs["Surface"])
     else:
         mundo.color = (0.045, 0.04, 0.05)
 
 
 def _luzes(centro, tamanho):
     for nome, energia, direcao, cor in (
-        ("sol", 3.2, (-0.6, -0.8, 1.0), (1.0, 0.94, 0.86)),
-        ("contra", 1.6, (0.8, 1.0, 0.7), (1.0, 0.62, 0.35)),
+        ("sol", 4.2, (-0.6, -0.8, 1.0), (1.0, 0.95, 0.9)),
+        ("contra", 1.4, (0.8, 1.0, 0.7), (0.92, 0.86, 0.8)),
     ):
         luz = bpy.data.lights.new(nome, "SUN")
         luz.energy = energia
@@ -334,7 +363,7 @@ def folha_de_modelo(caminho, objs, largura=420, altura=640, amostras=20):
     return caminho
 
 
-def video(caminho, objs, acoes, armadura, largura=400, altura=450, amostras=6):
+def video(caminho, objs, acoes, armadura, largura=640, altura=720, amostras=14):
     """Vídeo curto das animações (MP4 pelo ffmpeg que vem no Blender)."""
     cena = bpy.context.scene
     _preparar_render(largura, altura, amostras)
@@ -367,4 +396,49 @@ def video(caminho, objs, acoes, armadura, largura=400, altura=450, amostras=6):
     except Exception:
         pass
     s.file_format = "PNG"
+    return caminho
+
+
+def retrato(caminho, centro, largura=900, altura=1100, amostras=64, distancia=0.85, lente=85):
+    """Close de estúdio (rosto ou objeto): luz principal suave, recorte e fundo escuro."""
+    _preparar_render(largura, altura, amostras)
+    centro = Vector(centro)
+    for nome, energia, pos, tamanho, cor in (
+        ("chave_retrato", 55.0, (-0.9, -1.1, 0.6), 0.9, (1.0, 0.95, 0.9)),
+        ("recorte_retrato", 70.0, (0.8, 0.9, 0.5), 0.5, (1.0, 0.75, 0.55)),
+        ("preench_retrato", 9.0, (0.9, -1.0, -0.1), 1.2, (0.75, 0.82, 1.0)),
+    ):
+        if bpy.data.objects.get(nome):
+            continue
+        luz = bpy.data.lights.new(nome, "AREA")
+        luz.energy = energia
+        luz.size = tamanho
+        luz.color = cor
+        o = bpy.data.objects.new(nome, luz)
+        bpy.context.scene.collection.objects.link(o)
+        o.location = centro + Vector(pos)
+        o.rotation_euler = (centro - o.location).to_track_quat("-Z", "Y").to_euler()
+    for nome in ("sol", "contra", "preenchimento"):
+        o = bpy.data.objects.get(nome)
+        if o:
+            o.hide_render = True
+    chao = bpy.data.objects.get("chao_previa")
+    if chao:
+        chao.hide_render = True
+    cam = bpy.context.scene.camera or _camera()
+    cam.data.type = "PERSP"
+    cam.data.lens = lente
+    cam.location = centro + Vector((-0.18, -1.0, 0.05)).normalized() * distancia
+    cam.rotation_euler = (centro - cam.location).to_track_quat("-Z", "Y").to_euler()
+    cam.data.clip_start = 0.01
+    bpy.context.scene.render.filepath = caminho
+    os.makedirs(os.path.dirname(os.path.abspath(caminho)), exist_ok=True)
+    bpy.ops.render.render(write_still=True)
+    for nome in ("sol", "contra", "preenchimento"):
+        o = bpy.data.objects.get(nome)
+        if o:
+            o.hide_render = False
+    if chao:
+        chao.hide_render = False
+    cam.data.lens = 50
     return caminho

@@ -259,3 +259,15 @@ fn relatorio_de_creditos_e_licencas() {
     assert_eq!(salvo, rel.markdown);
     assert_eq!(rel.arquivo, p.raiz.join("ai/creditos-e-licencas.md"));
 }
+
+#[test]
+fn texturas_que_a_engine_tira_do_glb_usam_o_recibo_do_glb() {
+    let tmp = tempfile::tempdir().unwrap();
+    let p = projeto_em(tmp.path(), true);
+    asset(&p, "Characters/aren/aren.glb", b"glb");
+    recibos::registrar(&p, &Catalogo::embutido(), &ctx(&p), pedido("Characters/aren/aren.glb", "humano-fornalha")).unwrap();
+    asset(&p, "Characters/aren/aren_Metal038_1K-JPG_Color.jpg", b"jpg");
+    asset(&p, "Characters/aren/outra.png", b"png");
+    let pend = recibos::pendencias(&p, &Catalogo::embutido(), &ctx(&p)).unwrap();
+    assert_eq!(pend.sem_recibo, vec!["Characters/aren/outra.png".to_string()]);
+}

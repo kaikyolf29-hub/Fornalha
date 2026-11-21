@@ -124,6 +124,34 @@ async function dataUrl(caminho) {
   if (!tauri || !caminho) return null;
   try { const r = await tauri.invoke("ler_arquivo", { caminho }); return `data:${r.mime};base64,${r.base64}`; } catch { return null; }
 }
+async function urlDoModelo(caminho) {
+  if (!tauri || !caminho) return null;
+  try {
+    const r = await tauri.invoke("ler_arquivo", { caminho });
+    const bin = atob(r.base64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: "model/gltf-binary" }));
+  } catch { return null; }
+}
+let urlVisualizador = null;
+async function abrirVisualizador(caminho) {
+  const url = await urlDoModelo(caminho);
+  if (!url) return mensagem("Não deu para abrir o modelo (é grande demais ou está fora do projeto).", "alerta");
+  if (urlVisualizador) URL.revokeObjectURL(urlVisualizador);
+  urlVisualizador = url;
+  const mv = $("vis-modelo");
+  $("vis-nome").textContent = nomeArquivo(caminho);
+  mv.src = url;
+  mv.addEventListener("load", () => {
+    const lista = mv.availableAnimations || [];
+    pinta($("vis-animacao"), lista.length ? lista.map((n) => `<option ${n === "parado" ? "selected" : ""}>${esc(n)}</option>`).join("") : "<option>sem animação</option>");
+    if (lista.includes("parado")) mv.animationName = "parado";
+    mv.play();
+  }, { once: true });
+  $("visualizador").showModal();
+}
+$("vis-animacao").addEventListener("change", (e) => { const mv = $("vis-modelo"); mv.animationName = e.target.value; mv.play(); });
+$("vis-fechar").addEventListener("click", () => $("visualizador").close());
 async function abrirArquivo(caminho) {
   if (!tauri) return mensagem(caminho);
   try { await tauri.invoke("abrir_arquivo", { caminho }); } catch (e) { mensagem(String(e), "erro"); }
@@ -448,7 +476,8 @@ async function pintarGaleria() {
   $("galeria")._html = null;
   $("galeria").innerHTML = lista.map((r, i) => {
     const venda = r.modelo.uso_comercial === "sim";
-    return `<div class="cartao-asset"><div class="vitrine" id="vit-${i}">${r.arquivo.endsWith(".wav") ? `<button class="botao" data-tocar="${esc(raiz + "/" + r.arquivo)}">Ouvir</button>` : "carregando"}</div>
+    const ver3d = r.arquivo.endsWith(".glb") ? `<button class="botao ver-3d" data-ver3d="${esc(raiz + "/" + r.arquivo)}">Ver em 3D</button>` : "";
+    return `<div class="cartao-asset"><div class="vitrine" id="vit-${i}">${ver3d}${r.arquivo.endsWith(".wav") ? `<button class="botao" data-tocar="${esc(raiz + "/" + r.arquivo)}">Ouvir</button>` : "carregando"}</div>
       <div class="info"><strong>${esc(nomeArquivo(r.arquivo))}</strong><small>${esc(r.modelo.nome)}</small>
       <span><span class="selo ${venda ? "venda" : "teste"}">${venda ? "Pode vender" : esc(r.modelo.licenca)}</span>${foraDoGuia.has(r.arquivo) ? ` <span class="selo teste">Fora do guia</span>` : ""}</span></div></div>`;
   }).join("");
@@ -474,6 +503,7 @@ $("conferir-estilo").addEventListener("click", async () => {
     pintarGaleria();
   } catch (err) { mensagem(err.message, err.codigo === "sem_paleta" ? "alerta" : "erro"); }
 });
+$("galeria").addEventListener("click", (e) => { const b = e.target.closest("[data-ver3d]"); if (b) abrirVisualizador(b.dataset.ver3d); });
 $("filtros-galeria").addEventListener("click", (e) => { const b = e.target.closest("[data-filtro]"); if (b) { filtroGaleria = b.dataset.filtro; pintarGaleria(); } });
 
 // ---------- Testar ----------
@@ -596,6 +626,7 @@ async function pintarMaquina() {
       <div class="lado">${p.achado ? "" : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`}<button class="botao" data-programa="${id}">Escolher</button></div></div>`;
   }).join(""));
   pintarModelosDePlaca(a.cuda);
+  pintarPacotes();
   $("nivel-maquina").value = (info && info.nivel_da_maquina) || "auto";
   const emUso = niveis.nivel_em_uso;
   const cab = `<thead><tr><th>Função</th>${niveis.tabela.map((l) => `<th class="${l.nivel === emUso ? "em-uso" : ""}">${esc(l.nome)}<small>${esc(l.faixa)}</small></th>`).join("")}</tr></thead>`;
@@ -607,6 +638,25 @@ async function pintarMaquina() {
   }).join("")}</tr>`).join("");
   pinta($("tabela-niveis"), cab + "<tbody>" + linhas + "</tbody>");
 }
+let vigiaPacotes = null;
+function pintarPacotes() {
+  const lista = (estado && estado.pacotes) || [];
+  pinta($("pacotes"), lista.map((p) => {
+    const situacao = p.baixando ? "Baixando…" : p.instalado ? "Instalado" : `Não baixado (${p.tamanho})`;
+    const ultima = p.log && p.log.length ? p.log[p.log.length - 1] : "";
+    return `<div class="item"><div><strong>${esc(p.nome)}</strong><small>${esc(situacao)}</small>${p.baixando && ultima ? `<small class="mono">${esc(ultima)}</small>` : ""}</div>
+      <div class="lado">${p.baixando ? "" : `<button class="botao${p.instalado ? "" : " quente"}" data-pacote="${esc(p.id)}">${p.instalado ? "Baixar de novo" : "Baixar"}</button>`}</div></div>`;
+  }).join(""));
+  clearTimeout(vigiaPacotes);
+  if (lista.some((p) => p.baixando)) vigiaPacotes = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 4000);
+}
+$("pacotes").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-pacote]");
+  if (!b) return;
+  b.disabled = true;
+  try { await api("POST", "/janela/pacote", { id: b.dataset.pacote }); mensagem("Download começou."); } catch (err) { mensagem(err.message, "erro"); }
+  carregar("maquina");
+});
 let vigiaModelos = null;
 function pintarModelosDePlaca(cuda) {
   const lista = (estado && estado.modelos_de_placa) || [];

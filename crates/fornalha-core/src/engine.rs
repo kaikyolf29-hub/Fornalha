@@ -21,7 +21,7 @@ use crate::projeto::Projeto;
 
 /// Scripts do jogo que a Fornalha escreve em `Scripts/fornalha/`.
 /// (caminho no projeto, conteúdo). A ponte é um plugin do editor (vale na Godot e na Erethea).
-const SCRIPTS: [(&str, &str); 9] = [
+const SCRIPTS: [(&str, &str); 10] = [
     ("Scripts/fornalha/jogador.gd", include_str!("../godot/jogador.gd")),
     ("Scripts/fornalha/inimigo.gd", include_str!("../godot/inimigo.gd")),
     ("Scripts/fornalha/hud.gd", include_str!("../godot/hud.gd")),
@@ -29,6 +29,7 @@ const SCRIPTS: [(&str, &str); 9] = [
     ("Scripts/fornalha/teste_automatico.gd", include_str!("../godot/teste_automatico.gd")),
     ("Scripts/fornalha/principal.gd", include_str!("../godot/principal.gd")),
     ("Scripts/fornalha/montar.gd", include_str!("../godot/montar.gd")),
+    ("Scripts/fornalha/fisica.gd", include_str!("../godot/fisica.gd")),
     ("addons/fornalha_ponte/plugin.cfg", include_str!("../godot/ponte_plugin.cfg")),
     ("addons/fornalha_ponte/ponte_plugin.gd", include_str!("../godot/ponte_plugin.gd")),
 ];
@@ -82,6 +83,10 @@ window/size/viewport_height=720
 
 renderer/rendering_method="forward_plus"
 anti_aliasing/quality/msaa_3d=1
+anti_aliasing/quality/use_taa=true
+lights_and_shadows/directional_shadow/size=8192
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
+global_illumination/sdfgi/probe_ray_count=2
 "#,
         nome = escapar(nome),
         descricao = escapar(descricao),
@@ -236,6 +241,7 @@ pub fn escrever_manifesto(raiz: &Path, jogador: Option<&str>, inimigo_perto: boo
         "spawn_jogador": info.get("spawn_jogador").cloned().unwrap_or(json!([0.0, 0.2, 0.0])),
         "spawn_inimigos": info.get("spawn_inimigos").cloned().unwrap_or(json!([])),
         "musica": musica,
+        "ceu": if raiz.join("World/ceu.exr").is_file() { json!("res://World/ceu.exr") } else { json!("") },
         "principal": "res://principal.tscn",
     });
     let arq = raiz.join(".fornalha/cena.json");

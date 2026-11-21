@@ -303,6 +303,21 @@ fn listar_assets(raiz: &Path) -> Vec<String> {
     out
 }
 
+/// Textura que a engine (Godot/Erethea) tirou de dentro de um `.glb` ao importar
+/// (`pasta/nome_Textura.png` ao lado de `pasta/nome.glb`): o recibo do `.glb` vale para ela.
+fn derivado_de_glb(arquivo: &str, atuais: &BTreeMap<String, Recibo>) -> bool {
+    let (pasta, nome) = arquivo.rsplit_once('/').unwrap_or(("", arquivo));
+    let ext = nome.rsplit('.').next().unwrap_or("").to_lowercase();
+    if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) {
+        return false;
+    }
+    atuais.keys().any(|k| {
+        let Some(base) = k.strip_suffix(".glb") else { return false };
+        let (p2, n2) = base.rsplit_once('/').unwrap_or(("", base));
+        p2 == pasta && nome.starts_with(&format!("{n2}_"))
+    })
+}
+
 /// Confere os assets do projeto contra os recibos, como se ele fosse à venda.
 pub fn pendencias(projeto: &Projeto, cat: &Catalogo, ctx: &ContextoRota) -> Resultado<Pendencias> {
     let atuais = atuais(&projeto.raiz)?;
@@ -337,7 +352,7 @@ pub fn pendencias(projeto: &Projeto, cat: &Catalogo, ctx: &ContextoRota) -> Resu
             }
         }
     }
-    p.sem_recibo = listar_assets(&projeto.raiz).into_iter().filter(|a| !atuais.contains_key(a)).collect();
+    p.sem_recibo = listar_assets(&projeto.raiz).into_iter().filter(|a| !atuais.contains_key(a) && !derivado_de_glb(a, &atuais)).collect();
     Ok(p)
 }
 

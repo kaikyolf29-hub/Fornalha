@@ -118,7 +118,7 @@ fn roteador_escolhe_o_modelo_do_nivel() {
 fn sem_aceite_da_tencent_a_animacao_cai_para_a_biblioteca() {
     let c = cat();
     let e = licencas::escolher(&c, "animacao", Nivel::Qualidade, &ctx_nvidia()).unwrap();
-    assert_eq!(e.modelo.as_ref().unwrap().id, "biblioteca-fornalha");
+    assert_eq!(e.modelo.as_ref().unwrap().id, "biblioteca-quaternius");
     assert!(e.recusados.iter().any(|r| r.modelo == "hy-motion-1.0-q"));
     let ctx = ContextoRota { licencas_aceitas: vec!["tencent-hunyuan".into()], ..ctx_nvidia() };
     let e = licencas::escolher(&c, "animacao", Nivel::Qualidade, &ctx).unwrap();
@@ -144,7 +144,7 @@ fn nada_liberado_explica_cada_recusa() {
     // e a Forja da Fornalha entra, com o motivo de cada recusa.
     let c = cat();
     let e = licencas::escolher(&c, "3d", Nivel::Maximo, &ctx_nvidia()).unwrap();
-    assert_eq!(e.modelo.as_ref().unwrap().id, "forja-3d");
+    assert_eq!(e.modelo.as_ref().unwrap().id, "humano-fornalha");
     assert!(e.recusados.iter().any(|r| r.modelo.starts_with("trellis2")));
     assert!(e.recusados.iter().all(|r| !r.motivo.is_empty()));
 }
@@ -189,7 +189,7 @@ fn regras_de_provedor_do_plano() {
 fn trellis_verificado_sem_nvdiffrast_entra_em_projeto_comercial() {
     let c = cat();
     let e = licencas::escolher(&c, "3d", Nivel::Qualidade, &ctx_nvidia()).unwrap();
-    assert_eq!(e.modelo.as_ref().unwrap().id, "forja-3d");
+    assert_eq!(e.modelo.as_ref().unwrap().id, "humano-fornalha");
     let r = e.recusados.iter().find(|r| r.modelo.starts_with("trellis2")).unwrap();
     assert!(r.motivo.contains("nvdiffrast"), "{}", r.motivo);
     // a verificação da instalação comprovou que o worker não usa o nvdiffrast
@@ -199,7 +199,7 @@ fn trellis_verificado_sem_nvdiffrast_entra_em_projeto_comercial() {
     assert!(e.avisos.iter().any(|a| a.contains("sem o nvdiffrast")), "{:?}", e.avisos);
     // sem placa NVIDIA continua de fora
     let amd = ContextoRota { cuda: false, ..ctx };
-    assert_eq!(licencas::escolher(&c, "3d", Nivel::Qualidade, &amd).unwrap().modelo.unwrap().id, "forja-3d");
+    assert_eq!(licencas::escolher(&c, "3d", Nivel::Qualidade, &amd).unwrap().modelo.unwrap().id, "humano-fornalha");
 }
 
 #[test]
@@ -208,5 +208,5 @@ fn hy_motion_precisa_de_cuda_e_do_aceite() {
     let aceito = ContextoRota { licencas_aceitas: vec!["tencent-hunyuan".into()], ..ctx_nvidia() };
     assert!(licencas::escolher(&c, "animacao", Nivel::Equilibrado, &aceito).unwrap().modelo.unwrap().id.starts_with("hy-motion"));
     let amd = ContextoRota { cuda: false, ..aceito };
-    assert_eq!(licencas::escolher(&c, "animacao", Nivel::Equilibrado, &amd).unwrap().modelo.unwrap().id, "biblioteca-fornalha");
+    assert_eq!(licencas::escolher(&c, "animacao", Nivel::Equilibrado, &amd).unwrap().modelo.unwrap().id, "biblioteca-quaternius");
 }

@@ -115,7 +115,7 @@ async fn trellis_de_mentira_vira_modelo_com_textura_e_libera_venda_depois_da_ver
 
     // antes da verificação, o projeto comercial não aceita o TRELLIS.2 (nvdiffrast)
     let e = chamar(&f, "choose_model", json!({"funcao": "3d"})).await;
-    assert_eq!(e["modelo"]["id"], "forja-3d", "{e}");
+    assert_eq!(e["modelo"]["id"], "humano-fornalha", "{e}");
     imagem_de_teste(&py, &raiz.join("ai/conceitos/estatua.png"));
     let err = f.chamar("generate_3d", json!({"imagem": "ai/conceitos/estatua.png", "nome": "estatua"}), "claude-code").await.unwrap_err();
     assert_eq!(err.codigo, "sem_modelo_de_imagem_para_3d", "{}", err.mensagem);

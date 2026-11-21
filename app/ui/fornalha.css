@@ -318,3 +318,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .passos small { color: var(--ferro); }
 .amostra { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-left: 4px; border: 1px solid var(--rebite); }
 .hora { width: 56px; font: inherit; padding: 4px 6px; border: 1px solid var(--rebite); border-radius: 6px; background: var(--bancada); color: inherit; }
+
+/* Fornalha 3D: selo do nome e visualizador 3D */
+.selo-3d { font-weight: 800; font-size: 0.72em; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 6px; margin-left: 4px;
+  background: linear-gradient(135deg, var(--brasa, #e8622c), var(--cobre, #b8733c)); color: #fff; vertical-align: 2px; }
+.visualizador { width: min(1100px, 92vw); height: min(780px, 88vh); padding: 14px; border: 1px solid var(--rebite); border-radius: 14px;
+  background: radial-gradient(ellipse at 50% 30%, #2b2d33 0%, #15161a 70%); color: #e9e6e1; }
+.visualizador::backdrop { background: rgba(8, 8, 10, 0.72); backdrop-filter: blur(3px); }
+.visualizador model-viewer { width: 100%; height: calc(100% - 78px); background: transparent; --poster-color: transparent; }
+.vis-topo { display: flex; gap: 14px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.vis-topo strong { font-size: 15px; }
+.vitrine { position: relative; }
+.ver-3d { position: absolute; right: 8px; bottom: 8px; z-index: 2; font-size: 12px; padding: 3px 9px; }

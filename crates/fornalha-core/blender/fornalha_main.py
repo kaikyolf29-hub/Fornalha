@@ -65,6 +65,35 @@ def tarefa_personagem(t):
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas(objs, arm, acoes)}
 
 
+def tarefa_humano(t):
+    """Humano realista a partir dos dados CC0 do MakeHuman, com esqueleto de jogo."""
+    import fc_humano
+
+    ficha = t.get("humano", {})
+    if t.get("materiais"):
+        import fc_pbr
+
+        fc_pbr.definir_pasta(t["materiais"])
+    if t.get("ceu"):
+        c.definir_ceu(t["ceu"])
+    arm, pecas, h = fc_humano.criar_humano(t["makehuman"]["dados"], t["makehuman"]["assets"], ficha)
+    acoes = []
+    if t.get("animacoes_de"):
+        import fc_retarget
+
+        acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"))
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, [arm] + pecas, animacoes=bool(acoes))
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, pecas, saida, arm if acoes else None, acoes))
+    if t.get("retrato", True):
+        cabeca = arm.matrix_world @ arm.data.bones["head"].head_local
+        arquivos["retrato"] = c.retrato(os.path.splitext(saida)[0] + ".retrato.png", cabeca + Vector((0, 0, 0.09)), amostras=int(t.get("amostras", 48)))
+    st = estatisticas(pecas, arm, acoes)
+    st["pecas"] = [o.name for o in pecas]
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
 def tarefa_arma(t):
     import fc_armas
 
@@ -445,6 +474,7 @@ TAREFAS = {
     "animar": tarefa_animar,
     "material": tarefa_material,
     "assar": tarefa_assar,
+    "humano": tarefa_humano,
     "movimento": tarefa_movimento,
 }
 

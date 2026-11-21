@@ -485,6 +485,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "recursos_ignis": recursos_ignis,
                 "programas": programas,
                 "modelos_de_placa": crate::workers::estado(&f.paths),
+                "pacotes": crate::pacotes::estado(&f.paths),
             }))
         }
         "create_project" => {

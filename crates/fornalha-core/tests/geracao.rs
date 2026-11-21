@@ -157,6 +157,54 @@ async fn pedido_livre_vai_para_a_fila_e_gera_de_verdade() {
     assert!(raiz.join("Audio/musica/masmorra.wav").is_file());
 }
 
+/// Com os pacotes de conteúdo (FORNALHA_PACOTE_MAKEHUMAN / _ANIMACOES / _MATERIAIS):
+/// o personagem sai realista, com roupa medieval PBR e animações de captura, e roda no jogo.
+#[tokio::test]
+async fn personagem_realista_com_pacotes_testado_na_engine() {
+    let tmp = tempfile::tempdir().unwrap();
+    let Some(f) = fornalha_com_ferramentas(tmp.path()).await else {
+        eprintln!("Blender ou engine não encontrados: teste pulado");
+        return;
+    };
+    if fornalha_core::pacotes::para_a_forja(&f.paths).is_none() {
+        eprintln!("pacotes de conteúdo não encontrados: teste pulado");
+        return;
+    }
+    f.definir_porta_ignis(1).unwrap();
+    let p = f.chamar("create_project", json!({"nome": "Ordem do Templo"}), "claude-code").await.unwrap();
+    let raiz = std::path::PathBuf::from(p["raiz"].as_str().unwrap());
+    f.chamar("update_project", json!({"alteracoes": {"guia_visual": {"paleta": ["#d9d3c3", "#7a1c18", "#3d2a1c"]}}}), "claude-code")
+        .await
+        .unwrap();
+    let heroi = f
+        .chamar("create_character", json!({"nome": "Godofredo", "papel": "protagonista", "descricao": "cavaleiro templário", "armadura": "pesada", "arma": "espada", "porte": "forte", "conceito": false}), "claude-code")
+        .await
+        .unwrap();
+    eprintln!("herói: {}", serde_json::to_string_pretty(&heroi["estatisticas"]).unwrap());
+    assert_eq!(heroi["modelo_3d"], "humano-fornalha", "{heroi}");
+    let nomes: Vec<&str> = heroi["estatisticas"]["animacoes"].as_array().unwrap().iter().filter_map(|a| a["nome"].as_str()).collect();
+    for n in ["parado", "andar", "correr", "atacar", "defender", "esquivar", "dano", "morrer"] {
+        assert!(nomes.contains(&n), "falta a animação {n}: {nomes:?}");
+    }
+    assert!(heroi["estatisticas"]["triangulos"].as_u64().unwrap() > 20000);
+    let inimigo = f
+        .chamar("create_character", json!({"papel": "inimigo", "descricao": "mercenário com espada", "armadura": "leve", "arma": "espada", "testar_na_engine": true, "conceito": false}), "claude-code")
+        .await
+        .unwrap();
+    let teste = &inimigo["teste"];
+    eprintln!("run_test: {}", serde_json::to_string_pretty(teste).unwrap());
+    assert_eq!(inimigo["modelo_3d"], "humano-fornalha");
+    assert_eq!(teste["passou"], true, "{teste}");
+    assert_eq!(teste["erros"], json!([]));
+    let pend = f.chamar("check_licenses", json!({}), "claude-code").await.unwrap();
+    assert_eq!(pend["pode_vender"], true, "{pend}");
+    if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {
+        let destino = std::path::Path::new(&d).join("realista");
+        let _ = std::fs::remove_dir_all(&destino);
+        copiar(&raiz, &destino);
+    }
+}
+
 fn copiar(de: &std::path::Path, para: &std::path::Path) {
     std::fs::create_dir_all(para).unwrap();
     for e in std::fs::read_dir(de).unwrap().flatten() {

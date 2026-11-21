@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fornalha</title>
+  <title>Fornalha 3D</title>
   <link rel="stylesheet" href="fornalha.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
     <div class="controles-janela esquerda" id="controles-esquerda" hidden></div>
     <div class="marca" data-arrastar="tudo">
       <img src="icone.png" alt="" width="22" height="22">
-      <span>Fornalha</span>
+      <span>Fornalha <b class="selo-3d">3D</b></span>
     </div>
     <nav class="estacoes" aria-label="Estações">
       <button data-estacao="projeto" class="ativa">Projeto</button>
@@ -153,6 +153,11 @@
         </section>
       </div>
       <section class="painel">
+        <div class="titulo-painel"><h2>Pacotes de conteúdo</h2></div>
+        <p class="nota" style="margin:0 0 10px">Humanos realistas, animações de captura e materiais PBR, todos CC0. Baixam só quando você clica; nada é enviado.</p>
+        <div id="pacotes" class="lista"></div>
+      </section>
+      <section class="painel">
         <div class="titulo-painel"><h2>Modelos de placa</h2></div>
         <p class="nota" style="margin:0 0 10px">Só com placa NVIDIA. Cada um fica num ambiente só dele; sem eles, a Fornalha usa a Forja, o esqueleto padrão e a biblioteca de animações.</p>
         <div id="modelos-placa" class="lista"></div>
@@ -192,5 +197,14 @@
   </main>
 </div>
 <script src="app.js"></script>
+  <dialog id="visualizador" class="visualizador">
+    <div class="vis-topo"><strong id="vis-nome"></strong>
+      <label class="linha-campo">Animação <select id="vis-animacao"></select></label>
+      <button class="botao" id="vis-fechar">Fechar</button></div>
+    <model-viewer id="vis-modelo" camera-controls auto-rotate auto-rotate-delay="1500" rotation-per-second="18deg" shadow-intensity="1.1"
+      shadow-softness="0.8" exposure="1.05" tone-mapping="aces" environment-image="neutral" autoplay interaction-prompt="none"></model-viewer>
+    <p class="nota">Arraste para girar, role para aproximar. O que você vê é o arquivo que vai para a engine.</p>
+  </dialog>
+  <script type="module" src="vendor/model-viewer.min.js"></script>
 </body>
 </html>

@@ -108,6 +108,27 @@ jobs:
         shell: bash
         run: python -m pip install numpy pillow
 
+      - name: Cache dos pacotes de conteúdo (MakeHuman, animações e materiais, CC0)
+        uses: actions/cache@v4
+        with:
+          path: ~/pacotes
+          key: pacotes-v1-${{ runner.os }}
+
+      - name: Baixar os pacotes de conteúdo (como o botão Baixar da janela)
+        shell: bash
+        run: |
+          cargo build -q -p fornalha-cli
+          base="$HOME/pacotes"
+          if [ "$RUNNER_OS" = "Windows" ]; then base="$(cygpath -w "$base")"; fi
+          for p in makehuman animacoes materiais; do
+            if [ ! -f "$HOME/pacotes/dados/pacotes/$p/pacote.json" ]; then
+              FORNALHA_HOME="$base" ./target/debug/fornalha-cli baixar-pacote $p | tail -3
+            fi
+            dir="$HOME/pacotes/dados/pacotes/$p"
+            if [ "$RUNNER_OS" = "Windows" ]; then dir="$(cygpath -w "$dir")"; fi
+            echo "FORNALHA_PACOTE_$(echo $p | tr a-z A-Z)=$dir" >> "$GITHUB_ENV"
+          done
+
       - name: Gerações (Forja, engine, workers de placa e o pronto da Fase 4 pelo MCP)
         shell: bash
         env:

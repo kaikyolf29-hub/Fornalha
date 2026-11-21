@@ -2,6 +2,8 @@
 
 /// Nome mostrado para a pessoa.
 pub const APP_NAME: &str = "Fornalha";
+/// Nome que a pessoa vê (janela, bandeja, instalador). O APP_NAME fica para a API e as pastas.
+pub const NOME_EXIBIDO: &str = "Fornalha 3D";
 /// Nome usado em pastas, chave Run do Windows e arquivo .desktop.
 pub const APP_ID: &str = "fornalha";
 /// Versão do aplicativo (vem do Cargo).

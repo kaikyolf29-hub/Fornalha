@@ -152,3 +152,17 @@ async fn malha_de_fora_ganha_limpeza_esqueleto_e_animacoes() {
     assert_eq!(st["ossos"], 23);
     assert!(st["animacoes"].as_array().unwrap().len() >= 9);
 }
+
+#[test]
+fn todo_script_do_blender_vai_dentro_da_fornalha() {
+    let tmp = tempfile::tempdir().unwrap();
+    let principal = fornalha_core::forja::preparar_scripts(tmp.path()).unwrap();
+    let pasta = principal.parent().unwrap();
+    let fonte = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("blender");
+    for e in std::fs::read_dir(fonte).unwrap().flatten() {
+        let nome = e.file_name();
+        if nome.to_string_lossy().ends_with(".py") {
+            assert!(pasta.join(&nome).is_file(), "{nome:?} não está na lista SCRIPTS de forja.rs");
+        }
+    }
+}

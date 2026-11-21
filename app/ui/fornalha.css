@@ -139,14 +139,14 @@ html[data-botoes="kde"] .controles-janela button { width: 24px; height: 24px; bo
 html[data-botoes="kde"] .controles-janela button:hover { background: color-mix(in srgb, var(--texto) 14%, transparent); }
 html[data-botoes="kde"] .controles-janela .jan-close:hover { background: #da4453; color: #fff; }
 html[data-botoes="kde"] .controles-janela svg { width: 16px; height: 16px; stroke-width: 1.5; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .controles-janela { gap: 8px; padding: 0 14px; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .controles-janela button { width: 12px; height: 12px; border-radius: 50%; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .jan-close { background: #ff5f57; color: #4d0000; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .jan-minimize { background: #febc2e; color: #995700; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .jan-maximize { background: #28c840; color: #006500; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .controles-janela svg { width: 12px; height: 12px; stroke-width: 1.35; opacity: 0; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"]) .controles-janela:hover svg { opacity: 1; }
-:is(html[data-botoes="mac"], html[data-botoes="matsu"])[data-inativa] .controles-janela:not(:hover) button { background: var(--jan-inativa); }
+html[data-botoes="mac"] .controles-janela { gap: 8px; padding: 0 14px; }
+html[data-botoes="mac"] .controles-janela button { width: 12px; height: 12px; border-radius: 50%; }
+html[data-botoes="mac"] .jan-close { background: #ff5f57; color: #4d0000; }
+html[data-botoes="mac"] .jan-minimize { background: #febc2e; color: #995700; }
+html[data-botoes="mac"] .jan-maximize { background: #28c840; color: #006500; }
+html[data-botoes="mac"] .controles-janela svg { width: 12px; height: 12px; stroke-width: 1.35; opacity: 0; }
+html[data-botoes="mac"] .controles-janela:hover svg { opacity: 1; }
+html[data-botoes="mac"][data-inativa] .controles-janela:not(:hover) button { background: var(--jan-inativa); }
 html:not([data-so="windows"]):not([data-maximizada]) .oficina::after { content: ""; position: fixed; inset: 0; border: 1px solid var(--rebite); pointer-events: none; z-index: 1000; }
 
 /* ---------- coluna da bíblia ---------- */

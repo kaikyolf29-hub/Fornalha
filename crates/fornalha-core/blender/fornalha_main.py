@@ -138,6 +138,8 @@ def _importar(caminho):
         bpy.ops.wm.obj_import(filepath=caminho)
     elif ext == ".fbx":
         bpy.ops.import_scene.fbx(filepath=caminho)
+    elif ext == ".ply":
+        bpy.ops.wm.ply_import(filepath=caminho)
     else:
         raise ValueError(f"formato não suportado: {ext}")
     return [o for o in bpy.data.objects if o not in antes]
@@ -162,8 +164,11 @@ def _juntar_malhas(objs, nome):
     return m
 
 
-def limpar_malha(m, t):
-    """Limpeza do plano: escala real, pivô nos pés, decimar, UV, normais."""
+def posicionar(m, t):
+    """Em pé (Z para cima), virado para -Y, na altura pedida e com o pivô nos pés."""
+    if str(t.get("cima", "Z")).upper() == "Y":
+        m.rotation_euler.x = math.radians(90)
+        bpy.ops.object.transform_apply(rotation=True)
     if t.get("girar_graus"):
         m.rotation_euler.z = math.radians(float(t["girar_graus"]))
         bpy.ops.object.transform_apply(rotation=True)
@@ -177,6 +182,14 @@ def limpar_malha(m, t):
     # pivô no centro dos pés (z = 0)
     m.location -= Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
     bpy.ops.object.transform_apply(location=True)
+
+
+def limpar_malha(m, t):
+    """Limpeza do plano: escala real, pivô nos pés, decimar, UV, normais."""
+    for o in bpy.context.scene.objects:
+        o.select_set(o == m)
+    bpy.context.view_layer.objects.active = m
+    posicionar(m, t)
     tris_antes = c.triangulos([m])
     alvo = int(t.get("triangulos_max") or 0)
     if alvo and tris_antes > alvo:
@@ -245,6 +258,81 @@ def tarefa_rig(t):
     st.update(info)
     st["pesos"] = metodo
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
+def tarefa_assar(t):
+    """Malha alta com cores por vértice (TRELLIS.2) → malha leve com UV e textura assada no Blender."""
+    import fc_placa
+
+    nome = t.get("nome", "modelo")
+    alta = _juntar_malhas(_importar(t["entrada"]), nome + "_alta")
+    fc_placa.material_das_cores(alta)
+    posicionar(alta, t)
+    baixa = alta.copy()
+    baixa.data = alta.data.copy()
+    baixa.name = nome
+    bpy.context.scene.collection.objects.link(baixa)
+    for o in bpy.context.scene.objects:
+        o.select_set(o == baixa)
+    bpy.context.view_layer.objects.active = baixa
+    for a in list(baixa.data.uv_layers):
+        baixa.data.uv_layers.remove(a)
+    info = limpar_malha(baixa, {"triangulos_max": t.get("triangulos_max") or 12000})
+    img = fc_placa.assar_textura(alta, baixa, int(t.get("textura_px") or 1024), nome + "_textura")
+    st_textura = {"textura_px": img.size[0], "cobertura_da_textura": fc_placa.cobertura(img), "cor_media": fc_placa.cor_media(img)}
+    while len(baixa.data.color_attributes):
+        baixa.data.color_attributes.remove(baixa.data.color_attributes[0])
+    tris_alta = c.triangulos([alta])
+    bpy.data.objects.remove(alta, do_unlink=True)
+    objs = [baixa]
+    col = None
+    if t.get("colisao", False):
+        import fc_armas
+
+        col = fc_armas.colisao_simples(baixa)
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, objs + ([col] if col else []), animacoes=False)
+    if col:
+        col.hide_set(True)
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, objs, saida))
+    st = estatisticas(objs)
+    st.update(info)
+    st.update(st_textura)
+    st["triangulos_da_malha_alta"] = tris_alta
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
+def tarefa_movimento(t):
+    """Movimento SMPL (HY-Motion) vira animação do esqueleto padrão; as outras animações continuam."""
+    import json as _json
+
+    import fc_placa
+
+    objs = _importar(t["entrada"])
+    arm = next((o for o in objs if o.type == "ARMATURE"), None)
+    if arm is None:
+        raise ValueError("o modelo não tem esqueleto: use create_skeleton antes")
+    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - {b.name for b in arm.data.bones}
+    if faltando:
+        raise ValueError(f"o esqueleto não é o padrão da Fornalha (faltam {sorted(faltando)})")
+    fc_placa.guardar_acoes(arm)
+    with open(t["movimento"], encoding="utf-8") as f:
+        mov = _json.load(f)
+    nome = t.get("nome_animacao") or "movimento"
+    act, quadros, _ = fc_placa.aplicar_movimento(arm, mov, nome, bool(t.get("laco", False)), bool(t.get("no_lugar", True)))
+    conferir = {}
+    for osso in ("LeftHand", "RightHand", "LeftFoot", "RightFoot", "Head"):
+        conferir[osso] = {"inicio": fc_placa.posicao_do_osso(arm, osso, 1, act), "fim": fc_placa.posicao_do_osso(arm, osso, quadros, act)}
+    arm.animation_data.action = act
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, objs)
+    malhas = [o for o in objs if o.type == "MESH"]
+    acoes = [a for a in bpy.data.actions if a.use_fake_user]
+    st = estatisticas(malhas, arm, acoes)
+    st["quadros_novos"] = quadros
+    st["posicoes"] = conferir
+    return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "estatisticas": st}
 
 
 def tarefa_retarget(t):
@@ -349,6 +437,8 @@ TAREFAS = {
     "previa": tarefa_previa,
     "animar": tarefa_animar,
     "material": tarefa_material,
+    "assar": tarefa_assar,
+    "movimento": tarefa_movimento,
 }
 
 

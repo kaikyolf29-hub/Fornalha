@@ -65,7 +65,7 @@ pub fn classify(os: &OsRelease, ostree: bool) -> Familia {
         os.variant_id.as_deref(),
         Some("silverblue" | "kinoite" | "sericea" | "onyx" | "cosmic-atomic" | "atomic" | "iot" | "coreos")
     );
-    if is("fedora") || os.id == "bazzite" || os.id == "bluefin" || os.id == "aurora" || eh_matsu(os) {
+    if is("fedora") || os.id == "bazzite" || os.id == "bluefin" || os.id == "aurora" {
         if ostree || atomic_variant {
             return Familia::FedoraAtomic;
         }
@@ -81,12 +81,6 @@ pub fn classify(os: &OsRelease, ostree: bool) -> Familia {
         return Familia::Suse;
     }
     Familia::OutraLinux
-}
-
-/// Matsu OS (do criador), baseado no Fedora Atomic.
-pub fn eh_matsu(os: &OsRelease) -> bool {
-    let tem = |s: &str| s.to_lowercase().replace([' ', '-', '_'], "").contains("matsu");
-    tem(&os.id) || os.name.as_deref().is_some_and(tem) || os.pretty_name.as_deref().is_some_and(tem)
 }
 
 /// Lê o os-release do sistema (no Flatpak, o do sistema de verdade, em /run/host).
@@ -160,24 +154,6 @@ pub const PACOTES_ROCM: Pacotes =
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn matsu_os_e_reconhecido_e_vira_fedora_atomic() {
-        let os = parse_os_release("NAME=\"Matsu OS\"\nID=matsu\nID_LIKE=\"fedora\"\nPRETTY_NAME=\"Matsu OS 44 (Atomic)\"\n");
-        assert!(eh_matsu(&os));
-        assert_eq!(classify(&os, true), Familia::FedoraAtomic);
-        // mesmo sem ID_LIKE, o nome basta
-        let os = parse_os_release("NAME=\"MatsuOS\"\nID=matsuos\n");
-        assert!(eh_matsu(&os));
-        assert_eq!(classify(&os, true), Familia::FedoraAtomic);
-        // o número do ano vem no nome: Matsu 27 OS, Matsu 28 OS…
-        for nome in ["Matsu 27 OS", "Matsu 28 OS", "matsu-27-os"] {
-            let os = parse_os_release(&format!("NAME=\"{nome}\"\nID=fedora\nVARIANT_ID=silverblue\n"));
-            assert!(eh_matsu(&os), "{nome}");
-            assert_eq!(classify(&os, true), Familia::FedoraAtomic);
-        }
-        assert!(!eh_matsu(&parse_os_release(FEDORA_44)));
-    }
 
     const FEDORA_44: &str = r#"NAME="Fedora Linux"
 VERSION="44 (Workstation Edition)"

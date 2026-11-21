@@ -49,7 +49,7 @@ fn toda_ferramenta_tem_descricao_e_esquema_de_objeto() {
     for f in ferramentas::lista() {
         assert!(!f.descricao.is_empty(), "{}", f.nome);
         assert_eq!(f.esquema["type"], "object", "{}", f.nome);
-        assert!(f.nome.chars().all(|c| c.is_ascii_lowercase() || c == '_'), "{}", f.nome);
+        assert!(f.nome.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'), "{}", f.nome);
     }
 }
 

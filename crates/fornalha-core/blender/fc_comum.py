@@ -33,10 +33,39 @@ def cor_hex(h, padrao=(0.5, 0.5, 0.5)):
         return padrao
 
 
+# Com o pacote de materiais, os materiais da Forja viram PBR pelo nome (tingidos com a cor pedida).
+PBR = {"ativo": False}
+_PBR_POR_NOME = (
+    (("caminho", "estrada", "calcada", "praca"), "calcamento"),
+    (("telhado", "telha"), "telha"),
+    (("parede", "pedra", "muro", "castelo", "masmorra", "arena", "poco", "torre"), "pedra"),
+    (("rocha", "montanha", "penhasco"), "rocha"),
+    (("grama", "chao", "terra", "areia", "solo"), "terra"),
+    (("madeira", "tronco", "tabua", "cerca", "barril", "caixa", "bau", "porta", "cabo"), "madeira"),
+    (("metal", "aco", "ferro", "lamina"), "aco"),
+    (("couro",), "couro"),
+    (("roupa", "tecido", "capa"), "tecido"),
+)
+
+
+def _hex_de_linear(cor):
+    srgb = lambda c: 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+    return "#" + "".join(f"{int(max(0, min(1, srgb(x))) * 255):02x}" for x in cor[:3])
+
+
 def material(nome, cor, rugosidade=0.7, metal=0.0, emissao=None):
     m = bpy.data.materials.get(nome)
     if m is not None:
         return m
+    if PBR["ativo"] and emissao is None:
+        import fc_pbr
+
+        chave = nome.lower()
+        tipo = next((t for palavras, t in _PBR_POR_NOME if any(p in chave for p in palavras)), None)
+        if tipo and fc_pbr.disponivel(tipo):
+            m = fc_pbr.material(nome, tipo, _hex_de_linear(cor), mistura_tom=0.55)
+            m["uv_mundo"] = True
+            return m
     m = bpy.data.materials.new(nome)
     try:
         m.use_nodes = True
@@ -145,6 +174,29 @@ class Construtor:
         return obj
 
 
+def uv_mundo(objs, escala=1.0):
+    """UV em metros do mundo (projeção pela face dominante): a textura não estica em peça grande."""
+    for o in objs:
+        if o.type != "MESH" or not any(ms.material and ms.material.get("uv_mundo") for ms in o.material_slots):
+            continue
+        me = o.data
+        uv = me.uv_layers.get("UVMap") or me.uv_layers.new(name="UVMap")
+        mw = o.matrix_world
+        rot = mw.to_3x3()
+        for p in me.polygons:
+            n = (rot @ p.normal).normalized()
+            ax = max(range(3), key=lambda i: abs(n[i]))
+            for li in p.loop_indices:
+                co = mw @ me.vertices[me.loops[li].vertex_index].co
+                if ax == 0:
+                    u, v = co.y, co.z
+                elif ax == 1:
+                    u, v = co.x, co.z
+                else:
+                    u, v = co.x, co.y
+                uv.data[li].uv = (u * escala, v * escala)
+
+
 def triangulos(objs):
     total = 0
     deps = bpy.context.evaluated_depsgraph_get()
@@ -178,6 +230,8 @@ def caixa_envolvente(objs):
 
 
 def exportar_glb(caminho, selecionados=None, animacoes=True):
+    if PBR["ativo"]:
+        uv_mundo(selecionados if selecionados is not None else list(bpy.context.scene.objects))
     os.makedirs(os.path.dirname(os.path.abspath(caminho)), exist_ok=True)
     if selecionados is not None:
         for o in bpy.context.scene.objects:

@@ -188,7 +188,15 @@ async fn blender(f: &Fornalha) -> Resultado<Achado> {
 
 async fn forjar(f: &Fornalha, tarefa: &Value) -> Resultado<Value> {
     let b = blender(f).await?;
-    forja::rodar(&b, &f.paths.data_dir, tarefa, TEMPO_BLENDER).await
+    let mut t = tarefa.clone();
+    // com o pacote de materiais (CC0), tudo sai em PBR e as prévias usam o céu HDRI
+    if t.get("materiais").is_none() {
+        if let Some(m) = crate::pacotes::materiais_da_forja(&f.paths) {
+            t["materiais"] = m["materiais"].clone();
+            t["ceu"] = m["ceu"].clone();
+        }
+    }
+    forja::rodar(&b, &f.paths.data_dir, &t, TEMPO_BLENDER).await
 }
 
 fn paleta(p: &Projeto) -> Vec<String> {

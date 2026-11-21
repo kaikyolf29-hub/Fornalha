@@ -484,6 +484,14 @@ def main():
     caminho_tarefa, caminho_resultado = args[0], args[1]
     with open(caminho_tarefa, encoding="utf-8") as f:
         t = json.load(f)
+    # pacote de materiais CC0 (qualquer tarefa): PBR e céu HDRI nas prévias
+    if t.get("materiais"):
+        import fc_pbr
+
+        fc_pbr.definir_pasta(t["materiais"])
+        c.PBR["ativo"] = True
+    if t.get("ceu"):
+        c.definir_ceu(t["ceu"])
     inicio = time.time()
     try:
         c.limpar_cena()

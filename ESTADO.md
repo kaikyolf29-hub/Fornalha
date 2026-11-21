@@ -39,6 +39,7 @@ O app é para **Windows e Linux** (nada específico do Matsu OS, a pedido do cri
 - **Provado no CI** (Windows Server e Ubuntu, sem placa):
   - run 44892635516 (commit b8a36cc), job "Gerações de verdade (Windows)": a Forja fez herói, orc, espada e mundo; a Godot 4.6.1 montou as cenas e rodou o jogo — jogador andou 8,17 m, o inimigo perseguiu, **0 erros**, 5 capturas e vídeo; `check_licenses` → pode vender; artefato `geracoes-Windows` com 130 arquivos. O mesmo no Linux;
   - run 44908546429 (commit f2c14c3), tudo verde: os testes dos **workers de placa** de ponta a ponta com modelos de mentira de mesma interface (TRELLIS.2 → textura assada → recibo; HY-Motion → animação nova; verificação "sem nvdiffrast" liberando o TRELLIS.2 em projeto comercial);
+  - run 44910393345 (commit 0f6b23f), tudo verde: fila da noite, pedido livre (plano por regras e conferência do plano do cérebro), checagem do guia visual e o pedido livre gerando de verdade pela fila (goblin, lança e música da masmorra) no Windows e no Linux;
   - instaladores (NSIS no Windows; .deb, .rpm e AppImage no Linux) instalados e abertos a cada commit.
 - **Provado aqui** (Linux, sem placa): o Ignis 0.4.0 de verdade — voz pela Chatterbox, ficha pelo Qwen3, imagem de conceito pela Z-Image no processador, e o **plano de um pedido livre feito pelo Qwen3 0.6B** (orc → música → montar → testar, com argumentos conferidos); o jogo com janela numa tela virtual; o painel da janela.
 - **Falta provar** (só na máquina do criador ou numa placa NVIDIA):
@@ -57,7 +58,7 @@ O app é para **Windows e Linux** (nada específico do Matsu OS, a pedido do cri
   - UniRig só para criaturas que não são humanoides (humanoide usa o esqueleto padrão, que recebe as animações);
   - HY-Motion precisa de CUDA e do aceite da licença da Tencent na janela;
   - fila da noite das 23h às 7h (muda em Ajustes/config), uma tarefa por vez;
-  - plano do cérebro sempre conferido: argumento que não existe sai, o obrigatório que falta vem das regras, arquivo que não existe sai;
+  - plano do cérebro sempre conferido: argumento que não existe sai, o obrigatório que falta vem das regras, arquivo que não existe sai, e o que as regras acham no pedido e o cérebro esqueceu entra (ordem: gerar, montar, testar);
   - checagem do guia visual por cor (ΔE em Lab, 40% dos pixels coloridos na paleta); forma e conteúdo esperam o modelo de visão.
 
 ## Achado: TRELLIS.2 e o nvdiffrast

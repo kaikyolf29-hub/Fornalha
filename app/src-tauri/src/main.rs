@@ -207,7 +207,10 @@ mod nucleo {
             match serde_json::from_value::<fornalha_core::config::Noite>(n.clone()) {
                 Ok(noite) => r = r.and(f.definir_noite(noite)),
                 Err(_) => {
-                    return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"codigo": "argumento_invalido", "mensagem": "Horário da noite inválido."}})))
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"erro": {"codigo": "argumento_invalido", "mensagem": "Horário da noite inválido."}})),
+                    )
                         .into_response()
                 }
             }

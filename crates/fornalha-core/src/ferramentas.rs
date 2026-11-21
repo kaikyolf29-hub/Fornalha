@@ -317,6 +317,42 @@ pub fn lista() -> Vec<Ferramenta> {
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "segundos": {"type": "number"}, "video": {"type": "boolean"}}}),
             so_leitura: false,
         },
+        Ferramenta {
+            nome: "plan_request",
+            titulo: "Pedido livre (o cérebro planeja)",
+            descricao: "Transforma um pedido livre (\"faça a vila com dois goblins, uma espada e música de combate, e teste o jogo\") em passos com as ferramentas da Fornalha — pelo cérebro no Ignis, ou por regras se o Ignis estiver fechado — e põe na fila: agora (padrão), à noite ou só mostra o plano (executar: \"nao\").",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "pedido": {"type": "string"}, "executar": {"type": "string", "enum": ["agora", "noite", "nao"]}}, "required": ["pedido"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "queue_job",
+            titulo: "Pôr na fila (agora ou à noite)",
+            descricao: "Põe uma ferramenta de geração ou de teste na fila, para rodar assim que a fila estiver livre (quando: agora) ou só no horário da noite (quando: noite; padrão das 23h às 7h). Uma tarefa por vez.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "ferramenta": {"type": "string", "enum": crate::fila::FERRAMENTAS_DA_FILA},
+                "argumentos": {"type": "object"}, "quando": {"type": "string", "enum": ["agora", "noite"]}, "descricao": {"type": "string"}}, "required": ["ferramenta"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "list_queue",
+            titulo: "Ver a fila",
+            descricao: "Lista a fila: o que espera, o que está rodando, o que terminou (com o resultado ou o erro) e o horário da noite.",
+            esquema: json!({"type": "object", "properties": {}}),
+            so_leitura: true,
+        },
+        Ferramenta {
+            nome: "cancel_job",
+            titulo: "Cancelar tarefa da fila",
+            descricao: "Cancela uma tarefa que ainda está esperando (pelo id de list_queue). Com limpar: true, tira da lista o que já terminou.",
+            esquema: json!({"type": "object", "properties": {"id": {"type": "string"}, "limpar": {"type": "boolean"}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "check_style",
+            titulo: "Conferir o guia visual",
+            descricao: "Mede as cores de um asset (png ou glb) — ou de todos os assets do projeto — contra a paleta do guia visual da bíblia: quanto está na paleta, as cores dominantes e as que fogem dela.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}, "limite": {"type": "number", "minimum": 0, "maximum": 1}}}),
+            so_leitura: true,
+        },
     ]
 }
 
@@ -642,6 +678,54 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "generate_code" => geracao::gerar_codigo(f, args(a)?).await,
         "import_to_engine" => geracao::importar_na_engine(f, args(a)?, quem).await,
         "run_test" => geracao::rodar_teste(f, args(a)?).await,
+        "plan_request" => crate::plano::planejar(f, args(a)?, quem).await,
+        "queue_job" => {
+            #[derive(serde::Deserialize, Default)]
+            #[serde(default)]
+            struct A {
+                projeto: Option<String>,
+                ferramenta: String,
+                argumentos: Option<Value>,
+                quando: Option<crate::fila::Quando>,
+                descricao: Option<String>,
+            }
+            let x: A = args(a)?;
+            let p = f.projeto(x.projeto.as_deref())?;
+            let mut argumentos = x.argumentos.unwrap_or_else(|| json!({}));
+            if argumentos.is_object() && argumentos.get("projeto").is_none() {
+                argumentos["projeto"] = json!(p.raiz);
+            }
+            let t = crate::fila::enfileirar(f, &x.ferramenta, argumentos, quem, x.quando.unwrap_or_default(), x.descricao, None)?;
+            Ok(json!({"tarefa": t}))
+        }
+        "list_queue" => Ok(crate::fila::listar(f)),
+        "cancel_job" => {
+            #[derive(serde::Deserialize, Default)]
+            #[serde(default)]
+            struct A {
+                id: Option<String>,
+                limpar: Option<bool>,
+            }
+            let x: A = args(a)?;
+            if x.limpar.unwrap_or(false) {
+                return Ok(json!({"removidas": crate::fila::limpar(f)?}));
+            }
+            let id = x.id.ok_or_else(|| Erro::argumento("Diga o id da tarefa (veja list_queue)."))?;
+            Ok(json!({"tarefa": crate::fila::cancelar(f, &id)?}))
+        }
+        "check_style" => {
+            #[derive(serde::Deserialize, Default)]
+            #[serde(default)]
+            struct A {
+                projeto: Option<String>,
+                arquivo: Option<String>,
+                limite: Option<f32>,
+            }
+            let x: A = args(a)?;
+            let p = f.projeto(x.projeto.as_deref())?;
+            let arq = x.arquivo.as_deref().map(|c| f.resolver_no_projeto(&p, c));
+            crate::estilo::conferir(&p, arq.as_deref(), x.limite)
+        }
         outro => Err(Erro::novo("ferramenta_desconhecida", format!("A ferramenta \"{outro}\" não existe."))),
     }
 }

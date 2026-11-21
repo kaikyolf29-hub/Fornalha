@@ -28,6 +28,8 @@ pub struct Fornalha {
     ignis: crate::ignis::Cache,
     programas: tokio::sync::Mutex<std::collections::HashMap<crate::externas::Programa, crate::externas::Achado>>,
     ponte: Mutex<(u64, Vec<String>)>,
+    /// Uma tarefa da fila por vez (a placa e o Blender são um só).
+    pub(crate) fila: tokio::sync::Mutex<()>,
 }
 
 impl Fornalha {
@@ -47,6 +49,7 @@ impl Fornalha {
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
             programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             ponte: Mutex::new((0, Vec::new())),
+            fila: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -66,6 +69,7 @@ impl Fornalha {
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
             programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             ponte: Mutex::new((0, Vec::new())),
+            fila: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -121,6 +125,13 @@ impl Fornalha {
 
     pub fn definir_porta_ignis(&self, porta: u16) -> Resultado<()> {
         self.mudar_config(|c| c.porta_ignis = Some(porta))
+    }
+
+    pub fn definir_noite(&self, noite: crate::config::Noite) -> Resultado<()> {
+        if noite.inicio_hora > 23 || noite.fim_hora > 23 {
+            return Err(crate::erro::Erro::argumento("As horas da noite vão de 0 a 23."));
+        }
+        self.mudar_config(|c| c.noite = noite)
     }
 
     pub fn definir_estilo_janela(&self, estilo: Option<String>) -> Resultado<()> {

@@ -38,7 +38,7 @@ const FERRAMENTAS = [
   "list_receipts", "check_licenses", "export_credits",
   "create_character", "generate_concept", "generate_3d", "create_material", "create_skeleton", "generate_animation",
   "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_code",
-  "import_to_engine", "run_test",
+  "import_to_engine", "run_test", "plan_request", "queue_job", "list_queue", "cancel_job", "check_style",
 ];
 
 const PASTAS = ["GameDesign", "World", "Characters", "Enemies", "Items", "Weapons", "Animations",
@@ -100,6 +100,14 @@ async function roteiro(client, nomeCliente, quemEsperado, home) {
   confere(sfx.structuredContent?.arquivos?.length === 4, "generate_sfx grava os efeitos com variações");
   const codigo = await client.callTool({ name: "generate_code", arguments: {} });
   confere(fs.existsSync(path.join(raiz, "Scripts", "fornalha", "jogador.gd")) && fs.existsSync(path.join(raiz, "project.godot")), "generate_code escreve o jogo para a engine");
+
+  const plano = await client.callTool({ name: "plan_request", arguments: { pedido: "a música de combate e os efeitos sonoros", executar: "noite" } });
+  confere(plano.structuredContent?.passos?.length === 2 && plano.structuredContent?.tarefas?.length === 2, "plan_request planeja e põe na fila da noite");
+  const fila = await client.callTool({ name: "list_queue", arguments: {} });
+  confere(fila.structuredContent?.tarefas?.some((t) => t.quando === "noite" && t.situacao === "esperando"), "list_queue mostra a fila da noite");
+  await client.callTool({ name: "update_project", arguments: { alteracoes: { guia_visual: { paleta: ["#7a2e22", "#2f3640"] } } } });
+  const estilo = await client.callTool({ name: "check_style", arguments: {} });
+  confere(!estilo.isError && typeof estilo.structuredContent?.conferidos === "number", "check_style confere o guia visual");
 
   const semProjeto = await client.callTool({ name: "open_project", arguments: { caminho: path.join(home, "nao-existe") } });
   confere(semProjeto.isError === true, "erro de ferramenta volta com isError");

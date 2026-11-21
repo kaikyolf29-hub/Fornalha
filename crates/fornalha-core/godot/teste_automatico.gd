@@ -76,6 +76,9 @@ func _process(dt: float) -> void:
 
 
 func _capturar(n: int) -> void:
+	# sem tela (modo headless) não há imagem para capturar
+	if DisplayServer.get_name() == "headless":
+		return
 	var tex := get_viewport().get_texture()
 	if tex == null:
 		return

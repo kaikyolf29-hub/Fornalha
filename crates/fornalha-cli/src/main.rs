@@ -114,6 +114,7 @@ async fn main() {
 }
 
 async fn servir(f: std::sync::Arc<Fornalha>) -> i32 {
+    tokio::spawn(fornalha_core::fila::vigiar(f.clone()));
     eprintln!("Fornalha: API em http://127.0.0.1:{} (MCP em /mcp). Ctrl+C para sair.", f.porta_api());
     match fornalha_core::api::servir(f).await {
         Ok(()) => 0,

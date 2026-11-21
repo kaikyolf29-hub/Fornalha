@@ -77,6 +77,17 @@
     <section id="est-forjar" class="estacao" hidden>
       <h1>Forjar</h1>
       <p class="lead">Escolha um molde. A Fornalha usa a placa quando pode e os geradores próprios quando não pode; cada arquivo sai com recibo de licença.</p>
+      <section class="painel pedido-livre">
+        <h2>Pedido livre</h2>
+        <form id="form-pedido" class="formulario" autocomplete="off">
+          <label class="campo"><span>O que o jogo precisa (o cérebro no Ignis divide em passos)</span>
+            <textarea name="pedido" rows="2" placeholder="A vila com dois goblins, uma espada, a música de combate e testar o jogo"></textarea></label>
+          <div class="acoes"><button class="botao quente" type="submit" data-executar="agora">Fazer agora</button>
+            <button class="botao" type="submit" data-executar="noite">Deixar para a noite</button>
+            <button class="botao" type="submit" data-executar="nao">Só ver o plano</button></div>
+        </form>
+        <div id="plano"></div>
+      </section>
       <div class="moldes" id="moldes"></div>
       <section class="painel" id="painel-molde" hidden>
         <form id="form-molde" class="formulario" autocomplete="off"></form>
@@ -85,12 +96,19 @@
         <h2>Saída da forja</h2>
         <div id="saida" class="lista"><p class="vazio">O que for forjado aparece aqui, com a prévia.</p></div>
       </section>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Fila</h2><button class="botao" id="limpar-fila">Tirar as terminadas</button></div>
+        <p class="nota" id="noite-info" style="margin:0 0 10px"></p>
+        <div id="fila" class="lista"><p class="vazio">Nada na fila.</p></div>
+      </section>
     </section>
 
     <!-- ===== Galeria ===== -->
     <section id="est-galeria" class="estacao" hidden>
       <h1>Galeria</h1>
       <p class="lead">Todos os assets do projeto que têm recibo, com o modelo que os fez e a licença.</p>
+      <div class="acoes"><button class="botao" id="conferir-estilo">Conferir o guia visual</button></div>
+      <div id="resultado-estilo"></div>
       <div class="filtros" id="filtros-galeria"></div>
       <div class="galeria" id="galeria"></div>
     </section>
@@ -136,7 +154,7 @@
       </div>
       <section class="painel">
         <div class="titulo-painel"><h2>Modelos de placa</h2></div>
-        <p class="nota" style="margin-top:0">Só com placa NVIDIA. Cada um fica num ambiente só dele; sem eles, a Fornalha usa a Forja, o esqueleto padrão e a biblioteca de animações.</p>
+        <p class="nota" style="margin:0 0 10px">Só com placa NVIDIA. Cada um fica num ambiente só dele; sem eles, a Fornalha usa a Forja, o esqueleto padrão e a biblioteca de animações.</p>
         <div id="modelos-placa" class="lista"></div>
       </section>
       <section class="painel">

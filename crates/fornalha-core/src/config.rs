@@ -27,6 +27,35 @@ pub struct Config {
     pub godot: Option<PathBuf>,
     pub erethea: Option<PathBuf>,
     pub estudio: Estudio,
+    /// Horário da fila da noite (hora local, 0–23). Padrão: das 23h às 7h.
+    pub noite: Noite,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Noite {
+    pub inicio_hora: u8,
+    pub fim_hora: u8,
+}
+
+impl Default for Noite {
+    fn default() -> Self {
+        Self { inicio_hora: 23, fim_hora: 7 }
+    }
+}
+
+impl Noite {
+    /// A hora (0–23) está dentro da noite? Aceita noite que vira o dia (23h → 7h).
+    pub fn contem(&self, hora: u8) -> bool {
+        let (i, f) = (self.inicio_hora % 24, self.fim_hora % 24);
+        if i == f {
+            true
+        } else if i < f {
+            hora >= i && hora < f
+        } else {
+            hora >= i || hora < f
+        }
+    }
 }
 
 /// Decisões que só a pessoa toma (pela janela), nunca um agente.
@@ -63,6 +92,16 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn noite_que_vira_o_dia() {
+        let n = Noite::default();
+        assert!(n.contem(23) && n.contem(0) && n.contem(6));
+        assert!(!n.contem(7) && !n.contem(12) && !n.contem(22));
+        let tarde = Noite { inicio_hora: 13, fim_hora: 15 };
+        assert!(tarde.contem(14) && !tarde.contem(15));
+        assert!(Noite { inicio_hora: 5, fim_hora: 5 }.contem(17), "início igual ao fim = o dia todo");
+    }
 
     #[test]
     fn recentes_sem_repetir_e_com_limite() {

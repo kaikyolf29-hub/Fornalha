@@ -1,6 +1,8 @@
 //! Geração de verdade pelo Ignis 0.4.0 (cérebro, voz comercial e imagem).
 //! Só roda com FORNALHA_TESTE_IGNIS=<porta> (o Ignis aberto e preparado).
 
+mod comum;
+
 use fornalha_core::{audio, ignis};
 use serde_json::json;
 
@@ -68,5 +70,33 @@ async fn imagem_de_verdade_quando_preparada() {
     if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(format!("{d}/conceito_teste.png"), &png).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn cerebro_planeja_um_pedido_livre() {
+    let Some(p) = porta() else {
+        eprintln!("FORNALHA_TESTE_IGNIS não definido: teste pulado");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let f = fornalha_core::servico::Fornalha::para_testes(fornalha_core::paths::Paths::under(tmp.path()), comum::detection("sem-placa"));
+    f.definir_porta_ignis(p).unwrap();
+    f.chamar("create_project", json!({"nome": "Reino de Cinzas", "genero": "action RPG"}), "claude-code").await.unwrap();
+    let r = f
+        .chamar(
+            "plan_request",
+            json!({"pedido": "Crie um orc inimigo com martelo e a música de combate, depois teste o jogo", "executar": "nao"}),
+            "claude-code",
+        )
+        .await
+        .unwrap();
+    eprintln!("plano: {}", serde_json::to_string_pretty(&r).unwrap());
+    let passos = r["passos"].as_array().unwrap();
+    assert!(!passos.is_empty());
+    let nomes: Vec<&str> = passos.iter().filter_map(|x| x["ferramenta"].as_str()).collect();
+    assert!(nomes.iter().all(|n| fornalha_core::fila::FERRAMENTAS_DA_FILA.contains(n)), "{nomes:?}");
+    if r["origem"] == "cerebro" {
+        assert!(nomes.contains(&"create_character") || nomes.contains(&"generate_music"), "o plano do cérebro tem o pedido: {nomes:?}");
     }
 }

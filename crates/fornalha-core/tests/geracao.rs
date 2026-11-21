@@ -115,6 +115,14 @@ async fn crie_um_inimigo_novo_vira_inimigo_testado_na_engine() {
     assert_eq!(pend["pode_vender"], true, "{pend}");
     let creditos = chamar(&s, &mut sessao, 12, "export_credits", json!({})).await;
     assert!(creditos["markdown"].as_str().unwrap().contains("Forja da Fornalha"));
+    // o guia visual: as cores dos modelos contra a paleta da bíblia
+    let estilo = chamar(&s, &mut sessao, 13, "check_style", json!({})).await;
+    eprintln!("check_style: {} de {} dentro da paleta; fora: {}", estilo["aprovados"], estilo["conferidos"], estilo["fora_do_guia"]);
+    assert!(estilo["conferidos"].as_u64().unwrap() >= 4, "{estilo}");
+    if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(std::path::Path::new(&d).join("guia_visual.json"), serde_json::to_vec_pretty(&estilo).unwrap()).unwrap();
+    }
 
     if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {
         // guarda o projeto inteiro para ver depois (CI sobe como artefato)
@@ -122,6 +130,31 @@ async fn crie_um_inimigo_novo_vira_inimigo_testado_na_engine() {
         let _ = std::fs::remove_dir_all(&destino);
         copiar(&raiz, &destino);
     }
+}
+
+#[tokio::test]
+async fn pedido_livre_vai_para_a_fila_e_gera_de_verdade() {
+    let tmp = tempfile::tempdir().unwrap();
+    let Some(f) = fornalha_com_ferramentas(tmp.path()).await else {
+        eprintln!("Blender ou engine não encontrados: teste pulado");
+        return;
+    };
+    f.definir_porta_ignis(1).unwrap(); // sem Ignis: o plano sai das regras
+    let p = f.chamar("create_project", json!({"nome": "Pedido Livre"}), "codex").await.unwrap();
+    let raiz = std::path::PathBuf::from(p["raiz"].as_str().unwrap());
+    let r = f.chamar("plan_request", json!({"pedido": "um goblin inimigo, uma lança e a música da masmorra"}), "codex").await.unwrap();
+    let nomes: Vec<&str> = r["passos"].as_array().unwrap().iter().filter_map(|x| x["ferramenta"].as_str()).collect();
+    assert_eq!(nomes, ["create_character", "generate_3d", "generate_music"], "{r}");
+    while let Some(t) = fornalha_core::fila::rodar_proxima(&f, false).await {
+        assert_eq!(t.situacao, fornalha_core::fila::Situacao::Feita, "{} falhou: {:?}", t.ferramenta, t.erro);
+    }
+    let fichas = f.chamar("get_project", json!({}), "codex").await.unwrap();
+    let goblin = &fichas["biblia"]["personagens"][0];
+    assert_eq!(goblin["tipo"], "goblin", "{goblin}");
+    let id = goblin["id"].as_str().unwrap();
+    assert!(raiz.join(format!("Enemies/{id}/{id}.glb")).is_file());
+    assert!(raiz.join("Weapons/lanca.glb").is_file());
+    assert!(raiz.join("Audio/musica/masmorra.wav").is_file());
 }
 
 fn copiar(de: &std::path::Path, para: &std::path::Path) {

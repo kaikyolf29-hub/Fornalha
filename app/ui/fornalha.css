@@ -311,3 +311,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .aviso.erro { border-left-color: var(--erro); }
 .aviso #aviso-texto { flex: 1; }
 .aviso .fechar { background: none; border: 0; color: var(--ferro); font-size: 18px; line-height: 1; cursor: default; }
+
+/* pedido livre, fila e guia visual */
+.passos { margin: 4px 0 8px; padding-left: 22px; }
+.passos li { margin: 2px 0; }
+.passos small { color: var(--ferro); }
+.amostra { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-left: 4px; border: 1px solid var(--rebite); }

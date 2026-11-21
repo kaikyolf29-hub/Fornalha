@@ -136,7 +136,7 @@ fn paleta(p: &Projeto) -> Vec<String> {
     p.biblia.guia_visual.paleta.clone()
 }
 
-fn texto_do_projeto(p: &Projeto) -> String {
+pub(crate) fn texto_do_projeto(p: &Projeto) -> String {
     let b = &p.biblia;
     let c = &b.conceito;
     let mut partes = vec![format!("Jogo: {}", b.nome)];

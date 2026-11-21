@@ -335,6 +335,8 @@ mod nucleo {
                     senha: fornalha_core::util::id_aleatorio(32),
                     api_ok: api_ok.clone(),
                 });
+                // fila da noite: uma tarefa por vez, as de "noite" só no horário da noite
+                tauri::async_runtime::spawn(fornalha_core::fila::vigiar(fornalha.clone()));
                 // API principal (agentes) — se a porta estiver ocupada, a janela avisa.
                 let f2 = fornalha.clone();
                 tauri::async_runtime::spawn(async move {

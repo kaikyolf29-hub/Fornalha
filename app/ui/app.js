@@ -333,7 +333,50 @@ const MOLDES = {
     campos: () => txt("descricao", "O que desenhar", "vila medieval ao entardecer"), args: (f) => ({ descricao: f.descricao.value }) },
 };
 let moldeAtual = null;
+const SITUACAO_FILA = { esperando: ["", "Esperando"], rodando: ["cobre", "Rodando"], feita: ["venda", "Feita"], falhou: ["erro", "Falhou"], cancelada: ["", "Cancelada"] };
+let vigiaFila = null;
+async function pintarFila() {
+  let f;
+  try { f = await ferramenta("list_queue"); } catch { return; }
+  const n = f.noite;
+  pinta($("noite-info"), `Tarefas "para a noite" rodam das ${n.inicio_hora}h às ${n.fim_hora}h${n.agora_e_noite ? " (agora é noite: elas já estão rodando)" : ""}. Uma por vez.`);
+  const lista = (f.tarefas || []).slice().reverse();
+  pinta($("fila"), lista.length ? lista.map((t) => {
+    const [cor, nome] = SITUACAO_FILA[t.situacao] || ["", t.situacao];
+    const quando = t.quando === "noite" ? "à noite" : "agora";
+    const detalhe = t.erro ? esc(t.erro) : t.situacao === "feita" && t.resultado && t.resultado.ficha ? esc(t.resultado.ficha.nome) : esc(t.descricao || "");
+    return `<div class="item"><div><strong>${esc(t.ferramenta)}</strong><small>${detalhe}${detalhe ? " · " : ""}${quando}, pedido por ${esc(t.quem)}</small></div>
+      <div class="lado"><span class="selo ${cor}">${nome}</span>${t.situacao === "esperando" ? `<button class="botao" data-cancelar="${esc(t.id)}">Cancelar</button>` : ""}</div></div>`;
+  }).join("") : `<p class="vazio">Nada na fila.</p>`);
+  clearTimeout(vigiaFila);
+  if (lista.some((t) => t.situacao === "rodando" || (t.situacao === "esperando" && (t.quando === "agora" || n.agora_e_noite))))
+    vigiaFila = setTimeout(() => { if (!$("est-forjar").hidden) pintarFila(); }, 4000);
+}
+$("fila").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-cancelar]");
+  if (!b) return;
+  try { await ferramenta("cancel_job", { id: b.dataset.cancelar }); pintarFila(); } catch (err) { mensagem(err.message, "erro"); }
+});
+$("limpar-fila").addEventListener("click", async () => { try { await ferramenta("cancel_job", { limpar: true }); pintarFila(); } catch (err) { mensagem(err.message, "erro"); } });
+$("form-pedido").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!biblia) return mensagem("Abra ou crie um projeto antes do pedido.", "alerta");
+  const executar = (e.submitter && e.submitter.dataset.executar) || "agora";
+  const pedido = e.target.pedido.value.trim();
+  if (!pedido) return mensagem("Escreva o pedido.", "alerta");
+  pinta($("plano"), `<p class="nota">Planejando…</p>`);
+  try {
+    const r = await ferramenta("plan_request", { pedido, executar });
+    const origem = r.origem === "cerebro" ? "Plano do cérebro (Ignis)" : "Plano pelas regras da Fornalha";
+    pinta($("plano"), `<p class="nota">${origem}${r.quando === "so_o_plano" ? "" : r.quando === "noite" ? ", na fila para a noite" : ", na fila"}:</p>
+      <ol class="passos">${r.passos.map((p) => `<li><strong>${esc(p.ferramenta)}</strong> <small>${esc(p.motivo || "")}</small></li>`).join("")}</ol>
+      ${(r.avisos || []).map((a) => `<p class="nota">${esc(a)}</p>`).join("")}`);
+    pintarFila();
+  } catch (err) { pinta($("plano"), ""); mensagem(err.message, "erro"); }
+});
+
 function pintarForjar() {
+  pintarFila();
   pinta($("moldes"), Object.entries(MOLDES).map(([id, m]) => `<button class="molde ${id === moldeAtual ? "escolhido" : ""}" data-molde="${id}"><svg viewBox="0 0 24 24" aria-hidden="true">${I[id]}</svg><strong>${m.titulo}</strong><small>${m.desc}</small></button>`).join(""));
 }
 $("moldes").addEventListener("click", (e) => {
@@ -407,7 +450,7 @@ async function pintarGaleria() {
     const venda = r.modelo.uso_comercial === "sim";
     return `<div class="cartao-asset"><div class="vitrine" id="vit-${i}">${r.arquivo.endsWith(".wav") ? `<button class="botao" data-tocar="${esc(raiz + "/" + r.arquivo)}">Ouvir</button>` : "carregando"}</div>
       <div class="info"><strong>${esc(nomeArquivo(r.arquivo))}</strong><small>${esc(r.modelo.nome)}</small>
-      <span><span class="selo ${venda ? "venda" : "teste"}">${venda ? "Pode vender" : esc(r.modelo.licenca)}</span></span></div></div>`;
+      <span><span class="selo ${venda ? "venda" : "teste"}">${venda ? "Pode vender" : esc(r.modelo.licenca)}</span>${foraDoGuia.has(r.arquivo) ? ` <span class="selo teste">Fora do guia</span>` : ""}</span></div></div>`;
   }).join("");
   lista.forEach(async (r, i) => {
     const el = $("vit-" + i);
@@ -420,6 +463,17 @@ async function pintarGaleria() {
     el.innerHTML = url ? `<img src="${url}" alt="">` : "sem prévia";
   });
 }
+let foraDoGuia = new Set();
+$("conferir-estilo").addEventListener("click", async () => {
+  if (!biblia) return mensagem("Abra um projeto antes.", "alerta");
+  try {
+    const r = await ferramenta("check_style", {});
+    foraDoGuia = new Set(r.fora_do_guia || []);
+    pinta($("resultado-estilo"), `<section class="painel"><p style="margin:0">${r.aprovados} de ${r.conferidos} dentro da paleta ${r.paleta.map((c) => `<span class="amostra" style="background:${esc(c)}"></span>`).join("")}</p>
+      ${r.fora_do_guia.length ? `<p class="nota">Fora do guia: ${r.fora_do_guia.map(esc).join(", ")}.</p>` : ""}<p class="nota">${esc(r.nota)}</p></section>`);
+    pintarGaleria();
+  } catch (err) { mensagem(err.message, err.codigo === "sem_paleta" ? "alerta" : "erro"); }
+});
 $("filtros-galeria").addEventListener("click", (e) => { const b = e.target.closest("[data-filtro]"); if (b) { filtroGaleria = b.dataset.filtro; pintarGaleria(); } });
 
 // ---------- Testar ----------

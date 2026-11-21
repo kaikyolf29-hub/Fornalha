@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Fornalha",
+  "mainBinaryName": "fornalha",
+  "version": "0.1.0",
+  "identifier": "io.github.kaikyolf29hub.Fornalha",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "deb", "rpm", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "publisher": "Fornalha",
+    "copyright": "Todos os direitos reservados",
+    "shortDescription": "Fábrica de jogos 3D com IA local",
+    "longDescription": "Cria o que um jogo 3D precisa usando a placa de vídeo do próprio computador, com modelos que deixam vender o jogo, recibo de licença por asset e uma API e servidor MCP para o Claude Code, o Codex ou qualquer agente.",
+    "licenseFile": "../../LICENSE",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["PortugueseBR"],
+        "displayLanguageSelector": false
+      }
+    },
+    "linux": {
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3"]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+/* Fornalha — o que é só dela. A base (cores, lateral, barra de título,
+   caixas, botões) vem do style.css do Ignis. */
+
+/* cartões do início */
+.cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.cartao {
+  background: var(--painel); border: 1px solid var(--linha); border-radius: 14px;
+  padding: 16px 18px; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 6px; min-height: 128px;
+}
+.cartao .rotulo { color: var(--fraco); font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+.cartao .valor { font-size: 17px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+.cartao .sub { color: var(--suave); font-size: 13px; }
+.cartao .acoes { margin-top: auto; padding-top: 6px; }
+
+/* formulário */
+.formulario { padding: 16px 18px; display: grid; gap: 14px; }
+.campo { display: grid; gap: 5px; }
+.campo > span { font-size: 13px; color: var(--suave); font-weight: 600; }
+.campo input, .campo select { width: 100%; }
+.campos-lado { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.campo-linha { align-items: flex-start; }
+.campo-linha strong { color: var(--texto); }
+.formulario .acoes { margin-top: 2px; }
+
+/* tabela dos níveis */
+.tabela-rolagem { overflow-x: auto; background: var(--painel); border: 1px solid var(--linha); border-radius: 12px; }
+.tabela { border-collapse: collapse; width: 100%; font-size: 13px; }
+.tabela th, .tabela td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--linha); }
+.tabela thead th { border-top: 0; background: var(--painel-2); font-weight: 650; white-space: nowrap; }
+.tabela thead th small { display: block; font-weight: 400; color: var(--fraco); }
+.tabela tbody th { font-weight: 600; white-space: nowrap; color: var(--suave); }
+.tabela td.em-uso, .tabela th.em-uso { background: color-mix(in srgb, var(--brasa) 8%, transparent); }
+.tabela thead th.em-uso { color: var(--brasa); }
+.tabela .sem { color: var(--fraco); cursor: help; }
+.tabela .desceu { display: block; color: var(--fraco); font-size: 12px; }
+
+/* comandos para copiar */
+.comando { background: var(--painel); border: 1px solid var(--linha); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.comando-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px 10px; }
+.comando-topo strong { display: block; }
+.comando-topo small { color: var(--suave); font-size: 13px; }
+.comando pre {
+  margin: 0; padding: 12px 16px; background: var(--painel-2); border-top: 1px solid var(--linha);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-all;
+  user-select: text; -webkit-user-select: text;
+}
+
+/* catálogo */
+.modelo-linha .sub a { color: var(--brasa); }
+.funcao-titulo { padding: 10px 16px 6px; font-size: 12.5px; font-weight: 650; color: var(--fraco); text-transform: uppercase; letter-spacing: 0.04em; border-top: 1px solid var(--linha); background: var(--painel-2); }
+.funcao-titulo:first-child { border-top: 0; }
+.linha.compacta { padding: 10px 16px; }
+.linha .icone-estado { width: 10px; height: 10px; border-radius: 50%; background: var(--fraco); }
+.icone-estado.ok { background: var(--ok); }
+.icone-estado.alerta { background: var(--alerta); }
+.icone-estado.erro { background: var(--erro); }
+.texto-licenca { color: var(--suave); font-size: 13px; margin-top: 4px; max-width: 72ch; }
+#receita { width: 170px; }

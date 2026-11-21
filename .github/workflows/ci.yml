@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  testes:
+    name: Testes (${{ matrix.nome }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: Linux
+            os: ubuntu-24.04
+          - nome: Windows
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Dependências do sistema (Linux)
+        if: runner.os == 'Linux'
+        timeout-minutes: 30
+        run: ./scripts/apt-instalar.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formatação
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Testes (núcleo, API, MCP, app)
+        env:
+          RUST_BACKTRACE: "1"
+        run: cargo test --workspace --no-fail-fast
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: MCP de ponta a ponta com o SDK oficial (stdio e HTTP)
+        shell: bash
+        run: |
+          cargo build -p fornalha-cli
+          cd testes/mcp-e2e
+          npm ci
+          node teste.mjs "$GITHUB_WORKSPACE/target/debug/fornalha-cli$( [ "$RUNNER_OS" = Windows ] && echo .exe )"
+
+      - name: Detecção da placa na máquina do CI
+        shell: bash
+        run: cargo run -q -p fornalha-cli -- detectar

@@ -1,0 +1,173 @@
+name: Instaladores
+
+# Gera os instaladores a cada push (versões de teste, guardadas 90 dias em
+# Actions), instala cada um como a pessoa faria e testa o app instalado.
+# GERAR NÃO É PUBLICAR: nada vai para Releases (a venda e a atualização
+# privada são da Fase 5).
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: instaladores-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  TAURI_CLI: "@tauri-apps/cli@2"
+
+jobs:
+  windows:
+    name: Windows (instalador NSIS e teste do app instalado)
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Gerar instalador
+        working-directory: app/src-tauri
+        run: npx --yes ${{ env.TAURI_CLI }} build --bundles nsis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fornalha-windows
+          path: target/release/bundle/nsis/*.exe
+          retention-days: 90
+
+      - name: Instalar sem perguntar (por usuário, sem administrador)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Write-Host "instalando $($setup.Name)"
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Fornalha\fornalha.exe'
+          if (-not (Test-Path $exe)) {
+            Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Fornalha') -Recurse -ErrorAction SilentlyContinue | Select-Object -First 30 FullName
+            throw "fornalha.exe não foi instalado em $exe"
+          }
+          "FORNALHA_EXE=$exe" >> $env:GITHUB_ENV
+          "FORNALHA_HOME=$(Join-Path $env:RUNNER_TEMP 'fornalha-home')" >> $env:GITHUB_ENV
+
+      - name: Dependências do teste do MCP
+        working-directory: testes/mcp-e2e
+        run: npm ci
+
+      - name: MCP pelo executável instalado (fornalha.exe --mcp, como o Claude Code chama)
+        shell: bash
+        working-directory: testes/mcp-e2e
+        run: FORNALHA_MCP_CMD="$FORNALHA_EXE" FORNALHA_MCP_ARGS=--mcp node teste.mjs
+
+      - name: Abrir o app instalado (bandeja, janela e API)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force $env:FORNALHA_HOME | Out-Null
+          Start-Process $env:FORNALHA_EXE
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            try { $r = Invoke-RestMethod http://127.0.0.1:11480/fornalha/estado; $ok = $true; break } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $ok) { throw "a API da Fornalha não respondeu em 127.0.0.1:11480" }
+          Write-Host "API: $($r.app) $($r.versao), fase $($r.fase), placa: $($r.placa), nível sugerido: $($r.nivel_sugerido)"
+          Start-Sleep -Seconds 10
+          $procs = Get-CimInstance Win32_Process -Filter "Name='fornalha.exe'" | Select-Object ProcessId, CommandLine
+          $procs | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+          ./scripts/foto-da-tela.ps1 janela-windows.png
+          if (-not ($procs | Where-Object { $_.CommandLine -like '*--janela*' })) { throw "a janela não abriu" }
+          Get-ChildItem (Join-Path $env:FORNALHA_HOME 'dados\registros') -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 20 }
+
+      - name: MCP por HTTP no app aberto
+        shell: bash
+        working-directory: testes/mcp-e2e
+        run: FORNALHA_MCP_CMD="$FORNALHA_EXE" FORNALHA_MCP_ARGS=--mcp FORNALHA_MCP_URL=http://127.0.0.1:11480/mcp node teste.mjs
+
+      - name: Detecção da placa no Windows (DXGI)
+        shell: bash
+        run: curl -s -X POST http://127.0.0.1:11480/fornalha/ferramentas/detect_gpu
+
+      - name: Fechar o app
+        if: always()
+        shell: pwsh
+        run: Stop-Process -Name fornalha -Force -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: foto-janela-windows
+          path: janela-windows.png
+          retention-days: 30
+
+  linux:
+    name: Linux (.deb, .rpm e AppImage, e teste do app instalado)
+    # Ubuntu 22.04: glibc mais antiga = roda em mais distros
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dependências
+        timeout-minutes: 30
+        run: ./scripts/apt-instalar.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev file rpm xvfb xdotool imagemagick dbus-x11
+
+      - name: Gerar .deb, .rpm e AppImage
+        working-directory: app/src-tauri
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "true"
+        run: npx --yes ${{ env.TAURI_CLI }} build --bundles deb,rpm,appimage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fornalha-linux
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+          retention-days: 90
+
+      - name: Instalar o .deb e testar o MCP pelo executável instalado
+        run: |
+          sudo apt-get install -y ./target/release/bundle/deb/*.deb
+          cd testes/mcp-e2e && npm ci
+          FORNALHA_HOME=$RUNNER_TEMP/fh1 FORNALHA_MCP_CMD=/usr/bin/fornalha FORNALHA_MCP_ARGS=--mcp node teste.mjs
+
+      - name: Abrir o app instalado numa tela virtual
+        run: |
+          export FORNALHA_HOME=$RUNNER_TEMP/fh2 DISPLAY=:99
+          Xvfb :99 -screen 0 1400x900x24 &
+          sleep 2
+          dbus-run-session -- bash -ec '
+            fornalha > app.log 2>&1 &
+            for i in $(seq 1 60); do curl -sf http://127.0.0.1:11480/fornalha/estado && break; sleep 0.5; done
+            echo; sleep 8
+            pgrep -ax fornalha
+            import -window root janela-linux.png
+            pgrep -af "fornalha --janela" > /dev/null || { echo "a janela não abriu"; cat app.log; exit 1; }
+            cd testes/mcp-e2e
+            FORNALHA_MCP_CMD=/usr/bin/fornalha FORNALHA_MCP_ARGS=--mcp FORNALHA_MCP_URL=http://127.0.0.1:11480/mcp node teste.mjs
+            pkill -x fornalha || true
+          '
+
+      - name: AppImage abre e responde pelo MCP
+        run: |
+          APP=$(ls target/release/bundle/appimage/*.AppImage | head -1)
+          chmod +x "$APP"
+          cd testes/mcp-e2e
+          APPIMAGE_EXTRACT_AND_RUN=1 FORNALHA_HOME=$RUNNER_TEMP/fh3 FORNALHA_MCP_CMD="$GITHUB_WORKSPACE/$APP" FORNALHA_MCP_ARGS=--mcp node teste.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: foto-janela-linux
+          path: janela-linux.png
+          retention-days: 30

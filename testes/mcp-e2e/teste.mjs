@@ -4,6 +4,8 @@
 //   2) HTTP:   <cli> servir --porta N  →  http://127.0.0.1:N/mcp
 //
 // Uso: node teste.mjs <caminho do fornalha-cli>
+//   FORNALHA_MCP_CMD / FORNALHA_MCP_ARGS: outro comando para o stdio (ex.: fornalha.exe --mcp)
+//   FORNALHA_MCP_URL: testa o HTTP numa Fornalha já aberta (ex.: http://127.0.0.1:11480/mcp)
 // Pronto da Fase 0: "o Claude Code cria um projeto novo pelo MCP".
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -16,7 +18,7 @@ import os from "node:os";
 import path from "node:path";
 
 const cli = process.argv[2] || process.env.FORNALHA_CLI;
-if (!cli) {
+if (!cli && !process.env.FORNALHA_MCP_CMD) {
   console.error("Uso: node teste.mjs <caminho do fornalha-cli>");
   process.exit(2);
 }
@@ -130,18 +132,28 @@ async function main() {
   await roteiro(stdio, "claude-code", "claude-code", home);
   await stdio.close();
 
-  // 2) HTTP
-  const porta = await portaLivre();
-  console.log(`MCP por HTTP: ${cli} servir --porta ${porta}`);
-  const servidor = spawn(cli, ["servir", "--porta", String(porta)], { env, stdio: ["ignore", "inherit", "inherit"] });
-  try {
-    confere(await esperarApi(porta), "API local respondeu");
-    const http = new Client({ name: "codex", version: "teste" });
-    await http.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${porta}/mcp`)));
-    await roteiro(http, "codex", "codex", home);
-    await http.close();
-  } finally {
-    servidor.kill();
+  // 2) HTTP: numa Fornalha já aberta (FORNALHA_MCP_URL) ou no fornalha-cli servir
+  const urlPronta = process.env.FORNALHA_MCP_URL;
+  if (urlPronta || cli) {
+    let servidor = null;
+    let url = urlPronta;
+    if (!url) {
+      const porta = await portaLivre();
+      console.log(`MCP por HTTP: ${cli} servir --porta ${porta}`);
+      servidor = spawn(cli, ["servir", "--porta", String(porta)], { env, stdio: ["ignore", "inherit", "inherit"] });
+      confere(await esperarApi(porta), "API local respondeu");
+      url = `http://127.0.0.1:${porta}/mcp`;
+    } else {
+      console.log(`MCP por HTTP na Fornalha aberta: ${url}`);
+    }
+    try {
+      const http = new Client({ name: "codex", version: "teste" });
+      await http.connect(new StreamableHTTPClientTransport(new URL(url)));
+      await roteiro(http, "codex", "codex", home);
+      await http.close();
+    } finally {
+      if (servidor) servidor.kill();
+    }
   }
 
   fs.rmSync(home, { recursive: true, force: true });

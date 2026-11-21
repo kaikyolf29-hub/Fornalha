@@ -87,8 +87,14 @@ def tarefa_humano(t):
     arquivos = {"modelo": saida}
     arquivos.update(previas(t, pecas, saida, arm if acoes else None, acoes))
     if t.get("retrato", True):
-        cabeca = arm.matrix_world @ arm.data.bones["head"].head_local
-        arquivos["retrato"] = c.retrato(os.path.splitext(saida)[0] + ".retrato.png", cabeca + Vector((0, 0, 0.09)), amostras=int(t.get("amostras", 48)))
+        # o rosto na pose em que o personagem está (a animação parada mexe a cabeça)
+        # retrato na pose de descanso: cabeça reta, olhando para a frente
+        pose = arm.data.pose_position
+        arm.data.pose_position = "REST"
+        bpy.context.view_layer.update()
+        rosto = arm.matrix_world @ (arm.data.bones["head"].head_local + Vector((0, -0.01, 0.075)))
+        arquivos["retrato"] = c.retrato(os.path.splitext(saida)[0] + ".retrato.png", rosto, amostras=int(t.get("amostras", 48)))
+        arm.data.pose_position = pose
     st = estatisticas(pecas, arm, acoes)
     st["pecas"] = [o.name for o in pecas]
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}

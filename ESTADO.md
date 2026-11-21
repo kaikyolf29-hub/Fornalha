@@ -2,7 +2,7 @@
 
 > Toda retomada começa por aqui. Atualizado antes de cada pausa.
 
-## Situação (21/11/2026)
+## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI
 do Windows e do Linux.** Falta o teste do criador na máquina dele (TESTE_DO_CRIADOR.md) e falta
 provar, numa placa NVIDIA de verdade, os três modelos de placa (TRELLIS.2, UniRig, HY-Motion).
@@ -39,15 +39,33 @@ Meta do criador: personagens, armaduras, armas, cenário e movimento no nível d
 - **Janela**: nome exibido Fornalha 3D, pacotes em Máquina, visualizador 3D girável na Galeria.
 - Provado aqui: personagem realista criado pelo MCP, montado na Godot 4.6.1 e testado (0 erros, o
   jogador andou ~12 m, inimigos derrotados caindo pela física, "pode vender").
+- **Armadura, segunda passada** (commit d9165a5): contorno das placas alisado e **borda virada**;
+  placas "moldadas" (forma lisa de metal batido, sem anatomia); **elmo armet** (viseira em bico,
+  fenda, respiros, pivôs) e **elmo de barril**; a armadura vira **uma malha com atlas** e o desgaste
+  (quinas polidas, fuligem, ferrugem, oclusão entre placas) é **assado** em cor, rugosidade e normal,
+  então o glb e a engine recebem o mesmo que o render. Estilo **templário** (cota inteira, sobreveste
+  longa com cruz pátea costurada, cintos com fivelas de latão, placas nos membros, manto). Câmera por
+  cima do ombro. Provado aqui: o templário criado pelo MCP rodou na Godot (passou, 0 erros).
+- **Avaliação honesta do criador (21/11):** ainda está **muito abaixo** das referências AAA (templário
+  branco, rosto Snappers, velho). Código sozinho no Blender não chega lá; o caminho combinado é:
+  1. **por etapas**, cada parte levada ao máximo e comparada lado a lado com a referência antes da
+     próxima: rosto → corpo e pele → cabelo → armadura peça por peça → objetos → cenário/castelo;
+  2. peças e texturas de alta qualidade **com licença comercial** (o criador autorizou baixar; sem conta
+     no Sketchfab, então só fontes sem login);
+  3. IA de 3D local quando houver placa que rode (hoje o criador tem RX 580; a NVIDIA ainda não foi
+     comprada; também vai testar numa RX 6600 e pensa numa RX 9060 XT 16 GB). Regra do criador:
+     "quanto mais forte a máquina, melhor funciona", mas tem de funcionar para todo mundo.
 
 Falta para chegar nas referências (próximas rodadas):
 1. **Cenário**: já tem terreno com relevo (colisão acompanha), árvores (pinheiros e folhosas com casca),
    pedras, casas medievais (térreo de pedra, enxaimel, empena, telhado de telha, chaminé, janelas) e tudo
    em PBR com grama, terra, pedra, reboco, vigas e telha. Falta: castelo/muralha, interiores, objetos de
    rua (carroças, bancas), grama em tufos, água e uma vila com ruas em vez do anel atual.
-2. **Armadura**: bordas viradas com rebites no peitoral, viseira trabalhada, desgaste/ferrugem nas
-   bordas "assado" em textura (hoje a cor final só existe no render; o glTF leva a textura base).
-3. **Rosto**: detalhe de pele (poros, rugas por idade) assado em mapa normal; cabelo melhor.
+2. **Armadura**: feito na segunda passada (borda virada, moldagem, elmos, atlas com desgaste). Falta o
+   nível das referências: gravações, couro e costuras, ombreira de verdade (hoje parece "inflada"),
+   manoplas articuladas, sobreveste com caimento de pano de verdade e capuz.
+3. **Rosto** (etapa 1 do plano por etapas): detalhe de pele (poros, rugas por idade) assado em mapa
+   normal 4K, pele com variação de cor, olhos, barba rala; cabelo melhor.
 4. **Mais movimento**: 100STYLE (CC BY 4.0, 100 estilos de andar) e CMU (lutas), importar Mixamo baixado
    pela pessoa, pés firmes no chão (TwoBoneIK3D), mistura de locomoção por velocidade.
 5. **Máximo com placa NVIDIA**: TRELLIS.2 / Step1X-3D (Apache 2.0) para peças únicas a partir da arte.
@@ -103,7 +121,33 @@ comercial até a verificação passar na máquina. Outras notas: ACE-Step 1.5 é
 dos pesos ainda não traz o LICENSE; HY-Motion e Hunyuan3D têm a regra de território da Tencent
 (não vale na União Europeia, no Reino Unido e na Coreia do Sul).
 
+## Pesquisa de modelos e bibliotecas (21/11/2026)
+Feita por um agente lendo as páginas de licença (nada baixado nem executado). Pontos que valem:
+- **Corrigido:** o pipeline.json oficial do TRELLIS.2 pede o removedor de fundo **RMBG-2.0 (CC BY-NC,
+  não comercial)**; o worker agora força o **BiRefNet (MIT)** e recusa o outro (commit 181708b).
+  O DINOv3 que o TRELLIS.2 usa permite uso comercial, mas pede aceite da própria pessoa no Hugging
+  Face e o crédito "Built with DINOv3".
+- **3D local (só CUDA hoje):** TRELLIS.2 e Pixal3D (MIT, até 1536³ com PBR 4K; oficial pede 24 GB);
+  Direct3D-S2, Hi3DGen e TripoSG (MIT, só forma); Hunyuan3D-2.1 (Tencent: não vale na UE, Reino Unido
+  e Coreia do Sul); Step1X-3D e MV-Adapter pedem nvdiffrast. Nenhum aberto chega ao Meshy "Flagship".
+- **Rig e movimento:** SkinTokens (MIT, 14 GB), Puppeteer (Apache 2.0); **Kimodo-SOMA-RP** da NVIDIA
+  (licença aberta comercial, cobre combate, < 3 GB com o texto no processador; falta conferir o
+  codificador de texto).
+- **Captura de movimento comercial:** CMU, 100STYLE (CC BY 4.0), **ACCAD** (CC BY 3.0, artes marciais),
+  Mesh2Motion (CC0), Quaternius (CC0). **Não podem:** Bandai Namco, LAFAN1, ZEGGS, Motorica, BONES-SEED.
+- **Bibliotecas:** Poly Haven (CC0; API liberada para uso comercial com crédito "Powered by Poly Haven"
+  e User-Agent próprio), ambientCG (CC0), Megascans no Fab (grátis de novo desde 05/11/2026, usável
+  fora da Unreal, mas sem redistribuir e pela conta da pessoa).
+- **Rosto e corpo:** MHR da Meta (Apache 2.0, 72 expressões FACS), FLAME 2023 Open (CC BY 4.0), ICT
+  FaceKit light (MIT), Anny (Apache 2.0), cabeça escaneada Lee Perry-Smith (CC BY 3.0).
+- **Nuvem:** Meshy 7.1 (API a partir de US$ 20/mês; no pago o modelo é do cliente), Rodin Gen-2.5
+  (até 10M de faces; texto da licença tem um campo vazio). Depende da decisão abaixo.
+
 ## Decisões que são do criador
+- **Modo nuvem (pendente):** Meshy/Rodin/Tripo dariam o detalhe mais alto hoje, mas quebram a regra
+  "a Fornalha só fala com 127.0.0.1", gastam créditos com a chave da pessoa e a licença depende do
+  plano. Se o criador autorizar, entra como opção desligada por padrão, com a chave digitada na janela,
+  preço e licença mostrados antes de cada geração e recibo.
 - **Rede**: o CLAUDE.md diz que a Fornalha só fala com 127.0.0.1. Os pacotes CC0 e os modelos de placa
   baixam de sites de fora **só quando você clica** (nada é enviado). Se preferir, eles podem ir dentro
   do instalador (fica ~500 MB maior).
@@ -121,6 +165,15 @@ Turbo), reserva da placa, `uso_comercial` nos modelos, aceleradores em `/motor/e
    (o "evitar" da bíblia), não só as cores.
 3. **Dois modelos carregados** (pedido 8 do plano): o cérebro e a imagem juntos, para o pedido livre
    não descarregar um para usar o outro.
+4. **Imagem guiada pela forma (para texturizar o 3D da Fornalha):** gerar imagem condicionada a mapa de
+   profundidade ou de normais (ControlNet ou equivalente com licença comercial) e com máscara
+   (inpainting), local. A Fornalha manda a vista do modelo 3D e projeta a imagem de volta na textura.
+   É o que mais aproxima o detalhe das referências em placas sem CUDA.
+5. **Textura PBR que repete sem emenda:** gerar textura "seamless" por texto (pedra, couro, tecido
+   bordado, metal gravado) e tirar dela os mapas de normal e rugosidade, local e com licença comercial
+   (a pesquisa achou FLUX.2 klein Apache 2.0 e Marigold OpenRAIL++, conferir no Ignis).
+6. **Placas AMD:** rodar a imagem (Z-Image ou a do pedido 4) na RX 580 e na RX 6600 por Vulkan, e na
+   RX 9060 XT 16 GB pelo que for mais rápido, com o mesmo endpoint.
 
 ## Notas para a Erethea Engine
 A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.exe` em

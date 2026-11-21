@@ -461,10 +461,11 @@ def retrato(caminho, centro, largura=900, altura=1100, amostras=64, distancia=0.
     """Close de estúdio (rosto ou objeto): luz principal suave, recorte e fundo escuro."""
     _preparar_render(largura, altura, amostras)
     centro = Vector(centro)
+    # luz de estúdio de retrato (chave suave de lado, recorte atrás, quase nada de preenchimento)
     for nome, energia, pos, tamanho, cor in (
-        ("chave_retrato", 55.0, (-0.9, -1.1, 0.6), 0.9, (1.0, 0.95, 0.9)),
-        ("recorte_retrato", 70.0, (0.8, 0.9, 0.5), 0.5, (1.0, 0.75, 0.55)),
-        ("preench_retrato", 9.0, (0.9, -1.0, -0.1), 1.2, (0.75, 0.82, 1.0)),
+        ("chave_retrato", 38.0, (-1.0, -0.75, 0.55), 0.7, (1.0, 0.94, 0.88)),
+        ("recorte_retrato", 45.0, (0.85, 0.8, 0.35), 0.35, (1.0, 0.86, 0.74)),
+        ("preench_retrato", 3.0, (0.9, -1.0, -0.15), 1.4, (0.7, 0.8, 1.0)),
     ):
         if bpy.data.objects.get(nome):
             continue
@@ -483,10 +484,18 @@ def retrato(caminho, centro, largura=900, altura=1100, amostras=64, distancia=0.
     chao = bpy.data.objects.get("chao_previa")
     if chao:
         chao.hide_render = True
+    exposicao = bpy.context.scene.view_settings.exposure
+    bpy.context.scene.view_settings.exposure = 0.0
+    mundo = bpy.context.scene.world
+    forca_ceu = None
+    if mundo and mundo.node_tree and "Background" in mundo.node_tree.nodes:
+        fundo = mundo.node_tree.nodes["Background"]
+        forca_ceu = fundo.inputs["Strength"].default_value
+        fundo.inputs["Strength"].default_value = forca_ceu * 0.25
     cam = bpy.context.scene.camera or _camera()
     cam.data.type = "PERSP"
     cam.data.lens = lente
-    cam.location = centro + Vector((-0.18, -1.0, 0.05)).normalized() * distancia
+    cam.location = centro + Vector((-0.22, -1.0, 0.02)).normalized() * distancia
     cam.rotation_euler = (centro - cam.location).to_track_quat("-Z", "Y").to_euler()
     cam.data.clip_start = 0.01
     bpy.context.scene.render.filepath = caminho
@@ -498,5 +507,8 @@ def retrato(caminho, centro, largura=900, altura=1100, amostras=64, distancia=0.
             o.hide_render = False
     if chao:
         chao.hide_render = False
+    bpy.context.scene.view_settings.exposure = exposicao
+    if forca_ceu is not None:
+        mundo.node_tree.nodes["Background"].inputs["Strength"].default_value = forca_ceu
     cam.data.lens = 50
     return caminho

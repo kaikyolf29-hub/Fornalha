@@ -98,6 +98,12 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         crate::niveis::Nivel::Equilibrado => 1024,
         _ => 2048,
     };
+    // pele com poros e rugas (textura do corpo): 4K no máximo, 2K na qualidade
+    let textura_pele = match nivel {
+        crate::niveis::Nivel::Leve | crate::niveis::Nivel::Equilibrado => 0,
+        crate::niveis::Nivel::Qualidade => 2048,
+        crate::niveis::Nivel::Maximo => 4096,
+    };
     let arma = ficha["arma"].as_str().unwrap_or("nenhuma");
     json!({
         "id": ficha["id"],
@@ -112,6 +118,7 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
                             "textura": textura}},
         "arma": arma,
         "escudo": matches!(estilo, "cavaleiro" | "cavaleiro_placas") && arma == "espada",
+        "textura_pele": textura_pele,
     })
 }
 

@@ -205,19 +205,11 @@ def material_pele(nome, mhmat, tom=None):
     nt = mat.node_tree
     bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
     tex = _imagem(os.path.join(mhmat["_pasta"], mhmat.get("diffuseTexture", ""))) if mhmat else None
-    cor_saida = None
     if tex:
         no = nt.nodes.new("ShaderNodeTexImage")
-        no.image = tex
+        # tom de pele pedido (orc, goblin, demônio ou tom humano): recolore os pixels
+        no.image = tingir_imagem(tex, tom, 0.8) if tom else tex
         cor_saida = no.outputs["Color"]
-        if tom:
-            mist = nt.nodes.new("ShaderNodeMix")
-            mist.data_type = "RGBA"
-            mist.blend_type = "MULTIPLY"
-            mist.inputs["Factor"].default_value = 0.85
-            nt.links.new(no.outputs["Color"], mist.inputs["A"])
-            mist.inputs["B"].default_value = (*c.cor_hex(tom), 1.0)
-            cor_saida = mist.outputs["Result"]
         nt.links.new(cor_saida, bsdf.inputs["Base Color"])
     else:
         bsdf.inputs["Base Color"].default_value = (*c.cor_hex(tom or "#d6a58a"), 1.0)
@@ -238,6 +230,62 @@ def material_pele(nome, mhmat, tom=None):
     return mat
 
 
+_TINGIDAS = {}
+
+
+def _olho_natural(mat):
+    """O branco do olho do pacote é branco-azulado demais e a íris saturada: puxa para o natural
+    (esclera marfim, um pouco de rosa nos cantos) e põe a camada molhada (verniz) por cima."""
+    nt = mat.node_tree
+    no = next((n for n in nt.nodes if n.type == "TEX_IMAGE" and n.image is not None), None)
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    if no is not None:
+        img = no.image
+        w, h = img.size
+        px = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(h, w, 4)
+        lin = np.clip(px[..., :3], 0, 1) ** 2.2
+        lum = (lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))[..., None]
+        lin = lum + (lin - lum) * 0.72
+        branco = np.clip((lum - 0.45) / 0.3, 0, 1)
+        lin = lin * (1 - branco * 0.22) * np.array([1.0, 0.95, 0.9], dtype=np.float32)
+        px[..., :3] = np.clip(lin, 0, 1) ** (1 / 2.2)
+        nova = bpy.data.images.new(img.name + "_natural", w, h, alpha=True)
+        nova.pixels.foreach_set(px.ravel())
+        nova.pack()
+        no.image = nova
+    for k, v in (("Coat Weight", 1.0), ("Coat Roughness", 0.02), ("Coat IOR", 1.376), ("Roughness", 0.25), ("Subsurface Weight", 0.2)):
+        if k in bsdf.inputs:
+            bsdf.inputs[k].default_value = v
+
+
+def tingir_imagem(img, cor, contraste=1.0):
+    """Recolore a textura mantendo o desenho claro/escuro (fios do cabelo, pelos da sobrancelha):
+    a média vira a cor pedida. Vai nos pixels, então o glb e a engine recebem a mesma cor."""
+    chave = (img.name, cor, contraste)
+    if chave in _TINGIDAS:
+        return _TINGIDAS[chave]
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(-1, 4)
+    rgb = np.clip(px[:, :3], 0, 1) ** 2.2
+    alfa = px[:, 3]
+    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    vis = alfa > 0.3
+    media = float(lum[vis].mean()) if vis.any() else float(lum.mean()) or 1e-3
+    alvo = np.array(c.cor_hex(cor), dtype=np.float32)
+    rel = 1.0 + (lum / max(media, 1e-4) - 1.0) * contraste
+    novo = np.clip(rel[:, None] * alvo[None, :], 0, 1) ** (1 / 2.2)
+    px[:, :3] = novo
+    nova = bpy.data.images.new(f"{img.name}_{cor.lstrip('#')}", w, h, alpha=True)
+    nova.pixels.foreach_set(px.ravel())
+    nova.pack()
+    _TINGIDAS[chave] = nova
+    return nova
+
+
 def material_de_mhmat(nome, mhmat, alfa=False, rugosidade=0.6, metal=0.0, cor=None):
     mat = bpy.data.materials.new(nome)
     mat.use_nodes = True
@@ -248,17 +296,8 @@ def material_de_mhmat(nome, mhmat, alfa=False, rugosidade=0.6, metal=0.0, cor=No
         tex = _imagem(os.path.join(mhmat["_pasta"], mhmat.get("diffuseTexture", "")))
     if tex:
         no = nt.nodes.new("ShaderNodeTexImage")
-        no.image = tex
-        if cor:
-            mist = nt.nodes.new("ShaderNodeMix")
-            mist.data_type = "RGBA"
-            mist.blend_type = "MULTIPLY"
-            mist.inputs["Factor"].default_value = 1.0
-            nt.links.new(no.outputs["Color"], mist.inputs["A"])
-            mist.inputs["B"].default_value = (*c.cor_hex(cor), 1.0)
-            nt.links.new(mist.outputs["Result"], bsdf.inputs["Base Color"])
-        else:
-            nt.links.new(no.outputs["Color"], bsdf.inputs["Base Color"])
+        no.image = tingir_imagem(tex, cor, 0.9) if cor else tex
+        nt.links.new(no.outputs["Color"], bsdf.inputs["Base Color"])
         if alfa:
             nt.links.new(no.outputs["Alpha"], bsdf.inputs["Alpha"])
             try:
@@ -499,7 +538,8 @@ def criar_humano(dados, assets, ficha):
     pecas = [corpo]
     acessorios = [
         ("eyes", ficha.get("olhos_modelo", "high-poly"), False, None),
-        ("eyebrows", ficha.get("sobrancelha", "eyebrow001"), True, ficha.get("cor_cabelo")),
+        ("eyebrows", ficha.get("sobrancelha") or ("eyebrow012" if ficha.get("macro", {}).get("genero", 0.5) >= 0.5 else "eyebrow011"), True,
+         ficha.get("cor_cabelo")),
         ("eyelashes", ficha.get("cilios", "eyelashes01"), True, None),
         ("teeth", "teeth_base", False, None),
     ]
@@ -517,6 +557,7 @@ def criar_humano(dados, assets, ficha):
             cor_olho = ficha.get("cor_olhos", "brown")
             arq = os.path.join(assets, "eyes", "materials", cor_olho + ".mhmat")
             mat = material_de_mhmat(nome + "_olhos", ler_mhmat(arq) if os.path.isfile(arq) else None, alfa=True, rugosidade=0.05)
+            _olho_natural(mat)
         o = h.encaixar(mhclo, f"{nome}_{tipo}", material=mat, alfa=alfa, cor=cor, rugosidade=0.45 if tipo == "hair" else 0.6)
         if o is not None:
             pecas.append(o)
@@ -528,6 +569,22 @@ def criar_humano(dados, assets, ficha):
 
         r = ficha["roupa"]
         pecas.extend(fc_roupa.vestir(h, nome, r.get("estilo", "campones"), r.get("cores", {}), capa=r.get("capa", True)))
+    res_pele = int(ficha.get("textura_pele") or 0)
+    if res_pele and corpo.data.polygons:
+        # pele em alta: poros, rugas pela idade, barba rala e vermelhidão assados em cor/rugosidade/normal
+        import fc_pele
+
+        mat = corpo.data.materials[0]
+        olhos = next((o for o in pecas if o.name.endswith("_eyes")), None)
+        dentes = next((o for o in pecas if o.name.endswith("_teeth")), None)
+        cor, rug, nor = fc_pele.gerar(corpo, fc_pele.base_da_pele(mat), ficha, olhos, dentes, res=res_pele,
+                                      cor_barba=ficha.get("cor_cabelo") or "#2a1e16")
+        fc_pele.aplicar(mat, cor, rug, nor)
+        # no render a malha é subdividida (silhueta lisa); no glb e na engine vai a malha do jogo
+        sub = corpo.modifiers.new("subdivisao_render", "SUBSURF")
+        sub.levels = 0
+        sub.render_levels = 2
+        sub.quality = 3
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":
         import fc_armas_pbr

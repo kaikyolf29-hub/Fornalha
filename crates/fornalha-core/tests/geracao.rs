@@ -173,9 +173,14 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
     f.definir_porta_ignis(1).unwrap();
     let p = f.chamar("create_project", json!({"nome": "Ordem do Templo"}), "claude-code").await.unwrap();
     let raiz = std::path::PathBuf::from(p["raiz"].as_str().unwrap());
-    f.chamar("update_project", json!({"alteracoes": {"guia_visual": {"paleta": ["#d9d3c3", "#7a1c18", "#3d2a1c"]}}}), "claude-code")
-        .await
-        .unwrap();
+    // nível Qualidade: armadura com o desgaste assado num atlas e pele com poros e rugas (2K)
+    f.chamar(
+        "update_project",
+        json!({"alteracoes": {"nivel": "qualidade", "guia_visual": {"paleta": ["#d9d3c3", "#7a1c18", "#3d2a1c"]}}}),
+        "claude-code",
+    )
+    .await
+    .unwrap();
     let heroi = f
         .chamar("create_character", json!({"nome": "Godofredo", "papel": "protagonista", "descricao": "cavaleiro templário", "armadura": "pesada", "arma": "espada", "porte": "forte", "conceito": false}), "claude-code")
         .await
@@ -187,6 +192,10 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
         assert!(nomes.contains(&n), "falta a animação {n}: {nomes:?}");
     }
     assert!(heroi["estatisticas"]["triangulos"].as_u64().unwrap() > 20000);
+    // templário: as placas viraram uma malha só (atlas com desgaste)
+    let pecas: Vec<&str> = heroi["estatisticas"]["pecas"].as_array().unwrap().iter().filter_map(|p| p.as_str()).collect();
+    assert!(pecas.iter().any(|p| p.ends_with("_armadura")), "{pecas:?}");
+    assert!(pecas.iter().any(|p| p.ends_with("_sobreveste")), "{pecas:?}");
     let inimigo = f
         .chamar("create_character", json!({"papel": "inimigo", "descricao": "mercenário com espada", "armadura": "leve", "arma": "espada", "testar_na_engine": true, "conceito": false}), "claude-code")
         .await

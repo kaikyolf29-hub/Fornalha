@@ -226,3 +226,25 @@ fn plano_do_cerebro_e_conferido_contra_o_esquema() {
     assert_eq!(s[2]["argumentos"], json!({"inimigo_perto": true}), "arquivo que não existe sai");
     assert!(avisos.iter().any(|a| a.contains("generate_animation") && a.contains("arquivo")), "{avisos:?}");
 }
+
+#[test]
+fn o_que_o_cerebro_esqueceu_as_regras_completam() {
+    let mut avisos = Vec::new();
+    // o plano que o Qwen3 0.6B fez de verdade para "a floresta com dois orcs e a música de combate, e teste"
+    let cerebro = vec![
+        json!({"ferramenta": "generate_blockout", "argumentos": {"areas": [{"id": "floresta", "tipo": "floresta"}]}, "motivo": "mundo"}),
+        json!({"ferramenta": "generate_music", "argumentos": {"situacao": "combate"}, "motivo": "música"}),
+        json!({"ferramenta": "run_test", "argumentos": {}, "motivo": "testar"}),
+    ];
+    let p = plano::completar_com_regras(cerebro, "a floresta com dois orcs e a música de combate, e teste o jogo", &mut avisos);
+    assert_eq!(
+        ferramentas(&p),
+        ["generate_blockout", "generate_music", "create_character", "create_character", "import_to_engine", "run_test"]
+    );
+    assert!(avisos[0].contains("create_character"), "{avisos:?}");
+    // plano completo do cérebro fica como está
+    let mut av = Vec::new();
+    let ok = vec![json!({"ferramenta": "generate_music", "argumentos": {"situacao": "vila"}})];
+    assert_eq!(plano::completar_com_regras(ok, "a música da vila", &mut av).len(), 1);
+    assert!(av.is_empty());
+}

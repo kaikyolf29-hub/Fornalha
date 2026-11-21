@@ -101,8 +101,11 @@ async function roteiro(client, nomeCliente, quemEsperado, home) {
   const codigo = await client.callTool({ name: "generate_code", arguments: {} });
   confere(fs.existsSync(path.join(raiz, "Scripts", "fornalha", "jogador.gd")) && fs.existsSync(path.join(raiz, "project.godot")), "generate_code escreve o jogo para a engine");
 
-  const plano = await client.callTool({ name: "plan_request", arguments: { pedido: "a música de combate e os efeitos sonoros", executar: "noite" } });
-  confere(plano.structuredContent?.passos?.length === 2 && plano.structuredContent?.tarefas?.length === 2, "plan_request planeja e põe na fila da noite");
+  // com o Ignis aberto, quem planeja é o cérebro (no processador pode levar minutos)
+  const plano = await client.callTool({ name: "plan_request", arguments: { pedido: "a música de combate e os efeitos sonoros", executar: "noite" } }, undefined, { timeout: 600000 });
+  const nomesPlano = (plano.structuredContent?.passos || []).map((p) => p.ferramenta);
+  confere(nomesPlano.includes("generate_music") && nomesPlano.includes("generate_sfx") && plano.structuredContent?.tarefas?.length === nomesPlano.length,
+    `plan_request planeja (${plano.structuredContent?.origem}) e põe na fila da noite`);
   const fila = await client.callTool({ name: "list_queue", arguments: {} });
   confere(fila.structuredContent?.tarefas?.some((t) => t.quando === "noite" && t.situacao === "esperando"), "list_queue mostra a fila da noite");
   await client.callTool({ name: "update_project", arguments: { alteracoes: { guia_visual: { paleta: ["#7a2e22", "#2f3640"] } } } });

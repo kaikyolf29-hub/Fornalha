@@ -212,7 +212,10 @@ pub fn sanear(passos: Vec<Value>, pedido: &str, raiz: &std::path::Path, avisos: 
         let mut args = serde_json::Map::new();
         let mut tirados = Vec::new();
         for (k, v) in s["argumentos"].as_object().cloned().unwrap_or_default() {
-            let Some(p) = props.get(&k).filter(|_| k != "projeto") else {
+            if k == "projeto" {
+                continue; // a fila sempre usa o projeto em que o pedido foi feito
+            }
+            let Some(p) = props.get(&k) else {
                 tirados.push(k);
                 continue;
             };
@@ -250,6 +253,32 @@ pub fn sanear(passos: Vec<Value>, pedido: &str, raiz: &std::path::Path, avisos: 
     saida
 }
 
+/// O que as regras acharam no pedido e o cérebro esqueceu (ferramenta que nem
+/// aparece no plano dele) entra antes de montar na engine e testar.
+pub fn completar_com_regras(mut passos: Vec<Value>, pedido: &str, avisos: &mut Vec<String>) -> Vec<Value> {
+    let regras = plano_por_regras(pedido);
+    let tem: std::collections::HashSet<String> = passos.iter().filter_map(|s| s["ferramenta"].as_str().map(String::from)).collect();
+    let faltando: Vec<Value> = regras.into_iter().filter(|r| r["ferramenta"].as_str().is_some_and(|n| !tem.contains(n))).collect();
+    if faltando.is_empty() {
+        return passos;
+    }
+    let nomes: std::collections::BTreeSet<&str> = faltando.iter().filter_map(|r| r["ferramenta"].as_str()).collect();
+    avisos.push(format!(
+        "Completei o plano do cérebro com o que ele esqueceu do pedido: {}.",
+        nomes.into_iter().collect::<Vec<_>>().join(", ")
+    ));
+    passos.extend(faltando);
+    // gerar primeiro, depois montar na engine, testar por último (a ordem de cada grupo fica)
+    let ordem = |s: &Value| match s["ferramenta"].as_str() {
+        Some("import_to_engine") => 1,
+        Some("run_test") => 2,
+        _ => 0,
+    };
+    passos.sort_by_key(ordem);
+    passos.truncate(MAX_PASSOS);
+    passos
+}
+
 /// plan_request: pedido livre → plano (cérebro ou regras) → fila.
 pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Value> {
     if a.pedido.trim().is_empty() {
@@ -264,6 +293,9 @@ pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Valu
         match plano_pelo_cerebro(f, &p, &a.pedido).await {
             Ok(v) => {
                 passos = sanear(v, &a.pedido, &p.raiz, &mut avisos);
+                if !passos.is_empty() {
+                    passos = completar_com_regras(passos, &a.pedido, &mut avisos);
+                }
                 origem = "cerebro";
             }
             Err(e) => avisos.push(format!("O cérebro não fez o plano ({}); usei as regras da Fornalha.", e.mensagem)),

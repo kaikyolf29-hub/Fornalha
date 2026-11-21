@@ -1,5 +1,5 @@
 # TRELLIS.2 de mentira: mesma interface (from_pretrained, cuda, run → malha com
-# vertices, faces, coords, attrs, layout e voxel_size). Faz um "boneco" de duas
+# vertices, faces, coords, attrs, layout e voxel_size; rembg.BiRefNet como no original). Faz um "boneco" de duas
 # esferas com a cor de cima e a de baixo tiradas da imagem recebida.
 import numpy as np
 
@@ -39,10 +39,17 @@ class _Malha:
         return self
 
 
+from . import rembg  # noqa: E402
+
+
 class Trellis2ImageTo3DPipeline:
     @classmethod
     def from_pretrained(cls, nome):
-        return cls()
+        # como o pipeline.json oficial: pede o removedor de fundo RMBG-2.0 (licença não comercial);
+        # a Fornalha tem de trocar pelo BiRefNet (MIT) antes de carregar
+        pipe = cls()
+        pipe.rembg_model = rembg.BiRefNet(model_name="briaai/RMBG-2.0")
+        return pipe
 
     def cuda(self):
         return self

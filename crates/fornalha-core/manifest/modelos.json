@@ -330,7 +330,7 @@
       "dependencias": [
         "nvdiffrast"
       ],
-      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender) e troca o removedor de fundo RMBG-2.0 do pipeline.json oficial (CC BY-NC 4.0, não comercial) pelo BiRefNet (MIT, https://huggingface.co/ZhengPeng7/BiRefNet). O extrator DINOv3 (facebook/dinov3-vitl16-pretrain-lvd1689m) tem licença própria que permite uso comercial, mas o download pede aceite da própria pessoa no Hugging Face e quem distribui o jogo mostra \"Built with DINOv3\" nos créditos (https://ai.meta.com/resources/models-and-libraries/dinov3-license/). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-512",
@@ -345,7 +345,7 @@
       "dependencias": [
         "nvdiffrast"
       ],
-      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender) e troca o removedor de fundo RMBG-2.0 do pipeline.json oficial (CC BY-NC 4.0, não comercial) pelo BiRefNet (MIT, https://huggingface.co/ZhengPeng7/BiRefNet). O extrator DINOv3 (facebook/dinov3-vitl16-pretrain-lvd1689m) tem licença própria que permite uso comercial, mas o download pede aceite da própria pessoa no Hugging Face e quem distribui o jogo mostra \"Built with DINOv3\" nos créditos (https://ai.meta.com/resources/models-and-libraries/dinov3-license/). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-1024-poucavram",
@@ -360,7 +360,7 @@
       "dependencias": [
         "nvdiffrast"
       ],
-      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender) e troca o removedor de fundo RMBG-2.0 do pipeline.json oficial (CC BY-NC 4.0, não comercial) pelo BiRefNet (MIT, https://huggingface.co/ZhengPeng7/BiRefNet). O extrator DINOv3 (facebook/dinov3-vitl16-pretrain-lvd1689m) tem licença própria que permite uso comercial, mas o download pede aceite da própria pessoa no Hugging Face e quem distribui o jogo mostra \"Built with DINOv3\" nos créditos (https://ai.meta.com/resources/models-and-libraries/dinov3-license/). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-1536",
@@ -375,7 +375,7 @@
       "dependencias": [
         "nvdiffrast"
       ],
-      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender) e troca o removedor de fundo RMBG-2.0 do pipeline.json oficial (CC BY-NC 4.0, não comercial) pelo BiRefNet (MIT, https://huggingface.co/ZhengPeng7/BiRefNet). O extrator DINOv3 (facebook/dinov3-vitl16-pretrain-lvd1689m) tem licença própria que permite uso comercial, mas o download pede aceite da própria pessoa no Hugging Face e quem distribui o jogo mostra \"Built with DINOv3\" nos créditos (https://ai.meta.com/resources/models-and-libraries/dinov3-license/). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "hunyuan3d-2mini",

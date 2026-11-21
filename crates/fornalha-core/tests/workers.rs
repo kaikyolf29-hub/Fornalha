@@ -143,6 +143,8 @@ async fn trellis_de_mentira_vira_modelo_com_textura_e_libera_venda_depois_da_ver
     assert!(vermelho > verde && azul > verde, "as cores da imagem chegaram na textura: {cor:?}");
     assert!((assar["altura_m"].as_f64().unwrap() - 1.2).abs() < 0.01);
     assert!(r["estatisticas"]["trellis"]["cores_achadas"].as_f64().unwrap() > 0.95);
+    // o pipeline.json oficial pede o RMBG-2.0 (não comercial): a Fornalha usa o BiRefNet (MIT)
+    assert_eq!(r["estatisticas"]["trellis"]["removedor_de_fundo"], "ZhengPeng7/BiRefNet", "{r}");
 
     let recibos = chamar(&f, "list_receipts", json!({})).await;
     let lista = recibos["recibos"].as_array().unwrap();

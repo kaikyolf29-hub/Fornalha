@@ -22,12 +22,45 @@ TIPOS = {
     "trellis2-1536": ("1536_cascade", False),
 }
 PESOS_PADRAO = "microsoft/TRELLIS.2-4B"
+# O pipeline.json oficial pede o removedor de fundo briaai/RMBG-2.0, que é CC BY-NC 4.0
+# (não comercial). A Fornalha troca pelo BiRefNet original (MIT), que é o padrão do próprio
+# código do TRELLIS.2, ANTES de carregar: o RMBG-2.0 nem chega a ser baixado.
+REMOVEDOR_DE_FUNDO = "ZhengPeng7/BiRefNet"
+_NAO_COMERCIAIS = ("rmbg", "briaai")
+
+
+def _trocar_removedor_de_fundo():
+    from trellis2.pipelines import rembg
+
+    classe = rembg.BiRefNet
+    if getattr(classe, "__fornalha_trocado__", False):
+        return
+    original = classe.__init__
+
+    def init(self, model_name=REMOVEDOR_DE_FUNDO, *args, **kw):
+        if any(p in str(model_name).lower() for p in _NAO_COMERCIAIS):
+            model_name = REMOVEDOR_DE_FUNDO
+        original(self, model_name, *args, **kw)
+        self.__fornalha_modelo__ = model_name
+
+    classe.__init__ = init
+    classe.__fornalha_trocado__ = True
+
+
+def removedor_em_uso(pipe):
+    r = getattr(pipe, "rembg_model", None)
+    nome = getattr(r, "__fornalha_modelo__", None) or getattr(r, "model_name", None)
+    if nome and any(p in str(nome).lower() for p in _NAO_COMERCIAIS):
+        raise RuntimeError(f"removedor de fundo {nome} tem licença não comercial: bloqueado pela Fornalha")
+    return nome
 
 
 def carregar(pesos, pouca_vram):
     from trellis2.pipelines import Trellis2ImageTo3DPipeline
 
+    _trocar_removedor_de_fundo()
     pipe = Trellis2ImageTo3DPipeline.from_pretrained(pesos or PESOS_PADRAO)
+    removedor_em_uso(pipe)
     if pouca_vram and hasattr(pipe, "low_vram"):
         pipe.low_vram = True
     if hasattr(pipe, "cuda"):
@@ -155,6 +188,7 @@ def tarefa(t):
             "resolucao_voxels": res,
             "tipo": tipo,
             "pouca_vram": pouca_vram,
+            "removedor_de_fundo": removedor_em_uso(pipe),
             "cor_media": [int(x) for x in np.asarray(cores).mean(axis=0).round()],
         },
         "eixo_cima": t.get("eixo_cima_da_saida", "Z"),

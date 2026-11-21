@@ -541,6 +541,7 @@ async function pintarMaquina() {
     return `<div class="item"><div><strong>${esc(p.nome || id)}${p.achado && p.versao ? " " + esc(p.versao) : ""}</strong><small class="mono">${esc(p.achado ? p.caminho : "Não encontrado")}</small></div>
       <div class="lado">${p.achado ? "" : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`}<button class="botao" data-programa="${id}">Escolher</button></div></div>`;
   }).join(""));
+  pintarModelosDePlaca(a.cuda);
   $("nivel-maquina").value = (info && info.nivel_da_maquina) || "auto";
   const emUso = niveis.nivel_em_uso;
   const cab = `<thead><tr><th>Função</th>${niveis.tabela.map((l) => `<th class="${l.nivel === emUso ? "em-uso" : ""}">${esc(l.nome)}<small>${esc(l.faixa)}</small></th>`).join("")}</tr></thead>`;
@@ -552,6 +553,38 @@ async function pintarMaquina() {
   }).join("")}</tr>`).join("");
   pinta($("tabela-niveis"), cab + "<tbody>" + linhas + "</tbody>");
 }
+let vigiaModelos = null;
+function pintarModelosDePlaca(cuda) {
+  const lista = (estado && estado.modelos_de_placa) || [];
+  const aceitas = (info && info.estudio && info.estudio.licencas_aceitas) || [];
+  pinta($("modelos-placa"), lista.map((m) => {
+    const falta = !cuda ? "Precisa de placa NVIDIA (CUDA)." : m.aceite && !aceitas.includes(m.aceite) ? "Aceite a licença da Tencent em Licenças antes de instalar." : "";
+    const situacao = m.instalando ? "Instalando…" : m.verificado ? (m.sem.includes("nvdiffrast") ? "Pronto e verificado sem o nvdiffrast" : "Pronto e verificado") : m.instalado ? "Instalado, falta verificar" : "Não instalado";
+    const ultima = m.log && m.log.length ? m.log[m.log.length - 1] : "";
+    const botoes = m.instalando ? "" : m.instalado
+      ? `<button class="botao" data-modelo="${esc(m.id)}" data-acao="verificar">Verificar</button>`
+      : `<button class="botao" data-modelo="${esc(m.id)}" data-acao="instalar" ${falta ? "disabled" : ""}>Instalar</button>`;
+    return `<div class="item"><div><strong>${esc(m.nome)}</strong><small>${esc(falta || situacao)}</small>${ultima && (m.instalando || !m.instalado) ? `<small class="mono">${esc(ultima)}</small>` : ""}</div><div class="lado">${botoes}</div></div>`;
+  }).join(""));
+  clearTimeout(vigiaModelos);
+  if (lista.some((m) => m.instalando)) vigiaModelos = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
+}
+$("modelos-placa").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-modelo]");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.acao === "instalar") {
+      await api("POST", "/janela/modelo-de-placa", { id: b.dataset.modelo, acao: "instalar" });
+      mensagem("Instalação começou. São vários GB; dá para continuar usando a Fornalha.");
+    } else {
+      mensagem("Verificando com uma geração de teste…");
+      await api("POST", "/janela/modelo-de-placa", { id: b.dataset.modelo, acao: "verificar" });
+      mensagem("Modelo verificado.");
+    }
+  } catch (err) { mensagem(err.message, "erro"); }
+  carregar("maquina");
+});
 $("programas").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-programa]");
   if (!b) return;

@@ -12,7 +12,7 @@ fn projeto_em(dir: &Path, comercial: bool) -> Projeto {
 }
 
 fn ctx(p: &Projeto) -> ContextoRota {
-    ContextoRota { comercial: p.biblia.comercial, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![] }
+    ContextoRota { comercial: p.biblia.comercial, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![], sem_dependencias: vec![] }
 }
 
 fn asset(p: &Projeto, rel: &str, conteudo: &[u8]) {

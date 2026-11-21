@@ -100,7 +100,15 @@ jobs:
         shell: bash
         run: ./scripts/baixar-ferramentas.sh "$HOME/ferramentas"
 
-      - name: Gerações (Forja, engine e o pronto da Fase 4 pelo MCP)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python dos workers de placa (numpy e Pillow)
+        shell: bash
+        run: python -m pip install numpy pillow
+
+      - name: Gerações (Forja, engine, workers de placa e o pronto da Fase 4 pelo MCP)
         shell: bash
         env:
           FORNALHA_TESTE_SAIDA: ${{ github.workspace }}/geracoes
@@ -109,9 +117,9 @@ jobs:
         run: |
           mkdir -p geracoes
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a -s "-screen 0 1280x800x24" cargo test -p fornalha-core --test forja --test engine --test geracao -- --test-threads 1 --nocapture
+            xvfb-run -a -s "-screen 0 1280x800x24" cargo test -p fornalha-core --test forja --test engine --test geracao --test workers -- --test-threads 1 --nocapture
           else
-            cargo test -p fornalha-core --test forja --test engine --test geracao -- --test-threads 1 --nocapture
+            cargo test -p fornalha-core --test forja --test engine --test geracao --test workers -- --test-threads 1 --nocapture
           fi
 
       - uses: actions/upload-artifact@v4

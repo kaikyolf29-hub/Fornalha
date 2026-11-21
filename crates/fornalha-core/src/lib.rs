@@ -27,3 +27,4 @@ pub mod projeto;
 pub mod recibos;
 pub mod servico;
 pub mod util;
+pub mod workers;

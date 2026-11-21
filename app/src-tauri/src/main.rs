@@ -233,6 +233,32 @@ mod nucleo {
         }
     }
 
+    /// Instalar ou verificar um modelo de placa: só a pessoa, pela janela (downloads de
+    /// vários GB e, no HY-Motion, a licença da Tencent aceita antes).
+    async fn modelo_de_placa(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        use fornalha_core::workers::{self, Worker};
+        let Some(w) = v["id"].as_str().and_then(Worker::de_id) else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Modelo desconhecido."}}))).into_response();
+        };
+        let r = match v["acao"].as_str() {
+            Some("instalar") => {
+                if let Some(g) = w.aceite() {
+                    if !c.fornalha.estudio().licencas_aceitas.iter().any(|a| a == g) {
+                        let m = "Aceite a licença em Licenças antes de instalar este modelo.";
+                        return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": m}}))).into_response();
+                    }
+                }
+                workers::instalar(&c.fornalha.paths, w, false).await
+            }
+            Some("verificar") => workers::verificar(&c.fornalha.paths, w).await,
+            _ => return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Ação desconhecida."}}))).into_response(),
+        };
+        match r {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
     /// Canal exclusivo da janela: a mesma API (como "pessoa") + rotas que só a pessoa usa.
     async fn servir_canal_janela(app: AppHandle) {
         let st = app.state::<Estado>();
@@ -245,6 +271,7 @@ mod nucleo {
                     .route("/janela/info", get(info))
                     .route("/janela/estudio", post(definir_estudio))
                     .route("/janela/ajustes", post(definir_ajustes))
+                    .route("/janela/modelo-de-placa", post(modelo_de_placa))
                     .with_state(canal),
             )
             .layer(middleware::from_fn_with_state(senha, checar_senha));

@@ -180,6 +180,7 @@ impl Fornalha {
             cuda: acel.cuda,
             receita_anual_usd: estudio.receita_anual_usd,
             licencas_aceitas: estudio.licencas_aceitas,
+            sem_dependencias: crate::workers::sem_dependencias(&self.paths),
         }
     }
 

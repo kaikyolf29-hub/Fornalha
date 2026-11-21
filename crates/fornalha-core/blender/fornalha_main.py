@@ -146,9 +146,15 @@ def _importar(caminho):
 
 
 def _juntar_malhas(objs, nome):
+    # colisões exportadas pela própria Fornalha (-col/-colonly) não entram na malha visível
+    colisoes = [o for o in objs if o.type == "MESH" and o.name.lower().split(".")[0].endswith(("-col", "-colonly"))]
+    for o in colisoes:
+        bpy.data.objects.remove(o, do_unlink=True)
+    objs = [o for o in objs if o not in colisoes]
     malhas = [o for o in objs if o.type == "MESH"]
     if not malhas:
         raise ValueError("o arquivo não tem malha")
+    outros = [o.name for o in objs if o.type != "MESH"]
     for o in bpy.context.scene.objects:
         o.select_set(o in malhas)
     bpy.context.view_layer.objects.active = malhas[0]
@@ -158,8 +164,9 @@ def _juntar_malhas(objs, nome):
     m.name = nome
     bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    for o in objs:
-        if o.name in bpy.data.objects and o != m and o.type != "MESH":
+    for n in outros:
+        o = bpy.data.objects.get(n)
+        if o is not None and o != m:
             bpy.data.objects.remove(o, do_unlink=True)
     return m
 

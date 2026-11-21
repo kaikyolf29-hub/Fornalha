@@ -25,6 +25,7 @@ const SCRIPTS: [(&str, &str); 7] = [
 pub const TIPOS_DE_PERSONAGEM: [&str; 7] = ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"];
 pub const ARMAS: [&str; 7] = ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo"];
 pub const OBJETOS: [&str; 9] = ["barril", "caixa", "bau", "arvore", "pedra", "casa", "tocha", "cerca", "pocao"];
+pub const ANIMACOES: [&str; 9] = ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"];
 pub const AREAS: [&str; 15] = [
     "vila", "cidade", "aldeia", "floresta", "bosque", "pantano", "montanha", "colina", "vulcao", "masmorra", "caverna", "castelo",
     "ruinas", "arena", "coliseu",

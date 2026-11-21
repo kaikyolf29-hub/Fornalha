@@ -72,7 +72,7 @@ fn limites_de_vram() {
 #[test]
 fn tabela_tem_os_4_niveis_e_todas_as_funcoes() {
     let cat = Catalogo::embutido();
-    let ctx = ContextoRota { comercial: true, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![] };
+    let ctx = ContextoRota { comercial: true, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![], sem_dependencias: vec![] };
     let t = niveis::tabela(&cat, &ctx);
     assert_eq!(t.len(), 4);
     for linha in &t {

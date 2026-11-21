@@ -14,7 +14,10 @@ PROIBIDOS = ("nvdiffrast", "nvdiffrec")
 
 
 def proibidos_instalados():
-    return [m for m in PROIBIDOS if importlib.util.find_spec(m) is not None]
+    """Instalados no ambiente (procura direto no disco, sem passar pelo substituto)."""
+    import importlib.machinery
+
+    return [m for m in PROIBIDOS if importlib.machinery.PathFinder.find_spec(m) is not None]
 
 
 def proibidos_carregados():

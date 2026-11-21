@@ -16,6 +16,8 @@ Uso:
   fornalha-cli detectar                    placa, aceleradores e nível sugerido
   fornalha-cli chamar <ferramenta> [json]  chama uma ferramenta
   fornalha-cli ferramentas                 lista as ferramentas
+  fornalha-cli modelos                     modelos de placa (TRELLIS.2, UniRig, HY-Motion)
+  fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
   fornalha-cli versao
 
 A variável FORNALHA_HOME coloca configuração e projetos numa pasta só.";
@@ -75,6 +77,25 @@ async fn main() {
                 println!("{:<22} {}", t.nome, t.titulo);
             }
             0
+        }
+        Some("modelos") => {
+            println!("{}", serde_json::to_string_pretty(&fornalha_core::workers::estado(&paths)).unwrap_or_default());
+            0
+        }
+        Some("instalar-modelo") => {
+            use fornalha_core::workers::{self, Worker};
+            let Some(w) = args.get(1).and_then(|id| Worker::de_id(id)) else {
+                eprintln!("Diga qual: trellis2, unirig ou hy-motion.");
+                std::process::exit(2);
+            };
+            let f = Fornalha::new(paths.clone());
+            if let Some(g) = w.aceite() {
+                if !f.estudio().licencas_aceitas.iter().any(|a| a == g) {
+                    eprintln!("Este modelo precisa do aceite da licença na janela da Fornalha (Licenças) antes de instalar.");
+                    std::process::exit(2);
+                }
+            }
+            imprimir(workers::instalar_e_esperar(&paths, w, args.iter().any(|a| a == "--pular-pesos")).await)
         }
         Some("versao" | "--version" | "-V") => {
             println!("fornalha-cli {}", fornalha_core::consts::APP_VERSION);

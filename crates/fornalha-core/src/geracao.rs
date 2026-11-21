@@ -18,8 +18,75 @@ use crate::ignis;
 use crate::projeto::{self, Projeto};
 use crate::recibos::{self, NovoRecibo};
 use crate::servico::Fornalha;
+use crate::workers::{self, Instalacao, Worker};
 
 const TEMPO_BLENDER: Duration = Duration::from_secs(900);
+const TEMPO_PLACA: Duration = Duration::from_secs(1800);
+
+/// Modelo de placa que o roteador escolheu para a função, se o worker dele estiver
+/// instalado nesta máquina. Sem isso, quem chama usa a alternativa sem placa.
+async fn modelo_de_placa(f: &Fornalha, p: &Projeto, funcao: &str, avisos: &mut Vec<String>) -> Option<(Worker, String, Instalacao)> {
+    let ctx = f.contexto(Some(p)).await;
+    let nivel = f.nivel_em_uso(Some(p)).await;
+    let escolha = crate::licencas::escolher(&f.catalogo, funcao, nivel, &ctx).ok()?;
+    let m = escolha.modelo?;
+    let w = Worker::do_modelo(&m.id)?;
+    match workers::instalacao(&f.paths, w) {
+        Some(i) => Some((w, m.id, i)),
+        None => {
+            avisos.push(format!(
+                "O roteador escolheu {} ({funcao}), mas ele ainda não está instalado nesta máquina (Máquina → Modelos de placa): usei a alternativa sem placa.",
+                m.nome
+            ));
+            None
+        }
+    }
+}
+
+/// Altura de cada tipo de personagem (a mesma da Forja), para pôr a malha de fora em escala.
+fn altura_do_tipo(tipo: &str) -> f64 {
+    match tipo {
+        "elfo" => 1.85,
+        "anao" => 1.35,
+        "orc" => 1.95,
+        "goblin" => 1.15,
+        "demonio" => 2.0,
+        _ => 1.8,
+    }
+}
+
+/// TRELLIS.2 (imagem → malha alta com cor) e Blender (malha leve com textura assada).
+#[allow(clippy::too_many_arguments)]
+async fn trellis_e_assar(
+    f: &Fornalha,
+    inst: &Instalacao,
+    modelo: &str,
+    imagem: &Path,
+    pasta: &Path,
+    nome: &str,
+    altura_m: f64,
+    seed: u64,
+    colisao: bool,
+) -> Resultado<(PathBuf, Value)> {
+    let alta = pasta.join(format!("{nome}.alta.ply"));
+    let r = workers::rodar(
+        &f.paths,
+        Worker::Trellis2,
+        inst,
+        &json!({"tarefa": "gerar", "imagem": imagem, "saida": alta, "modelo": modelo, "seed": seed}),
+        TEMPO_PLACA,
+    )
+    .await?;
+    let malha = pasta.join(format!("{nome}.malha.glb"));
+    let a = forjar(
+        f,
+        &json!({"tarefa": "assar", "entrada": alta, "saida": malha, "nome": nome, "altura_m": altura_m, "triangulos_max": 20000,
+                "textura_px": 2048, "cima": r["eixo_cima"].as_str().unwrap_or("Z"), "colisao": colisao, "previa": true, "amostras": 16}),
+    )
+    .await?;
+    let _ = std::fs::remove_file(&alta);
+    Ok((malha, json!({"trellis": r["estatisticas"], "assar": a["estatisticas"], "previa": a["arquivos"]["previa"]})))
+}
 
 fn rel(raiz: &Path, arq: &Path) -> String {
     arq.strip_prefix(raiz).unwrap_or(arq).to_string_lossy().replace('\\', "/")
@@ -288,25 +355,51 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
         }
     }
 
-    // 3D (Forja). Com placa NVIDIA e o worker do TRELLIS.2 liberado, o 3D sairia da imagem de conceito.
-    let ctx = f.contexto(Some(&p)).await;
+    // 3D: com placa NVIDIA e o TRELLIS.2 instalado e liberado, sai da imagem de conceito
+    // (malha com textura assada no Blender + esqueleto padrão); senão, a Forja monta pela ficha.
     let nivel = f.nivel_em_uso(Some(&p)).await;
-    let escolha = crate::licencas::escolher(&f.catalogo, "3d", nivel, &ctx)?;
-    let modelo_3d = escolha.modelo.as_ref().map(|m| m.id.clone()).unwrap_or_default();
-    if modelo_3d != "forja-3d" {
-        avisos.push(format!(
-            "O roteador escolheu {} para o 3D, mas o worker dele ainda não está instalado nesta máquina: usei a Forja da Fornalha.",
-            escolha.modelo.as_ref().map(|m| m.nome.as_str()).unwrap_or("?")
-        ));
-    }
     let glb = pasta.join(format!("{id}.glb"));
-    let tarefa = json!({"tarefa": "personagem", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20, "personagem": ficha});
-    let r = forjar(f, &tarefa).await?;
-    std::fs::write(pasta.join(format!("{id}.forja.json")), serde_json::to_vec_pretty(&r).unwrap_or_default()).ok();
     let parametros = json!({"tipo": ficha["tipo"], "arma": ficha["arma"], "armadura": ficha["armadura"], "nivel": nivel.id()});
+    let mut modelo_3d = "forja-3d".to_string();
+    let mut r = Value::Null;
+    let conceito = arquivos.get("conceito").and_then(|v| v.as_str()).map(PathBuf::from);
+    if let Some(img) = conceito.filter(|c| c.is_file()) {
+        if let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, &p, "3d", &mut avisos).await {
+            let altura = altura_do_tipo(ficha["tipo"].as_str().unwrap_or(""));
+            match trellis_e_assar(f, &inst, &modelo, &img, &pasta, &id, altura, seed, false).await {
+                Ok((malha, info)) => {
+                    let rig = forjar(
+                        f,
+                        &json!({"tarefa": "rig", "entrada": malha, "saida": glb, "nome": id, "altura_m": altura, "triangulos_max": 20000,
+                                "folha": true, "video": a.video.unwrap_or(false), "amostras": 20}),
+                    )
+                    .await;
+                    match rig {
+                        Ok(mut rr) => {
+                            let _ = std::fs::remove_file(&malha);
+                            rr["placa"] = info;
+                            modelo_3d = modelo;
+                            r = rr;
+                        }
+                        Err(e) => avisos.push(format!("O esqueleto na malha do TRELLIS.2 falhou ({}): usei a Forja.", e.mensagem)),
+                    }
+                }
+                Err(e) => avisos.push(format!("O TRELLIS.2 não conseguiu ({}): usei a Forja da Fornalha.", e.mensagem)),
+            }
+        }
+    } else if let Some(m) = crate::licencas::escolher(&f.catalogo, "3d", nivel, &f.contexto(Some(&p)).await).ok().and_then(|e| e.modelo) {
+        if Worker::do_modelo(&m.id) == Some(Worker::Trellis2) {
+            avisos.push("O TRELLIS.2 faz o 3D a partir da imagem de conceito, que não saiu: usei a Forja da Fornalha.".into());
+        }
+    }
+    if r.is_null() {
+        let tarefa = json!({"tarefa": "personagem", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20, "personagem": ficha});
+        r = forjar(f, &tarefa).await?;
+    }
+    std::fs::write(pasta.join(format!("{id}.forja.json")), serde_json::to_vec_pretty(&r).unwrap_or_default()).ok();
     for (chave, arq) in r["arquivos"].as_object().cloned().unwrap_or_default() {
         if let Some(s) = arq.as_str() {
-            recibo(f, &p, Path::new(s), "forja-3d", ficha["descricao"].as_str().map(String::from), Some(seed), parametros.clone(), quem)
+            recibo(f, &p, Path::new(s), &modelo_3d, ficha["descricao"].as_str().map(String::from), Some(seed), parametros.clone(), quem)
                 .await?;
             arquivos.insert(chave, json!(s));
         }
@@ -327,7 +420,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
 
     let mut resposta = json!({
         "ficha": ficha, "pasta": pasta, "arquivos": arquivos, "estatisticas": r["estatisticas"], "segundos_blender": r["segundos"],
-        "modelo_3d": "forja-3d", "avisos": avisos,
+        "modelo_3d": modelo_3d, "avisos": avisos,
     });
     if a.testar_na_engine.unwrap_or(false) {
         garantir_mundo_e_sons(f, &p, quem).await?;
@@ -439,10 +532,53 @@ pub struct Args3d {
     pub entrada: Option<String>,
     pub altura_m: Option<f64>,
     pub triangulos_max: Option<u64>,
+    /// Imagem (do projeto) para virar 3D com o TRELLIS.2 (placa NVIDIA).
+    pub imagem: Option<String>,
+}
+
+/// 3D a partir de uma imagem: só com o TRELLIS.2 (placa NVIDIA e worker instalado).
+async fn gerar_3d_da_imagem(f: &Fornalha, p: &Projeto, a: &Args3d, imagem: &str, quem: &str) -> Resultado<Value> {
+    let img = f.resolver_no_projeto(p, imagem);
+    if !img.is_file() {
+        return Err(Erro::argumento(format!("A imagem {} não existe.", img.display())));
+    }
+    let mut avisos = Vec::new();
+    let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, p, "3d", &mut avisos).await else {
+        let motivo = avisos.pop().unwrap_or_else(|| {
+            "o roteador não liberou o TRELLIS.2 aqui (precisa de placa NVIDIA; em projeto comercial, a verificação sem o nvdiffrast)".into()
+        });
+        return Err(Erro::novo(
+            "sem_modelo_de_imagem_para_3d",
+            format!("3D a partir de imagem precisa do TRELLIS.2: {motivo}. Sem placa, use tipo arma ou objeto (a Forja monta pelo nome)."),
+        ));
+    };
+    let nome = projeto::nome_de_pasta(a.nome.as_deref().unwrap_or("modelo"));
+    let pasta = p.raiz.join(if a.tipo == "arma" { "Weapons" } else { "Items" });
+    std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
+    let seed = a.seed.unwrap_or(1);
+    let (malha, info) = trellis_e_assar(f, &inst, &modelo, &img, &pasta, &nome, a.altura_m.unwrap_or(1.0), seed, true).await?;
+    let saida = pasta.join(format!("{nome}.glb"));
+    std::fs::rename(&malha, &saida).map_err(|e| Erro::io(&saida, e))?;
+    let mut arquivos = serde_json::Map::new();
+    arquivos.insert("modelo".into(), json!(saida));
+    if let Some(prev) = info["previa"].as_str() {
+        let destino = pasta.join(format!("{nome}.previa.png"));
+        if std::fs::rename(prev, &destino).is_ok() {
+            arquivos.insert("previa".into(), json!(destino));
+        }
+    }
+    for arq in arquivos.values().filter_map(|v| v.as_str()) {
+        recibo(f, p, Path::new(arq), &modelo, None, Some(seed), json!({"imagem": imagem, "textura": "assada no Blender"}), quem).await?;
+    }
+    f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
+    Ok(json!({"arquivos": arquivos, "estatisticas": info, "modelo": modelo, "avisos": avisos}))
 }
 
 pub async fn gerar_3d(f: &Fornalha, a: Args3d, quem: &str) -> Resultado<Value> {
     let p = f.projeto(a.projeto.as_deref())?;
+    if let Some(img) = a.imagem.clone().filter(|s| !s.trim().is_empty()) {
+        return gerar_3d_da_imagem(f, &p, &a, &img, quem).await;
+    }
     let seed = a.seed.unwrap_or(1);
     let (tarefa, pasta, nome) = if let Some(entrada) = &a.entrada {
         let nome = projeto::nome_de_pasta(a.nome.as_deref().unwrap_or("modelo"));
@@ -519,14 +655,52 @@ pub struct ArgsEsqueleto {
     pub girar_graus: Option<f64>,
     pub animacoes: Option<Vec<String>>,
     pub inimigo: Option<bool>,
+    /// Criatura que não é humanoide (bicho, monstro de quatro patas...): esqueleto pelo UniRig.
+    pub criatura: Option<bool>,
 }
 
 /// create_skeleton: malha de fora (TRELLIS.2, Hunyuan3D, feita à mão) ganha o esqueleto padrão e animações.
+/// Criatura que não é humanoide ganha o esqueleto do UniRig (placa NVIDIA), sem as animações da biblioteca.
 pub async fn criar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Resultado<Value> {
     let p = f.projeto(a.projeto.as_deref())?;
     let nome = projeto::nome_de_pasta(a.nome.as_deref().unwrap_or("personagem"));
     let pasta = p.raiz.join(if a.inimigo.unwrap_or(false) { "Enemies" } else { "Characters" }).join(&nome);
     let saida = pasta.join(format!("{nome}.glb"));
+    let mut avisos = Vec::new();
+    if a.criatura.unwrap_or(false) {
+        if let Some((Worker::UniRig, modelo, inst)) = modelo_de_placa(f, &p, "rig", &mut avisos).await {
+            std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
+            // a malha vai limpa (escala, pivô, triângulos) para o UniRig
+            let limpa = pasta.join(format!("{nome}.limpa.glb"));
+            forjar(
+                f,
+                &json!({"tarefa": "limpar", "entrada": f.resolver_no_projeto(&p, &a.entrada), "saida": limpa, "nome": nome,
+                        "altura_m": a.altura_m, "girar_graus": a.girar_graus, "triangulos_max": 20000, "colisao": false, "previa": false}),
+            )
+            .await?;
+            match workers::rodar(
+                &f.paths,
+                Worker::UniRig,
+                &inst,
+                &json!({"entrada": limpa, "saida": saida, "pasta_temporaria": f.paths.data_dir.join("tmp").join(format!("unirig_{nome}"))}),
+                TEMPO_PLACA,
+            )
+            .await
+            {
+                Ok(r) => {
+                    let _ = std::fs::remove_file(&limpa);
+                    recibo(f, &p, &saida, &modelo, None, None, json!({"entrada": a.entrada, "criatura": true}), quem).await?;
+                    f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
+                    return Ok(json!({"arquivos": {"modelo": saida}, "estatisticas": r["estatisticas"], "modelo": modelo,
+                        "avisos": ["Esqueleto do UniRig: as animações da biblioteca são do esqueleto humanoide; anime a criatura na engine ou no Blender."]}));
+                }
+                Err(e) => avisos.push(format!("O UniRig não conseguiu ({}): usei o esqueleto padrão (humanoide).", e.mensagem)),
+            }
+        } else {
+            avisos
+                .push("Criatura sem o UniRig (precisa de placa NVIDIA e do worker instalado): usei o esqueleto padrão (humanoide).".into());
+        }
+    }
     let r = forjar(
         f,
         &json!({"tarefa": "rig", "entrada": f.resolver_no_projeto(&p, &a.entrada), "saida": saida, "nome": nome, "altura_m": a.altura_m.unwrap_or(1.8),
@@ -538,7 +712,7 @@ pub async fn criar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Resu
         recibo(f, &p, Path::new(arq), "rigify-blender", None, None, json!({"entrada": a.entrada}), quem).await?;
     }
     f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
-    Ok(json!({"arquivos": r["arquivos"], "estatisticas": r["estatisticas"]}))
+    Ok(json!({"arquivos": r["arquivos"], "estatisticas": r["estatisticas"], "modelo": "rigify-blender", "avisos": avisos}))
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -550,11 +724,65 @@ pub struct ArgsAnimacao {
     /// Origem das animações (retarget) — outro personagem com o esqueleto padrão.
     pub origem: Option<String>,
     pub animacoes: Option<Vec<String>>,
+    /// Movimento descrito em texto ("acena com a mão direita"): HY-Motion (placa NVIDIA + aceite da Tencent).
+    pub descricao: Option<String>,
+    /// Nome da animação nova (com descricao).
+    pub nome_animacao: Option<String>,
+    pub segundos: Option<f64>,
+    pub laco: Option<bool>,
+    pub seed: Option<u64>,
+}
+
+/// Movimento por texto: HY-Motion no worker e o Blender aplica no esqueleto padrão.
+async fn animar_por_texto(f: &Fornalha, p: &Projeto, a: &ArgsAnimacao, descricao: &str, quem: &str) -> Resultado<Value> {
+    let arquivo = f.resolver_no_projeto(p, &a.arquivo);
+    let mut avisos = Vec::new();
+    let Some((Worker::HyMotion, modelo, inst)) = modelo_de_placa(f, p, "animacao", &mut avisos).await else {
+        let motivo = avisos.pop().unwrap_or_else(|| {
+            "o roteador não liberou o HY-Motion aqui (precisa de placa NVIDIA e do aceite da licença da Tencent na janela)".into()
+        });
+        return Err(Erro::novo(
+            "sem_modelo_de_movimento",
+            format!(
+                "Movimento por texto precisa do HY-Motion: {motivo}. Sem ele, use as animações da biblioteca: {}.",
+                forja::ANIMACOES.join(", ")
+            ),
+        ));
+    };
+    let nome = projeto::nome_de_pasta(a.nome_animacao.as_deref().unwrap_or("movimento")).replace('-', "_");
+    let tmp = f.paths.data_dir.join("tmp").join(format!("hymotion_{}", crate::util::id_aleatorio(6)));
+    let mov = tmp.join("movimento.json");
+    let r = workers::rodar(
+        &f.paths,
+        Worker::HyMotion,
+        &inst,
+        &json!({"texto": descricao, "segundos": a.segundos.unwrap_or(4.0), "saida": mov, "modelo": modelo, "seed": a.seed.unwrap_or(1), "pasta_temporaria": tmp}),
+        TEMPO_PLACA,
+    )
+    .await?;
+    let b = forjar(
+        f,
+        &json!({"tarefa": "movimento", "entrada": arquivo, "saida": arquivo, "movimento": mov, "nome_animacao": nome, "laco": a.laco.unwrap_or(false)}),
+    )
+    .await?;
+    let _ = std::fs::remove_dir_all(&tmp);
+    recibo(f, p, &arquivo, &modelo, Some(descricao.into()), a.seed, json!({"animacao": nome, "segundos": a.segundos}), quem).await?;
+    f.avisar_ponte(vec![rel(&p.raiz, &arquivo)]);
+    Ok(
+        json!({"arquivo": arquivo, "animacao": nome, "modelo": modelo, "movimento": r["estatisticas"], "estatisticas": b["estatisticas"], "avisos": avisos}),
+    )
 }
 
 /// generate_animation (sem origem) e retarget_animation (com origem).
 pub async fn animar(f: &Fornalha, a: ArgsAnimacao, quem: &str) -> Resultado<Value> {
     let p = f.projeto(a.projeto.as_deref())?;
+    if let Some(d) = a.descricao.clone().filter(|s| !s.trim().is_empty()) {
+        // o nome de uma animação da biblioteca não precisa do HY-Motion
+        let chave = projeto::nome_de_pasta(&d);
+        if !forja::ANIMACOES.contains(&chave.as_str()) {
+            return animar_por_texto(f, &p, &a, &d, quem).await;
+        }
+    }
     let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
     let tarefa = match &a.origem {
         Some(o) => {

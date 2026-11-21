@@ -224,14 +224,15 @@ pub fn lista() -> Vec<Ferramenta> {
         },
         Ferramenta {
             nome: "generate_3d",
-            titulo: "Gerar modelo 3D (arma ou objeto) ou limpar malha",
-            descricao: "Gera uma arma (espada, machado, lanca, martelo, adaga, cajado, escudo) ou um objeto (barril, caixa, bau, arvore, pedra, casa, tocha, cerca, pocao) low-poly no estilo do jogo, com colisão simples e prévia; ou, com entrada, limpa uma malha de fora (escala real, pivô nos pés, decimar, UV e colisão). Personagens: use create_character.",
+            titulo: "Gerar modelo 3D (arma, objeto, de uma imagem) ou limpar malha",
+            descricao: "Gera uma arma (espada, machado, lanca, martelo, adaga, cajado, escudo) ou um objeto (barril, caixa, bau, arvore, pedra, casa, tocha, cerca, pocao) low-poly no estilo do jogo, com colisão simples e prévia; com imagem, faz o 3D da imagem pelo TRELLIS.2 (placa NVIDIA; textura assada no Blender, sem o nvdiffrast); ou, com entrada, limpa uma malha de fora (escala real, pivô nos pés, decimar, UV e colisão). Personagens: use create_character.",
             esquema: json!({"type": "object", "properties": {
                 "projeto": projeto_opcional(),
                 "tipo": {"type": "string", "enum": ["arma", "objeto"]},
                 "modelo": {"type": "string"}, "nome": {"type": "string"},
                 "cores": {"type": "object", "description": "ex.: {\"metal\": \"#aabbcc\", \"madeira\": \"#553311\"}"},
-                "entrada": {"type": "string", "description": "Malha de fora (.glb, .gltf, .obj, .fbx) para limpar."},
+                "entrada": {"type": "string", "description": "Malha de fora (.glb, .gltf, .obj, .fbx, .ply) para limpar."},
+                "imagem": {"type": "string", "description": "Imagem do projeto para virar 3D com o TRELLIS.2 (precisa de placa NVIDIA e do modelo instalado)."},
                 "altura_m": {"type": "number"}, "triangulos_max": {"type": "integer"}, "seed": {"type": "integer", "minimum": 0}
             }}),
             so_leitura: false,
@@ -246,15 +247,18 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "create_skeleton",
             titulo: "Pôr esqueleto e animações numa malha",
-            descricao: "Uma malha de personagem sem esqueleto (do TRELLIS.2, Hunyuan3D ou feita à mão) ganha limpeza, o esqueleto padrão (nomes do perfil humanoide da Godot), pesos automáticos e as animações da biblioteca.",
-            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "entrada": {"type": "string"}, "nome": {"type": "string"}, "altura_m": {"type": "number"}, "girar_graus": {"type": "number"}, "inimigo": {"type": "boolean"}, "animacoes": {"type": "array", "items": {"type": "string"}}}, "required": ["entrada"]}),
+            descricao: "Uma malha de personagem sem esqueleto (do TRELLIS.2, Hunyuan3D ou feita à mão) ganha limpeza, o esqueleto padrão (nomes do perfil humanoide da Godot), pesos automáticos e as animações da biblioteca. Com criatura: true (bicho, monstro que não é humanoide), o esqueleto sai do UniRig (placa NVIDIA), sem as animações da biblioteca.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "entrada": {"type": "string"}, "nome": {"type": "string"}, "altura_m": {"type": "number"}, "girar_graus": {"type": "number"}, "inimigo": {"type": "boolean"}, "criatura": {"type": "boolean"}, "animacoes": {"type": "array", "items": {"type": "string"}}}, "required": ["entrada"]}),
             so_leitura: false,
         },
         Ferramenta {
             nome: "generate_animation",
             titulo: "Gerar animações",
-            descricao: "Gera (de novo) as animações da biblioteca num personagem com o esqueleto padrão: parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer (todas, ou as pedidas).",
-            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}, "animacoes": {"type": "array", "items": {"type": "string", "enum": ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"]}}}, "required": ["arquivo"]}),
+            descricao: "Gera (de novo) as animações da biblioteca num personagem com o esqueleto padrão: parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer (todas, ou as pedidas). Com descricao (ex.: \"acena com a mão direita e depois cruza os braços\"), cria uma animação nova pelo HY-Motion (placa NVIDIA e aceite da licença da Tencent na janela) e mantém as outras.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"},
+                "animacoes": {"type": "array", "items": {"type": "string", "enum": ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"]}},
+                "descricao": {"type": "string", "description": "Movimento em texto (HY-Motion)."}, "nome_animacao": {"type": "string"},
+                "segundos": {"type": "number", "minimum": 1, "maximum": 12}, "laco": {"type": "boolean"}, "seed": {"type": "integer", "minimum": 0}}, "required": ["arquivo"]}),
             so_leitura: false,
         },
         Ferramenta {
@@ -444,6 +448,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "ignis": ignis,
                 "recursos_ignis": recursos_ignis,
                 "programas": programas,
+                "modelos_de_placa": crate::workers::estado(&f.paths),
             }))
         }
         "create_project" => {

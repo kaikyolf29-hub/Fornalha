@@ -9,7 +9,7 @@ fn cat() -> Catalogo {
 
 /// Projeto comercial numa NVIDIA, sem nada aceito e sem receita informada.
 fn ctx_nvidia() -> ContextoRota {
-    ContextoRota { comercial: true, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![] }
+    ContextoRota { comercial: true, cuda: true, receita_anual_usd: None, licencas_aceitas: vec![], sem_dependencias: vec![] }
 }
 
 #[test]
@@ -183,4 +183,30 @@ fn regras_de_provedor_do_plano() {
     let c = cat();
     assert!(c.modelo("meshy-gratis").unwrap().obrigacoes.iter().any(|o| o.contains("CC BY 4.0")));
     assert!(c.modelo("mixamo").unwrap().obrigacoes.iter().any(|o| o.contains("pacote de assets")));
+}
+
+#[test]
+fn trellis_verificado_sem_nvdiffrast_entra_em_projeto_comercial() {
+    let c = cat();
+    let e = licencas::escolher(&c, "3d", Nivel::Qualidade, &ctx_nvidia()).unwrap();
+    assert_eq!(e.modelo.as_ref().unwrap().id, "forja-3d");
+    let r = e.recusados.iter().find(|r| r.modelo.starts_with("trellis2")).unwrap();
+    assert!(r.motivo.contains("nvdiffrast"), "{}", r.motivo);
+    // a verificação da instalação comprovou que o worker não usa o nvdiffrast
+    let ctx = ContextoRota { sem_dependencias: vec!["nvdiffrast".into()], ..ctx_nvidia() };
+    let e = licencas::escolher(&c, "3d", Nivel::Qualidade, &ctx).unwrap();
+    assert_eq!(e.modelo.as_ref().unwrap().id, "trellis2-1024-poucavram");
+    assert!(e.avisos.iter().any(|a| a.contains("sem o nvdiffrast")), "{:?}", e.avisos);
+    // sem placa NVIDIA continua de fora
+    let amd = ContextoRota { cuda: false, ..ctx };
+    assert_eq!(licencas::escolher(&c, "3d", Nivel::Qualidade, &amd).unwrap().modelo.unwrap().id, "forja-3d");
+}
+
+#[test]
+fn hy_motion_precisa_de_cuda_e_do_aceite() {
+    let c = cat();
+    let aceito = ContextoRota { licencas_aceitas: vec!["tencent-hunyuan".into()], ..ctx_nvidia() };
+    assert!(licencas::escolher(&c, "animacao", Nivel::Equilibrado, &aceito).unwrap().modelo.unwrap().id.starts_with("hy-motion"));
+    let amd = ContextoRota { cuda: false, ..aceito };
+    assert_eq!(licencas::escolher(&c, "animacao", Nivel::Equilibrado, &amd).unwrap().modelo.unwrap().id, "biblioteca-fornalha");
 }

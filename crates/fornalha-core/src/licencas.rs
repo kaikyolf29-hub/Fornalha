@@ -202,6 +202,10 @@ pub struct ContextoRota {
     pub receita_anual_usd: Option<u64>,
     /// Grupos de licença que a pessoa aceitou.
     pub licencas_aceitas: Vec<String>,
+    /// Dependências sem licença comercial que a Fornalha comprovou, nesta máquina,
+    /// que o worker do modelo não usa (ex.: o TRELLIS.2 verificado sem o nvdiffrast).
+    #[serde(default)]
+    pub sem_dependencias: Vec<String>,
 }
 
 /// Pode usar este modelo neste projeto?
@@ -228,6 +232,10 @@ pub fn situacao_no_catalogo(cat: &Catalogo, m: &Modelo, ctx: &ContextoRota) -> S
     }
     for d in &m.dependencias {
         let Some(dep) = cat.dependencias.get(d) else { continue };
+        if ctx.sem_dependencias.iter().any(|s| s == d) {
+            avisos.push(format!("{} roda sem o {} nesta máquina (verificado pela Fornalha).", m.nome, dep.nome));
+            continue;
+        }
         if dep.uso_comercial == UsoComercial::Nao {
             return Situacao::Bloqueado {
                 motivo: format!("{} usa o {} ({}), que não permite uso comercial. {}", m.nome, dep.nome, dep.licenca, dep.como_resolver),

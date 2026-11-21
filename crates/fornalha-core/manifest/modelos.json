@@ -321,7 +321,8 @@
       "vram_mb": 7500,
       "dependencias": [
         "nvdiffrast"
-      ]
+      ],
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-512",
@@ -335,7 +336,8 @@
       "vram_mb": 11000,
       "dependencias": [
         "nvdiffrast"
-      ]
+      ],
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-1024-poucavram",
@@ -349,7 +351,8 @@
       "vram_mb": 15000,
       "dependencias": [
         "nvdiffrast"
-      ]
+      ],
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "trellis2-1536",
@@ -363,7 +366,8 @@
       "vram_mb": 24000,
       "dependencias": [
         "nvdiffrast"
-      ]
+      ],
+      "nota": "A Fornalha roda o TRELLIS.2 sem o nvdiffrast (cor tirada dos voxels e textura assada no Blender). Em projeto comercial ele só entra depois que a verificação da instalação comprova isso nesta máquina."
     },
     {
       "id": "hunyuan3d-2mini",
@@ -410,34 +414,37 @@
       "id": "hy-motion-lite",
       "nome": "HY-Motion Lite",
       "funcao": "animacao",
-      "onde": "comfyui",
+      "onde": "worker",
       "licenca": "Tencent Hunyuan Community License",
       "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0",
       "uso_comercial": "condicional",
       "aceite": "tencent-hunyuan",
-      "vram_mb": 4000
+      "vram_mb": 4000,
+      "requer_cuda": true
     },
     {
       "id": "hy-motion-1.0-q",
       "nome": "HY-Motion 1.0 (codificador de texto quantizado)",
       "funcao": "animacao",
-      "onde": "comfyui",
+      "onde": "worker",
       "licenca": "Tencent Hunyuan Community License",
       "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0",
       "uso_comercial": "condicional",
       "aceite": "tencent-hunyuan",
-      "vram_mb": 10000
+      "vram_mb": 10000,
+      "requer_cuda": true
     },
     {
       "id": "hy-motion-1.0",
       "nome": "HY-Motion 1.0 (completo)",
       "funcao": "animacao",
-      "onde": "comfyui",
+      "onde": "worker",
       "licenca": "Tencent Hunyuan Community License",
       "url_licenca": "https://github.com/Tencent-Hunyuan/HY-Motion-1.0",
       "uso_comercial": "condicional",
       "aceite": "tencent-hunyuan",
-      "vram_mb": 16000
+      "vram_mb": 16000,
+      "requer_cuda": true
     },
     {
       "id": "moss-soundeffect-v2",

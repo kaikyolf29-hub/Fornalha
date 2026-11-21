@@ -118,7 +118,7 @@ fn roteador_escolhe_o_modelo_do_nivel() {
 fn sem_aceite_da_tencent_a_animacao_cai_para_a_biblioteca() {
     let c = cat();
     let e = licencas::escolher(&c, "animacao", Nivel::Qualidade, &ctx_nvidia()).unwrap();
-    assert_eq!(e.modelo.as_ref().unwrap().id, "biblioteca-cmu");
+    assert_eq!(e.modelo.as_ref().unwrap().id, "biblioteca-fornalha");
     assert!(e.recusados.iter().any(|r| r.modelo == "hy-motion-1.0-q"));
     let ctx = ContextoRota { licencas_aceitas: vec!["tencent-hunyuan".into()], ..ctx_nvidia() };
     let e = licencas::escolher(&c, "animacao", Nivel::Qualidade, &ctx).unwrap();
@@ -140,11 +140,12 @@ fn placa_sem_cuda_usa_a_opcao_que_nao_depende_de_cuda() {
 
 #[test]
 fn nada_liberado_explica_cada_recusa() {
-    // Projeto comercial, sem aceite da Tencent: o 3D fica sem opção até trocar o nvdiffrast.
+    // Projeto comercial, sem aceite da Tencent: o TRELLIS.2 (nvdiffrast) e o Hunyuan3D ficam de fora
+    // e a Forja da Fornalha entra, com o motivo de cada recusa.
     let c = cat();
     let e = licencas::escolher(&c, "3d", Nivel::Maximo, &ctx_nvidia()).unwrap();
-    assert!(e.modelo.is_none());
-    assert!(!e.recusados.is_empty());
+    assert_eq!(e.modelo.as_ref().unwrap().id, "forja-3d");
+    assert!(e.recusados.iter().any(|r| r.modelo.starts_with("trellis2")));
     assert!(e.recusados.iter().all(|r| !r.motivo.is_empty()));
 }
 
@@ -154,12 +155,13 @@ fn opcao_de_nivel_mais_baixo_e_usada_com_aviso() {
     let c = cat();
     let e = licencas::escolher(&c, "video", Nivel::Leve, &ctx_nvidia()).unwrap();
     assert!(e.modelo.is_none(), "no Leve o trailer usa só captura do jogo");
-    // 3D com aceite: no Máximo nenhum TRELLIS.2 passa, então desce até o Hunyuan3D-2mini do Leve
+    // Sem vídeo no Leve nem fallback, nenhuma opção; com o Leve tendo opção, a escolha desce de nível com aviso.
     let ctx = ContextoRota { licencas_aceitas: vec!["tencent-hunyuan".into()], ..ctx_nvidia() };
-    let e = licencas::escolher(&c, "3d", Nivel::Maximo, &ctx).unwrap();
-    assert_eq!(e.modelo.as_ref().unwrap().id, "hunyuan3d-2mini");
-    assert_eq!(e.nivel_usado, Some(Nivel::Leve));
-    assert!(e.avisos.iter().any(|a| a.contains("Leve")), "{:?}", e.avisos);
+    let e = licencas::escolher(&c, "video", Nivel::Equilibrado, &ctx).unwrap();
+    assert_eq!(e.modelo.as_ref().unwrap().id, "wan2.2-5b-gguf");
+    let amd = ContextoRota { cuda: false, ..ctx_nvidia() };
+    let e = licencas::escolher(&c, "boca", Nivel::Maximo, &amd).unwrap();
+    assert_eq!(e.modelo.as_ref().unwrap().id, "boca-fornalha", "sem CUDA o Audio2Face sai e a boca pela voz entra");
 }
 
 #[test]

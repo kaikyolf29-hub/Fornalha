@@ -30,6 +30,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 dirs = "6"
 tempfile = "3"
+base64 = "0.22"
 
 [profile.release]
 opt-level = "s"

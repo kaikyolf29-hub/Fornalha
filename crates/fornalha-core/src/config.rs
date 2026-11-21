@@ -22,6 +22,10 @@ pub struct Config {
     pub nivel: Option<String>,
     /// Estilo dos botões da janela ("auto", "windows", "gnome", "kde", "mac").
     pub estilo_janela: Option<String>,
+    /// Caminhos escolhidos pela pessoa (senão a Fornalha procura sozinha).
+    pub blender: Option<PathBuf>,
+    pub godot: Option<PathBuf>,
+    pub erethea: Option<PathBuf>,
     pub estudio: Estudio,
 }
 

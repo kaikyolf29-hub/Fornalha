@@ -12,11 +12,20 @@ use serde_json::{json, Value};
 
 use crate::consts::{API_VERSION, APP_NAME, APP_VERSION, FASE};
 use crate::erro::{Erro, Resultado};
+use crate::geracao;
 use crate::licencas::{self, situacao_no_catalogo};
 use crate::niveis::{self, Nivel};
 use crate::projeto::{self, Conceito, NovoProjeto};
 use crate::recibos::{self, NovoRecibo};
 use crate::servico::Fornalha;
+
+#[derive(Deserialize)]
+struct ArgsConceito {
+    projeto: Option<String>,
+    descricao: String,
+    arquivo: Option<String>,
+    seed: Option<u64>,
+}
 
 /// Descrição de uma ferramenta (vira `tools/list` no MCP e `/fornalha/ferramentas` na API).
 #[derive(Debug, Clone)]
@@ -180,6 +189,130 @@ pub fn lista() -> Vec<Ferramenta> {
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional()}}),
             so_leitura: false,
         },
+        Ferramenta {
+            nome: "create_character",
+            titulo: "Criar personagem ou inimigo",
+            descricao: "Cria um personagem do zero: a ficha (o cérebro do Ignis completa o que faltar, coerente com a bíblia), a imagem de conceito (Ignis), o modelo 3D com o esqueleto padrão e 9 animações (parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer), a arma na mão, prévia e folha de modelo, e a fala dublada com a curva da boca. Grava em Characters/<id>/ (ou Enemies/<id>/ se o papel for inimigo ou chefe), atualiza a bíblia e registra os recibos. Com testar_na_engine, monta o jogo e roda o teste (o inimigo novo aparece na frente do jogador). Pode levar alguns minutos.",
+            esquema: json!({
+                "type": "object",
+                "properties": {
+                    "projeto": projeto_opcional(),
+                    "nome": {"type": "string"},
+                    "papel": {"type": "string", "description": "protagonista, aliado, inimigo, chefe..."},
+                    "descricao": {"type": "string"},
+                    "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"]},
+                    "arma": {"type": "string", "enum": ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo", "nenhuma"]},
+                    "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada"]},
+                    "porte": {"type": "string", "enum": ["magro", "medio", "forte"]},
+                    "cor_roupa": {"type": "string"}, "cor_roupa_secundaria": {"type": "string"}, "cor_pele": {"type": "string"}, "cor_cabelo": {"type": "string"},
+                    "capa": {"type": "boolean"}, "capuz": {"type": "boolean"},
+                    "fala": {"type": "string", "description": "Frase para dublar em português."},
+                    "conceito": {"type": "boolean", "description": "Gerar a imagem de conceito (padrão: sim, se o Ignis tiver imagem)."},
+                    "video": {"type": "boolean", "description": "Vídeo curto das animações."},
+                    "testar_na_engine": {"type": "boolean", "description": "Montar na engine e rodar o teste no fim."},
+                    "seed": {"type": "integer", "minimum": 0}
+                }
+            }),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_concept",
+            titulo: "Gerar imagem de conceito",
+            descricao: "Gera uma imagem de conceito pelo Ignis (Z-Image Turbo, licença Apache 2.0) com o guia visual da bíblia junto. Grava em ai/conceitos/ (ou no caminho pedido) com recibo.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "descricao": {"type": "string"}, "arquivo": {"type": "string"}, "seed": {"type": "integer", "minimum": 0}}, "required": ["descricao"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_3d",
+            titulo: "Gerar modelo 3D (arma ou objeto) ou limpar malha",
+            descricao: "Gera uma arma (espada, machado, lanca, martelo, adaga, cajado, escudo) ou um objeto (barril, caixa, bau, arvore, pedra, casa, tocha, cerca, pocao) low-poly no estilo do jogo, com colisão simples e prévia; ou, com entrada, limpa uma malha de fora (escala real, pivô nos pés, decimar, UV e colisão). Personagens: use create_character.",
+            esquema: json!({"type": "object", "properties": {
+                "projeto": projeto_opcional(),
+                "tipo": {"type": "string", "enum": ["arma", "objeto"]},
+                "modelo": {"type": "string"}, "nome": {"type": "string"},
+                "cores": {"type": "object", "description": "ex.: {\"metal\": \"#aabbcc\", \"madeira\": \"#553311\"}"},
+                "entrada": {"type": "string", "description": "Malha de fora (.glb, .gltf, .obj, .fbx) para limpar."},
+                "altura_m": {"type": "number"}, "triangulos_max": {"type": "integer"}, "seed": {"type": "integer", "minimum": 0}
+            }}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "create_material",
+            titulo: "Aplicar materiais e cores",
+            descricao: "Recolore os materiais de um modelo pela paleta do guia visual (em ordem) ou pelas cores pedidas por nome de material.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}, "cores": {"type": "object"}, "rugosidade": {"type": "number"}}, "required": ["arquivo"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "create_skeleton",
+            titulo: "Pôr esqueleto e animações numa malha",
+            descricao: "Uma malha de personagem sem esqueleto (do TRELLIS.2, Hunyuan3D ou feita à mão) ganha limpeza, o esqueleto padrão (nomes do perfil humanoide da Godot), pesos automáticos e as animações da biblioteca.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "entrada": {"type": "string"}, "nome": {"type": "string"}, "altura_m": {"type": "number"}, "girar_graus": {"type": "number"}, "inimigo": {"type": "boolean"}, "animacoes": {"type": "array", "items": {"type": "string"}}}, "required": ["entrada"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_animation",
+            titulo: "Gerar animações",
+            descricao: "Gera (de novo) as animações da biblioteca num personagem com o esqueleto padrão: parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer (todas, ou as pedidas).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}, "animacoes": {"type": "array", "items": {"type": "string", "enum": ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"]}}}, "required": ["arquivo"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "retarget_animation",
+            titulo: "Copiar animações entre personagens",
+            descricao: "Copia as animações de um personagem para outro com o mesmo esqueleto padrão.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string", "description": "Personagem que recebe."}, "origem": {"type": "string"}, "animacoes": {"type": "array", "items": {"type": "string"}}}, "required": ["arquivo", "origem"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_sfx",
+            titulo: "Gerar efeitos sonoros",
+            descricao: "Gera os efeitos por evento em Audio/efeitos/ (passos na grama, pedra, água e madeira, golpes, impacto, espada, pulo, aterrissagem, dano, morte, moeda, clique), com variações. Sem efeitos pedidos, gera o pacote que o jogo usa.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "efeitos": {"type": "array", "items": {"type": "string"}}, "variacoes": {"type": "integer", "minimum": 1, "maximum": 8}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_music",
+            titulo: "Gerar música em loop",
+            descricao: "Compõe a trilha de uma área ou situação (exploracao, vila, floresta, combate, chefe, masmorra), pronta para tocar em loop, em Audio/musica/.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "situacao": {"type": "string"}, "compassos": {"type": "integer", "minimum": 1, "maximum": 64}, "seed": {"type": "integer", "minimum": 0}}, "required": ["situacao"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_voice",
+            titulo: "Gerar fala dublada",
+            descricao: "Dubla uma fala em português pelo Ignis (Chatterbox, licença MIT, pode ir para jogo à venda) e grava a curva de abertura da boca para a animação.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "texto": {"type": "string"}, "personagem": {"type": "string"}, "idioma": {"type": "string"}, "seed": {"type": "integer", "minimum": 0}}, "required": ["texto"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_blockout",
+            titulo: "Gerar o mundo em blockout",
+            descricao: "Transforma as áreas da bíblia (vila, floresta, montanha, masmorra, arena, caverna, castelo...) num mapa em blocos testável na engine, com colisão, caminhos entre as áreas e pontos de nascimento do jogador e dos inimigos. Grava World/blockout.glb, a prévia e o mapa visto de cima.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "areas": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "tipo": {"type": "string"}, "nome": {"type": "string"}}}}, "seed": {"type": "integer", "minimum": 0}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "generate_code",
+            titulo: "Gerar o código do jogo",
+            descricao: "Escreve o código do jogo para a engine da bíblia (Godot ou Erethea Engine): jogador em terceira pessoa, inimigo com IA básica, HUD, sons, teste automático e o plugin da ponte com a Fornalha. Não sobrescreve script que você editou.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional()}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "import_to_engine",
+            titulo: "Levar para a engine e montar as cenas",
+            descricao: "Importa os assets na engine (Godot ou Erethea) e monta as cenas: personagem com as animações ligadas e câmera, inimigos com IA nos pontos do mapa, arma na mão, mundo com luz e céu, HUD e música. Cena principal: principal.tscn.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "jogador": {"type": "string"}, "inimigo_perto": {"type": "boolean"}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "run_test",
+            titulo: "Testar o jogo na engine",
+            descricao: "Abre o jogo em modo de teste: o jogador anda, pula e ataca sozinho; devolve os erros da engine, quadros por segundo, polígonos e tamanho de cada modelo, se os inimigos reagiram, capturas de tela e um vídeo (em ai/testes/).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "segundos": {"type": "number"}, "video": {"type": "boolean"}}}),
+            so_leitura: false,
+        },
     ]
 }
 
@@ -284,7 +417,19 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
     match nome {
         "get_status" => {
             let ignis = f.estado_ignis().await;
+            let recursos_ignis =
+                if ignis.conectado { crate::ignis::capacidades(f.porta_ignis()).await } else { json!({"conectado": false}) };
             let sugestao = f.sugestao().await;
+            let mut programas = serde_json::Map::new();
+            for p in [crate::externas::Programa::Blender, crate::externas::Programa::Godot, crate::externas::Programa::Erethea] {
+                programas.insert(
+                    p.id().into(),
+                    match f.programa(p).await {
+                        Ok(a) => json!({"achado": true, "nome": p.nome(), "versao": a.versao, "caminho": a.caminho}),
+                        Err(_) => json!({"achado": false, "nome": p.nome(), "pagina": p.pagina_download()}),
+                    },
+                );
+            }
             let atual = f.projeto_atual().and_then(|r| projeto::abrir(&r).ok());
             Ok(json!({
                 "app": APP_NAME,
@@ -297,6 +442,8 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "nivel_sugerido": sugestao.nivel,
                 "placa": sugestao.placa,
                 "ignis": ignis,
+                "recursos_ignis": recursos_ignis,
+                "programas": programas,
             }))
         }
         "create_project" => {
@@ -457,6 +604,39 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
             let ctx = f.contexto(Some(&p)).await;
             Ok(json_de(&recibos::relatorio(&p, &f.catalogo, &ctx)?))
         }
+        "create_character" => geracao::criar_personagem(f, args(a)?, quem).await,
+        "generate_concept" => {
+            let a: ArgsConceito = args(a)?;
+            let p = f.projeto(a.projeto.as_deref())?;
+            let nome = crate::projeto::nome_de_pasta(&a.descricao.chars().take(40).collect::<String>());
+            let destino = match &a.arquivo {
+                Some(c) => f.resolver_no_projeto(&p, c),
+                None => p.raiz.join("ai/conceitos").join(format!("{nome}.png")),
+            };
+            geracao::conceito_avulso(f, &p, &a.descricao, &destino, a.seed.unwrap_or(1), quem).await
+        }
+        "generate_3d" => geracao::gerar_3d(f, args(a)?, quem).await,
+        "create_material" => geracao::criar_material(f, args(a)?, quem).await,
+        "create_skeleton" => geracao::criar_esqueleto(f, args(a)?, quem).await,
+        "generate_animation" => {
+            let mut x: geracao::ArgsAnimacao = args(a)?;
+            x.origem = None;
+            geracao::animar(f, x, quem).await
+        }
+        "retarget_animation" => {
+            let x: geracao::ArgsAnimacao = args(a)?;
+            if x.origem.is_none() {
+                return Err(Erro::argumento("Diga de onde copiar as animações (origem)."));
+            }
+            geracao::animar(f, x, quem).await
+        }
+        "generate_sfx" => geracao::gerar_efeitos(f, args(a)?, quem).await,
+        "generate_music" => geracao::gerar_musica(f, args(a)?, quem).await,
+        "generate_voice" => geracao::gerar_voz(f, args(a)?, quem).await,
+        "generate_blockout" => geracao::gerar_blockout(f, args(a)?, quem).await,
+        "generate_code" => geracao::gerar_codigo(f, args(a)?).await,
+        "import_to_engine" => geracao::importar_na_engine(f, args(a)?, quem).await,
+        "run_test" => geracao::rodar_teste(f, args(a)?).await,
         outro => Err(Erro::novo("ferramenta_desconhecida", format!("A ferramenta \"{outro}\" não existe."))),
     }
 }

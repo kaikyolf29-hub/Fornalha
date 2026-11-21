@@ -4,225 +4,165 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fornalha</title>
-  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="fornalha.css">
 </head>
 <body>
-<div class="app">
-  <aside class="lateral" data-arrastar>
-    <div class="controles-janela esquerda" id="controles-esquerda" data-arrastar hidden></div>
+<div class="oficina">
+  <!-- Barra de título integrada: estações da fábrica + botões da janela -->
+  <header class="topo" data-arrastar>
+    <div class="controles-janela esquerda" id="controles-esquerda" hidden></div>
     <div class="marca" data-arrastar="tudo">
-      <img src="icone.png" alt="" width="28" height="28">
+      <img src="icone.png" alt="" width="22" height="22">
       <span>Fornalha</span>
     </div>
-    <nav class="menu" aria-label="Seções">
-      <button data-secao="inicio" class="ativo">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11a7 7 0 0 1 14 0v9"/><path d="M12 9c1.6 2 3 3.3 3 5.5a3 3 0 0 1-6 0c0-1.3.7-2.2 1.5-3 .1 1.2.6 2 1.3 2.3-.5-1.5-.3-3.3.2-4.8Z"/><path d="M7 20h10"/></svg>
-        <span>Início</span>
-      </button>
-      <button data-secao="projetos">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-        <span>Projetos</span>
-      </button>
-      <button data-secao="placa">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg>
-        <span>Placa e níveis</span>
-      </button>
-      <button data-secao="licencas">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/></svg>
-        <span>Licenças</span>
-      </button>
-      <button data-secao="agentes">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/></svg>
-        <span>Agentes</span>
-      </button>
-      <button data-secao="ajustes">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-        <span>Ajustes</span>
-      </button>
+    <nav class="estacoes" aria-label="Estações">
+      <button data-estacao="projeto" class="ativa">Projeto</button>
+      <button data-estacao="forjar">Forjar</button>
+      <button data-estacao="galeria">Galeria</button>
+      <button data-estacao="testar">Testar</button>
+      <button data-estacao="licencas">Licenças</button>
+      <button data-estacao="maquina">Máquina</button>
+      <button data-estacao="agentes">Agentes</button>
     </nav>
-    <div class="rodape" id="rodape">
-      <span class="ponto" id="rodape-ponto"></span>
-      <div>
-        <strong id="rodape-titulo">Iniciando…</strong>
-        <small id="rodape-sub"></small>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Barra de título integrada: arrasta a janela, duplo clique maximiza -->
-  <div class="barra-janela" data-arrastar>
+    <button class="engrenagem" data-estacao="ajustes" title="Ajustes" aria-label="Ajustes">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
     <div class="controles-janela direita" id="controles-direita" hidden></div>
-  </div>
+  </header>
+  <div class="calor" id="calor" aria-hidden="true"></div>
+
+  <!-- Coluna da bíblia: a identidade do jogo aberto -->
+  <aside class="biblia" id="biblia" data-arrastar>
+    <div id="biblia-projeto"></div>
+    <div class="ferramentas-estado" id="ferramentas-estado"></div>
+    <div class="agentes-rodape" id="rodape"></div>
+  </aside>
 
   <main id="principal">
     <div id="aviso" class="aviso" role="status" hidden>
-      <span class="aviso-icone" aria-hidden="true"></span>
       <span id="aviso-texto"></span>
-      <button class="fechar" id="aviso-fechar" title="Fechar aviso" aria-label="Fechar aviso">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
+      <button class="fechar" id="aviso-fechar" aria-label="Fechar aviso">×</button>
     </div>
 
-    <!-- ================= Início ================= -->
-    <section id="sec-inicio" class="secao">
-      <header class="cabecalho">
-        <h1>Fornalha</h1>
-        <p>Fábrica de jogos 3D com IA, na placa do seu computador e com modelos que deixam vender o jogo.</p>
-      </header>
-      <div id="inicio-cartoes" class="cartoes"></div>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>O que já funciona (Fase 0)</h2></div>
-        <div class="caixa" id="inicio-fase"></div>
-        <p class="nota">Próxima fase: o primeiro personagem gerado do zero, andando e atacando dentro da engine.</p>
-      </section>
-    </section>
-
-    <!-- ================= Projetos ================= -->
-    <section id="sec-projetos" class="secao" hidden>
-      <header class="cabecalho">
-        <h1>Projetos</h1>
-        <p>Cada projeto tem a pasta padrão e a bíblia do jogo (game.project.json), a fonte da verdade de tudo que for gerado.</p>
-      </header>
-      <section class="grupo" id="grupo-atual" hidden>
-        <div class="grupo-topo">
-          <h2>Projeto aberto</h2>
-          <button class="botao pequeno" id="abrir-pasta-atual">Abrir a pasta</button>
-        </div>
-        <div class="placa" id="projeto-atual"></div>
-      </section>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>Novo projeto</h2></div>
-        <form class="caixa formulario" id="form-novo" autocomplete="off">
-          <label class="campo"><span>Nome do jogo</span><input type="text" id="novo-nome" placeholder="Ex.: Reino de Cinzas" maxlength="80" required></label>
-          <div class="campos-lado">
-            <label class="campo"><span>Gênero</span><input type="text" id="novo-genero" placeholder="Ex.: action RPG"></label>
-            <label class="campo"><span>Câmera</span><input type="text" id="novo-camera" placeholder="Ex.: terceira pessoa"></label>
-            <label class="campo"><span>Estilo</span>
-              <select id="novo-estilo"><option value="">O guia visual decide</option><option>estilizado</option><option>realista</option></select>
-            </label>
-          </div>
-          <label class="interruptor-rotulo campo-linha">
-            <input type="checkbox" class="interruptor" id="novo-comercial" checked>
-            <span><strong>Jogo à venda</strong> — só entram modelos com licença que deixa vender. Desligue só para testes.</span>
-          </label>
-          <div class="campo">
-            <span>Onde criar</span>
-            <div class="linha-campo">
-              <input type="text" id="novo-pasta" class="mono" spellcheck="false">
-              <button type="button" class="botao" id="escolher-pasta">Escolher…</button>
+    <!-- ===== Projeto ===== -->
+    <section id="est-projeto" class="estacao">
+      <h1>Projeto</h1>
+      <p class="lead">A bíblia do jogo é a fonte da verdade: tudo que a Fornalha gera recebe este contexto.</p>
+      <div class="duas-colunas">
+        <section class="painel" id="painel-biblia">
+          <h2>Bíblia do jogo</h2>
+          <div id="editor-biblia"><p class="vazio">Abra ou crie um projeto para editar a bíblia.</p></div>
+        </section>
+        <section class="painel">
+          <h2>Novo projeto</h2>
+          <form id="form-novo" class="formulario" autocomplete="off">
+            <label class="campo"><span>Nome do jogo</span><input type="text" id="novo-nome" placeholder="Reino de Cinzas" maxlength="80" required></label>
+            <div class="lado-a-lado">
+              <label class="campo"><span>Gênero</span><input type="text" id="novo-genero" placeholder="action RPG"></label>
+              <label class="campo"><span>Câmera</span><input type="text" id="novo-camera" placeholder="terceira pessoa"></label>
             </div>
-          </div>
-          <div class="acoes">
-            <button type="submit" class="botao primario" id="criar">Criar projeto</button>
-            <button type="button" class="botao" id="abrir-projeto">Abrir projeto existente…</button>
-          </div>
-        </form>
+            <label class="chave"><input type="checkbox" id="novo-comercial" checked><span>Jogo à venda: só entram modelos que deixam vender</span></label>
+            <div class="campo"><span>Onde criar</span>
+              <div class="linha-campo"><input type="text" id="novo-pasta" class="mono" spellcheck="false"><button type="button" class="botao" id="escolher-pasta">Escolher</button></div>
+            </div>
+            <div class="acoes"><button type="submit" class="botao quente" id="criar">Criar projeto</button><button type="button" class="botao" id="abrir-projeto">Abrir existente</button></div>
+          </form>
+          <h2 class="espaco">Recentes</h2>
+          <div id="recentes" class="lista"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===== Forjar ===== -->
+    <section id="est-forjar" class="estacao" hidden>
+      <h1>Forjar</h1>
+      <p class="lead">Escolha um molde. A Fornalha usa a placa quando pode e os geradores próprios quando não pode; cada arquivo sai com recibo de licença.</p>
+      <div class="moldes" id="moldes"></div>
+      <section class="painel" id="painel-molde" hidden>
+        <form id="form-molde" class="formulario" autocomplete="off"></form>
       </section>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>Recentes</h2></div>
-        <div class="caixa" id="recentes"></div>
+      <section class="saida-forja">
+        <h2>Saída da forja</h2>
+        <div id="saida" class="lista"><p class="vazio">O que for forjado aparece aqui, com a prévia.</p></div>
       </section>
     </section>
 
-    <!-- ================= Placa e níveis ================= -->
-    <section id="sec-placa" class="secao" hidden>
-      <header class="cabecalho">
-        <h1>Placa e níveis</h1>
-        <p>A Fornalha detecta a placa e sugere um nível. Cada nível tem um modelo para cada função, todos com licença que deixa vender o jogo.</p>
-      </header>
-      <div class="placa" id="placa-cartao"></div>
-      <section class="grupo">
-        <div class="grupo-topo">
-          <h2>Os 4 níveis</h2>
+    <!-- ===== Galeria ===== -->
+    <section id="est-galeria" class="estacao" hidden>
+      <h1>Galeria</h1>
+      <p class="lead">Todos os assets do projeto que têm recibo, com o modelo que os fez e a licença.</p>
+      <div class="filtros" id="filtros-galeria"></div>
+      <div class="galeria" id="galeria"></div>
+    </section>
+
+    <!-- ===== Testar ===== -->
+    <section id="est-testar" class="estacao" hidden>
+      <h1>Testar</h1>
+      <p class="lead">Leva os assets para a engine, monta as cenas com o código do jogo e roda o teste: o jogador anda, pula e ataca sozinho.</p>
+      <section class="painel motor-linha" id="motor"></section>
+      <div class="acoes"><button class="botao" id="montar">Montar na engine</button><button class="botao quente" id="rodar-teste">Rodar teste</button></div>
+      <div id="resultado-teste"></div>
+    </section>
+
+    <!-- ===== Licenças ===== -->
+    <section id="est-licencas" class="estacao" hidden>
+      <h1>Licenças</h1>
+      <p class="lead">Licença é regra do app: num jogo à venda, modelo sem licença comercial não entra.</p>
+      <section class="painel" id="painel-pendencias" hidden>
+        <div class="titulo-painel"><h2 id="pendencias-titulo">Antes de vender</h2><button class="botao" id="exportar-creditos">Exportar créditos</button></div>
+        <div id="pendencias" class="lista"></div>
+      </section>
+      <section class="painel">
+        <h2>Decisões do estúdio</h2>
+        <div id="estudio" class="lista"></div>
+        <p class="nota">Só você decide isto, aqui na janela. Agentes não aceitam licença no seu lugar.</p>
+      </section>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Catálogo de modelos</h2><select id="filtro-funcao"><option value="">Todas as funções</option></select></div>
+        <div id="catalogo" class="lista"></div>
+      </section>
+    </section>
+
+    <!-- ===== Máquina ===== -->
+    <section id="est-maquina" class="estacao" hidden>
+      <h1>Máquina</h1>
+      <p class="lead">A placa decide o nível; os programas de fora fazem o trabalho pesado.</p>
+      <div class="duas-colunas">
+        <section class="painel" id="placa"></section>
+        <section class="painel">
+          <h2>Programas</h2>
+          <div id="programas" class="lista"></div>
+        </section>
+      </div>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Os 4 níveis</h2>
           <label class="linha-campo">Nível desta máquina
-            <select id="nivel-maquina">
-              <option value="auto">Automático (pela placa)</option>
-              <option value="leve">Leve</option>
-              <option value="equilibrado">Equilibrado</option>
-              <option value="qualidade">Qualidade</option>
-              <option value="maximo">Máximo</option>
-            </select>
+            <select id="nivel-maquina"><option value="auto">Pela placa</option><option value="leve">Leve</option><option value="equilibrado">Equilibrado</option><option value="qualidade">Qualidade</option><option value="maximo">Máximo</option></select>
           </label>
         </div>
-        <div class="tabela-rolagem"><table class="tabela" id="tabela-niveis"></table></div>
-        <p class="nota">Em projeto comercial, o roteador pula o modelo que não pode ser vendido e explica o motivo (passe o mouse no traço). A Fase 1 mede tudo em placa real antes de fechar a tabela.</p>
+        <div class="rolagem"><table class="tabela" id="tabela-niveis"></table></div>
+        <p class="nota">Passe o mouse no traço para ver por que nenhum modelo serviu naquele nível.</p>
       </section>
     </section>
 
-    <!-- ================= Licenças ================= -->
-    <section id="sec-licencas" class="secao" hidden>
-      <header class="cabecalho">
-        <h1>Licenças</h1>
-        <p>Licença é regra do app, não lembrete: num projeto à venda, modelo sem licença comercial não entra.</p>
-      </header>
-      <section class="grupo" id="grupo-pendencias" hidden>
-        <div class="grupo-topo">
-          <h2 id="pendencias-titulo">Antes de vender</h2>
-          <button class="botao pequeno" id="exportar-creditos">Exportar créditos e licenças</button>
-        </div>
-        <div class="caixa" id="pendencias"></div>
-      </section>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>Decisões do estúdio</h2></div>
-        <div class="caixa" id="estudio"></div>
-        <p class="nota">Só você decide isto, aqui na janela. Agentes (Claude Code, Codex) não aceitam licença no seu lugar.</p>
-      </section>
-      <section class="grupo">
-        <div class="grupo-topo">
-          <h2>Catálogo de modelos</h2>
-          <select id="filtro-funcao"><option value="">Todas as funções</option></select>
-        </div>
-        <div class="caixa" id="catalogo"></div>
-      </section>
+    <!-- ===== Agentes ===== -->
+    <section id="est-agentes" class="estacao" hidden>
+      <h1>Agentes</h1>
+      <p class="lead">O Claude Code, o Codex ou qualquer agente usam a Fornalha pelos mesmos comandos que você.</p>
+      <div id="comandos"></div>
+      <section class="painel"><h2>Ferramentas</h2><div id="ferramentas" class="lista colunas"></div></section>
     </section>
 
-    <!-- ================= Agentes ================= -->
-    <section id="sec-agentes" class="secao" hidden>
-      <header class="cabecalho">
-        <h1>Agentes</h1>
-        <p>O Claude Code, o Codex ou qualquer agente usam a Fornalha pelos mesmos comandos que você, pelo servidor MCP ou pela API local.</p>
-      </header>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>Conectar um agente</h2></div>
-        <div id="comandos"></div>
+    <!-- ===== Ajustes ===== -->
+    <section id="est-ajustes" class="estacao" hidden>
+      <h1>Ajustes</h1>
+      <section class="painel lista">
+        <div class="item"><div><strong>Botões da janela</strong><small>Minimizar, maximizar e fechar no jeito do seu sistema.</small></div>
+          <select id="estilo-janela"><option value="auto">Automático</option><option value="windows">Windows</option><option value="gnome">GNOME</option><option value="kde">KDE</option><option value="mac">Mac</option></select></div>
+        <div class="item"><div><strong>Pasta dos projetos novos</strong><small class="mono" id="ajuste-pasta"></small></div><button class="botao" id="ajuste-escolher-pasta">Trocar</button></div>
+        <div class="item"><div><strong>Registros</strong><small>Arquivos de diagnóstico da Fornalha.</small></div><button class="botao" id="abrir-registros">Abrir a pasta</button></div>
       </section>
-      <section class="grupo">
-        <div class="grupo-topo"><h2>Ferramentas disponíveis</h2></div>
-        <div class="caixa" id="ferramentas"></div>
-      </section>
-    </section>
-
-    <!-- ================= Ajustes ================= -->
-    <section id="sec-ajustes" class="secao" hidden>
-      <header class="cabecalho">
-        <h1>Ajustes</h1>
-        <p>Configurações desta máquina.</p>
-      </header>
-      <section class="grupo">
-        <div class="caixa">
-          <div class="linha">
-            <span></span>
-            <div><div class="titulo">Botões da janela</div><div class="sub">Minimizar, maximizar e fechar no jeito do seu sistema.</div></div>
-            <div class="lado">
-              <select id="estilo-janela">
-                <option value="auto">Automático</option><option value="windows">Windows</option><option value="gnome">GNOME</option><option value="kde">KDE</option><option value="mac">Mac</option>
-              </select>
-            </div>
-          </div>
-          <div class="linha">
-            <span></span>
-            <div><div class="titulo">Pasta dos projetos novos</div><div class="sub mono selecionavel" id="ajuste-pasta"></div></div>
-            <div class="lado"><button class="botao" id="ajuste-escolher-pasta">Trocar…</button></div>
-          </div>
-          <div class="linha">
-            <span></span>
-            <div><div class="titulo">Registros</div><div class="sub">Arquivos de registro da Fornalha, para diagnóstico.</div></div>
-            <div class="lado"><button class="botao" id="abrir-registros">Abrir a pasta</button></div>
-          </div>
-        </div>
-        <p class="nota" id="versao"></p>
-      </section>
+      <p class="nota" id="versao"></p>
     </section>
   </main>
 </div>

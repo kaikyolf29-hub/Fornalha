@@ -117,4 +117,7 @@ func _terminar() -> void:
 	f.store_string(JSON.stringify(rel, "  "))
 	f.close()
 	print("FORNALHA_TESTE fim ", JSON.stringify(rel))
+	# fecha a cena antes de sair, para cada nó soltar o que carregou
+	get_tree().current_scene.queue_free()
+	await get_tree().process_frame
 	get_tree().quit(0)

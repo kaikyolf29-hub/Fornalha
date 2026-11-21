@@ -206,6 +206,24 @@ mod nucleo {
             let estilo = e.as_str().filter(|s| fornalha_core::janela::ESTILOS.contains(s) && *s != "auto").map(String::from);
             r = r.and(f.definir_estilo_janela(estilo));
         }
+        if let Some(prog) = v.get("programa") {
+            let nome = prog["nome"].as_str().unwrap_or("");
+            let programa = match nome {
+                "blender" => Some(fornalha_core::externas::Programa::Blender),
+                "godot" => Some(fornalha_core::externas::Programa::Godot),
+                "erethea" => Some(fornalha_core::externas::Programa::Erethea),
+                _ => None,
+            };
+            let Some(programa) = programa else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"erro": {"codigo": "argumento_invalido", "mensagem": "Programa desconhecido."}})),
+                )
+                    .into_response();
+            };
+            let caminho = prog["caminho"].as_str().filter(|s| !s.trim().is_empty()).map(std::path::PathBuf::from);
+            r = r.and(f.definir_programa(programa, caminho).await);
+        }
         if let Some(p) = v.get("pasta_projetos") {
             r = r.and(f.definir_pasta_projetos(p.as_str().filter(|s| !s.trim().is_empty()).map(Into::into)));
         }
@@ -387,6 +405,9 @@ mod janela {
             "https://helpx.adobe.com/",
             "https://code.claude.com/",
             "https://developers.openai.com/",
+            "https://www.blender.org/download/",
+            "https://godotengine.org/",
+            "https://github.com/kaikyolf29-hub/",
         ];
         if !permitido.iter().any(|p| url.starts_with(p)) {
             return Err("link não permitido".into());
@@ -402,6 +423,58 @@ mod janela {
             return Err("pasta não encontrada".into());
         }
         app.opener().open_path(p.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+    }
+
+    /// Só arquivos de dentro de um projeto da Fornalha (uma pasta acima tem o game.project.json).
+    fn dentro_de_projeto(caminho: &std::path::Path) -> Option<std::path::PathBuf> {
+        let real = std::fs::canonicalize(caminho).ok()?;
+        let mut d = real.parent();
+        while let Some(pasta) = d {
+            if pasta.join("game.project.json").is_file() {
+                return Some(real);
+            }
+            d = pasta.parent();
+        }
+        None
+    }
+
+    /// Lê um arquivo do projeto para a janela mostrar (prévias, capturas, áudio).
+    #[tauri::command]
+    fn ler_arquivo(caminho: String) -> Result<Value, String> {
+        use base64::Engine;
+        let real = dentro_de_projeto(std::path::Path::new(&caminho)).ok_or("arquivo fora de um projeto da Fornalha")?;
+        let tamanho = std::fs::metadata(&real).map_err(|e| e.to_string())?.len();
+        if tamanho > 25 * 1024 * 1024 {
+            return Err("arquivo grande demais para a prévia".into());
+        }
+        let mime = match real.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            "wav" => "audio/wav",
+            "mp4" => "video/mp4",
+            "json" | "md" => "text/plain",
+            _ => "application/octet-stream",
+        };
+        let bytes = std::fs::read(&real).map_err(|e| e.to_string())?;
+        Ok(json!({"mime": mime, "base64": base64::engine::general_purpose::STANDARD.encode(bytes)}))
+    }
+
+    /// Abre um arquivo do projeto no programa padrão do sistema (vídeo do teste, modelo 3D).
+    #[tauri::command]
+    fn abrir_arquivo(app: AppHandle, caminho: String) -> Result<(), String> {
+        let real = dentro_de_projeto(std::path::Path::new(&caminho)).ok_or("arquivo fora de um projeto da Fornalha")?;
+        app.opener().open_path(real.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+    }
+
+    /// Janela do sistema para escolher um arquivo (executável do Blender, da Godot, da Erethea).
+    #[tauri::command]
+    async fn escolher_arquivo(app: AppHandle, titulo: String) -> Option<String> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.dialog().file().set_title(titulo).pick_file(move |p| {
+            let _ = tx.send(p.and_then(|f| f.into_path().ok()).map(|p| p.to_string_lossy().into_owned()));
+        });
+        rx.await.ok().flatten()
     }
 
     /// Janela do sistema para escolher uma pasta.
@@ -462,7 +535,16 @@ mod janela {
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_dialog::init())
             .manage(canal)
-            .invoke_handler(tauri::generate_handler![api, abrir_link, abrir_pasta, escolher_pasta, botoes_janela])
+            .invoke_handler(tauri::generate_handler![
+                api,
+                abrir_link,
+                abrir_pasta,
+                escolher_pasta,
+                escolher_arquivo,
+                ler_arquivo,
+                abrir_arquivo,
+                botoes_janela
+            ])
             .setup(move |app| {
                 // Na thread principal, com o GTK já iniciado.
                 let sistema = sistema_da_janela();

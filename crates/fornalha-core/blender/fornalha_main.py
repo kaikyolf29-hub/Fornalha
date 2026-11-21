@@ -276,6 +276,57 @@ def tarefa_retarget(t):
     return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "estatisticas": estatisticas(malhas, arm, copiadas), "ossos_iguais": len(nomes_alvo)}
 
 
+def tarefa_animar(t):
+    """Personagem com o esqueleto padrão ganha (de novo) as animações da biblioteca."""
+    import fc_animacoes
+
+    objs = _importar(t["entrada"])
+    arm = next((o for o in objs if o.type == "ARMATURE"), None)
+    if arm is None:
+        raise ValueError("o modelo não tem esqueleto: use create_skeleton antes")
+    faltando = {"Hips", "Spine", "Chest", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"} - {b.name for b in arm.data.bones}
+    if faltando:
+        raise ValueError(f"o esqueleto não é o padrão da Fornalha (faltam {sorted(faltando)})")
+    for a in list(bpy.data.actions):
+        bpy.data.actions.remove(a)
+    H = arm.data.bones["Head"].tail_local.z * arm.matrix_world.to_scale().z
+    acoes = fc_animacoes.aplicar_biblioteca(arm, H, t.get("animacoes"))
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, objs)
+    malhas = [o for o in objs if o.type == "MESH"]
+    return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "estatisticas": estatisticas(malhas, arm, acoes)}
+
+
+def tarefa_material(t):
+    """Recolore os materiais: cores pedidas por nome, ou a paleta do guia visual em ordem."""
+    objs = _importar(t["entrada"])
+    malhas = [o for o in objs if o.type == "MESH" and not o.name.endswith("-colonly")]
+    mats = []
+    for o in malhas:
+        for m in o.data.materials:
+            if m and m not in mats:
+                mats.append(m)
+    cores = t.get("cores") or {}
+    paleta = t.get("paleta") or []
+    mudados = {}
+    for i, m in enumerate(mats):
+        hexa = cores.get(m.name) or (paleta[i % len(paleta)] if paleta and not cores else None)
+        if not hexa:
+            continue
+        cor = c.cor_hex(hexa)
+        m.diffuse_color = (*cor, 1.0)
+        arv = getattr(m, "node_tree", None)
+        bsdf = next((n for n in arv.nodes if n.type == "BSDF_PRINCIPLED"), None) if arv else None
+        if bsdf is not None:
+            bsdf.inputs["Base Color"].default_value = (*cor, 1.0)
+            if t.get("rugosidade") is not None:
+                bsdf.inputs["Roughness"].default_value = float(t["rugosidade"])
+        mudados[m.name] = hexa
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, objs)
+    return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "materiais": mudados, "estatisticas": estatisticas(malhas)}
+
+
 def tarefa_previa(t):
     objs = _importar(t["entrada"])
     malhas = [o for o in objs if o.type == "MESH" and not o.name.endswith("-colonly")]
@@ -296,6 +347,8 @@ TAREFAS = {
     "rig": tarefa_rig,
     "retarget": tarefa_retarget,
     "previa": tarefa_previa,
+    "animar": tarefa_animar,
+    "material": tarefa_material,
 }
 
 

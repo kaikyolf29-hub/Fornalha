@@ -160,6 +160,12 @@ async fn mcp_delete(State(e): State<Estado>, headers: HeaderMap) -> StatusCode {
     }
 }
 
+/// Ponte com a engine: o plugin do editor (Godot/Erethea) pergunta se há assets novos.
+async fn ponte(State(e): State<Estado>) -> Json<Value> {
+    let (versao, arquivos) = e.fornalha.estado_ponte();
+    Json(json!({"versao": versao, "arquivos": arquivos}))
+}
+
 async fn nao_encontrado() -> Response {
     (
         StatusCode::NOT_FOUND,
@@ -175,6 +181,7 @@ pub fn router(fornalha: Arc<Fornalha>) -> Router {
         .route("/fornalha/estado", get(estado))
         .route("/fornalha/ferramentas", get(lista))
         .route("/fornalha/ferramentas/{nome}", post(chamar))
+        .route("/fornalha/ponte", get(ponte))
         .route("/mcp", post(mcp_post).delete(mcp_delete).get(|| async { StatusCode::METHOD_NOT_ALLOWED }))
         .fallback(nao_encontrado)
         .with_state(estado_app)

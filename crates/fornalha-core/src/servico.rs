@@ -26,21 +26,27 @@ pub struct Fornalha {
     /// Porta escolhida só para esta execução (ex.: `fornalha-cli servir --porta`).
     porta_fixa: Mutex<Option<u16>>,
     ignis: crate::ignis::Cache,
+    programas: tokio::sync::Mutex<std::collections::HashMap<crate::externas::Programa, crate::externas::Achado>>,
+    ponte: Mutex<(u64, Vec<String>)>,
 }
 
 impl Fornalha {
     pub fn new(paths: Paths) -> Arc<Self> {
         let _ = paths.ensure();
         let config = Config::carregar(&paths);
+        // reabre o último projeto que ainda existe
+        let ultimo = config.projetos_recentes.iter().find(|r| r.join(projeto::ARQUIVO_BIBLIA).is_file()).cloned();
         Arc::new(Self {
             paths,
             catalogo: Catalogo::embutido(),
             config: Mutex::new(config),
             deteccao: tokio::sync::Mutex::new(None),
             deteccao_fixa: false,
-            projeto_atual: Mutex::new(None),
+            projeto_atual: Mutex::new(ultimo),
             porta_fixa: Mutex::new(None),
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
+            programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+            ponte: Mutex::new((0, Vec::new())),
         })
     }
 
@@ -58,6 +64,8 @@ impl Fornalha {
             projeto_atual: Mutex::new(None),
             porta_fixa: Mutex::new(None),
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
+            programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+            ponte: Mutex::new((0, Vec::new())),
         })
     }
 
@@ -109,6 +117,10 @@ impl Fornalha {
 
     pub fn definir_pasta_projetos(&self, pasta: Option<PathBuf>) -> Resultado<()> {
         self.mudar_config(|c| c.pasta_projetos = pasta)
+    }
+
+    pub fn definir_porta_ignis(&self, porta: u16) -> Resultado<()> {
+        self.mudar_config(|c| c.porta_ignis = Some(porta))
     }
 
     pub fn definir_estilo_janela(&self, estilo: Option<String>) -> Resultado<()> {
@@ -180,6 +192,70 @@ impl Fornalha {
             return n;
         }
         self.sugestao().await.nivel
+    }
+
+    /// Blender, Godot ou Erethea: o caminho escolhido nas configurações, ou procura no sistema.
+    pub async fn programa(&self, programa: crate::externas::Programa) -> Resultado<crate::externas::Achado> {
+        use crate::externas::Programa;
+        let mut cache = self.programas.lock().await;
+        if let Some(a) = cache.get(&programa) {
+            if a.caminho.is_file() {
+                return Ok(a.clone());
+            }
+        }
+        let cfg = self.config();
+        let escolhido = match programa {
+            Programa::Blender => cfg.blender,
+            Programa::Godot => cfg.godot,
+            Programa::Erethea => cfg.erethea,
+        };
+        let amb = crate::externas::Ambiente::do_sistema(programa, escolhido, self.paths.data_dir.join("ferramentas"));
+        match crate::externas::achar_no(programa, &amb).await {
+            Some(a) => {
+                cache.insert(programa, a.clone());
+                Ok(a)
+            }
+            None => Err(Erro::novo(
+                "programa_nao_encontrado",
+                format!(
+                    "Não achei o {} neste computador. Instale ({}) ou escolha o executável em Ajustes da Fornalha.",
+                    programa.nome(),
+                    programa.pagina_download()
+                ),
+            )),
+        }
+    }
+
+    /// Escolhe (ou esquece) o caminho de um programa. Só pela janela.
+    pub async fn definir_programa(&self, programa: crate::externas::Programa, caminho: Option<PathBuf>) -> Resultado<()> {
+        use crate::externas::Programa;
+        self.programas.lock().await.remove(&programa);
+        self.mudar_config(|c| match programa {
+            Programa::Blender => c.blender = caminho,
+            Programa::Godot => c.godot = caminho,
+            Programa::Erethea => c.erethea = caminho,
+        })
+    }
+
+    /// Avisa a ponte com a engine que há arquivos novos (o plugin do editor reimporta).
+    pub fn avisar_ponte(&self, arquivos: Vec<String>) {
+        let mut p = self.ponte.lock().unwrap();
+        p.0 += 1;
+        p.1 = arquivos;
+    }
+
+    pub fn estado_ponte(&self) -> (u64, Vec<String>) {
+        self.ponte.lock().unwrap().clone()
+    }
+
+    /// Caminho relativo vale a partir da pasta do projeto.
+    pub fn resolver_no_projeto(&self, p: &Projeto, c: &str) -> PathBuf {
+        let caminho = PathBuf::from(c.replace('\\', std::path::MAIN_SEPARATOR_STR));
+        if caminho.is_absolute() {
+            caminho
+        } else {
+            p.raiz.join(caminho)
+        }
     }
 
     /// Chama uma ferramenta pelo nome. `quem` vai para os recibos ("pessoa", "claude-code"...).

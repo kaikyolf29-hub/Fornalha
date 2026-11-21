@@ -38,12 +38,22 @@ func tocar(nome: String, onde := Vector3.ZERO) -> void:
 
 
 func tocar_musica(caminho: String) -> void:
-	var stream := load(caminho)
-	if stream == null:
+	var original := load(caminho)
+	if original == null:
 		return
+	# cópia: mexer no loop do recurso em cache deixa ele preso na saída do jogo
+	var stream: AudioStream = original.duplicate()
 	if stream is AudioStreamWAV:
 		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		stream.loop_begin = 0
 		stream.loop_end = int(stream.get_length() * stream.mix_rate)
 	musica.stream = stream
 	musica.play()
+
+
+func _exit_tree() -> void:
+	# solta os sons antes de o jogo fechar (senão a engine avisa "resources still in use at exit")
+	if musica:
+		musica.stop()
+		musica.stream = null
+	efeitos.clear()

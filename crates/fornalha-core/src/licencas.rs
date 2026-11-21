@@ -36,6 +36,8 @@ pub enum Onde {
     Biblioteca,
     /// Serviço pago, só no modo turbo.
     Api,
+    /// Gerador da própria Fornalha (sem modelo de IA, sem placa).
+    Fornalha,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

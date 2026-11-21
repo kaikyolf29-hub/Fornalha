@@ -9,6 +9,7 @@ pub mod api;
 pub mod config;
 pub mod consts;
 pub mod distro;
+pub mod engine;
 pub mod erro;
 pub mod externas;
 pub mod ferramentas;

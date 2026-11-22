@@ -53,11 +53,12 @@ impl Fornalha {
         })
     }
 
-    /// Para testes: placa fixa e Ignis numa porta fechada.
+    /// Para testes: placa fixa e Ignis e ComfyUI numa porta fechada.
     pub fn para_testes(paths: Paths, deteccao: Detection) -> Arc<Self> {
         let _ = paths.ensure();
         let mut config = Config::carregar(&paths);
         config.porta_ignis.get_or_insert(1);
+        config.porta_comfyui.get_or_insert(1);
         Arc::new(Self {
             paths,
             catalogo: Catalogo::embutido(),
@@ -101,6 +102,10 @@ impl Fornalha {
         self.config().porta_ignis.unwrap_or(PORTA_IGNIS)
     }
 
+    pub fn porta_comfyui(&self) -> u16 {
+        self.config().porta_comfyui.unwrap_or(crate::comfyui::PORTA_PADRAO)
+    }
+
     pub fn pasta_projetos(&self) -> PathBuf {
         self.config().pasta_projetos(&self.paths)
     }
@@ -125,6 +130,10 @@ impl Fornalha {
 
     pub fn definir_porta_ignis(&self, porta: u16) -> Resultado<()> {
         self.mudar_config(|c| c.porta_ignis = Some(porta))
+    }
+
+    pub fn definir_porta_comfyui(&self, porta: u16) -> Resultado<()> {
+        self.mudar_config(|c| c.porta_comfyui = Some(porta))
     }
 
     pub fn definir_noite(&self, noite: crate::config::Noite) -> Resultado<()> {

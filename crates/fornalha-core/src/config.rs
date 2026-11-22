@@ -18,6 +18,8 @@ pub struct Config {
     pub projetos_recentes: Vec<PathBuf>,
     pub porta_api: Option<u16>,
     pub porta_ignis: Option<u16>,
+    /// Porta do ComfyUI local (padrão 8188).
+    pub porta_comfyui: Option<u16>,
     /// Nível escolhido pela pessoa para esta máquina (`None` = o sugerido pela placa).
     pub nivel: Option<String>,
     /// Estilo dos botões da janela ("auto", "windows", "gnome", "kde", "mac").

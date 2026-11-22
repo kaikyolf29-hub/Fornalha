@@ -7,6 +7,7 @@
 
 pub mod api;
 pub mod audio;
+pub mod comfyui;
 pub mod config;
 pub mod consts;
 pub mod distro;

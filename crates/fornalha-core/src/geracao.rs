@@ -576,31 +576,32 @@ pub async fn conceito_avulso(f: &Fornalha, p: &Projeto, descricao: &str, destino
 }
 
 async fn gerar_imagem_conceito(f: &Fornalha, p: &Projeto, prompt: &str, destino: &Path, seed: u64, quem: &str) -> Resultado<String> {
-    let cap = ignis::capacidades(f.porta_ignis()).await;
-    if cap["imagem"].as_array().is_none_or(|v| v.is_empty()) {
-        return Err(Erro::novo(
-            "ignis_sem_imagem",
-            "o Ignis não está aberto ou a geração de imagem não foi preparada nele (janela do Ignis → Imagem).",
-        ));
-    }
     let sem_placa = f.deteccao(false).await.principal().is_none();
-    let (tamanho, passos) = if sem_placa { ("384x384", 6) } else { ("1024x1024", 8) };
-    let (png, info) = ignis::gerar_imagem(f.porta_ignis(), prompt, tamanho, seed, passos).await?;
+    // 1º o ComfyUI (o motor de fluxos na placa da pessoa: NVIDIA, AMD ou processador), 2º o Ignis
+    let comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
+    let modelo_comfy = if comfy.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
+    let (png, modelo, parametros) = if let Some(m) = modelo_comfy {
+        let lado = if sem_placa { 512 } else { 1024 };
+        let (png, info) = crate::comfyui::gerar_imagem(f.porta_comfyui(), prompt, lado, lado, seed, 8).await?;
+        (png, m.id, json!({"comfyui": info, "dispositivos": comfy.dispositivos}))
+    } else {
+        let cap = ignis::capacidades(f.porta_ignis()).await;
+        if cap["imagem"].as_array().is_none_or(|v| v.is_empty()) {
+            return Err(Erro::novo(
+                "sem_gerador_de_imagem",
+                "nem o ComfyUI (com o Z-Image Turbo) nem o Ignis (com a imagem preparada) estão abertos. \
+                 Abra um dos dois (janela do Ignis → Imagem, ou o ComfyUI com os modelos do Z-Image Turbo).",
+            ));
+        }
+        let (tamanho, passos) = if sem_placa { ("384x384", 6) } else { ("1024x1024", 8) };
+        let (png, info) = ignis::gerar_imagem(f.porta_ignis(), prompt, tamanho, seed, passos).await?;
+        (png, "z-image-turbo-ignis", json!({"tamanho": tamanho, "passos": passos, "ignis": info}))
+    };
     if let Some(d) = destino.parent() {
         std::fs::create_dir_all(d).map_err(|e| Erro::io(d, e))?;
     }
     std::fs::write(destino, &png).map_err(|e| Erro::io(destino, e))?;
-    recibo(
-        f,
-        p,
-        destino,
-        "z-image-turbo-ignis",
-        Some(prompt.into()),
-        Some(seed),
-        json!({"tamanho": tamanho, "passos": passos, "ignis": info}),
-        quem,
-    )
-    .await?;
+    recibo(f, p, destino, modelo, Some(prompt.into()), Some(seed), parametros, quem).await?;
     Ok(destino.to_string_lossy().into_owned())
 }
 

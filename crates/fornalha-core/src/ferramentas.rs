@@ -459,6 +459,11 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
             let ignis = f.estado_ignis().await;
             let recursos_ignis =
                 if ignis.conectado { crate::ignis::capacidades(f.porta_ignis()).await } else { json!({"conectado": false}) };
+            let comfyui = {
+                let e = crate::comfyui::consultar(f.porta_comfyui()).await;
+                let modelo = if e.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
+                json!({"estado": e, "modelo_de_imagem": modelo})
+            };
             let sugestao = f.sugestao().await;
             let mut programas = serde_json::Map::new();
             for p in [crate::externas::Programa::Blender, crate::externas::Programa::Godot, crate::externas::Programa::Erethea] {
@@ -483,6 +488,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "placa": sugestao.placa,
                 "ignis": ignis,
                 "recursos_ignis": recursos_ignis,
+                "comfyui": comfyui,
                 "programas": programas,
                 "modelos_de_placa": crate::workers::estado(&f.paths),
                 "pacotes": crate::pacotes::estado(&f.paths),

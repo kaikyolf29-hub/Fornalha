@@ -141,3 +141,33 @@ async fn scripts_do_jogo_compilam_na_engine() {
         assert!(erros.is_empty(), "{s}.gd não compila: {erros:?}");
     }
 }
+
+/// Pedido da Erethea: o run_test chama `--agent-test=<pasta>` e lê `<pasta>/report.json`;
+/// saída 2 (opções desconhecidas) cai no teste_automatico da Fornalha.
+#[cfg(unix)]
+#[tokio::test]
+async fn erethea_usa_o_teste_de_agente_dela() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let raiz = tmp.path().join("jogo");
+    std::fs::create_dir_all(&raiz).unwrap();
+    let falsa = tmp.path().join("erethea");
+    std::fs::write(
+        &falsa,
+        "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in --agent-test=*) d=\"${a#--agent-test=}\";; --agent-test-seconds=*) s=\"${a#--agent-test-seconds=}\";; esac; done\n\
+         [ -z \"$d\" ] && exit 2\nmkdir -p \"$d\"\nprintf '{\"passou\": true, \"segundos\": %s, \"quadros\": 240}' \"$s\" > \"$d/report.json\"\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&falsa, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let eng = externas::Achado { programa: Programa::Erethea, caminho: falsa.clone(), versao: Some("4.8-erethea".into()) };
+    let op = OpcoesTeste { segundos: 4.0, sem_janela: true, ..Default::default() };
+    let rel = engine::testar(&eng, &raiz, &tmp.path().join("saida"), &op).await.unwrap();
+    assert_eq!(rel["teste"], "erethea --agent-test");
+    assert_eq!(rel["passou"], true);
+    assert_eq!(rel["erethea"]["quadros"], 240);
+    assert_eq!(rel["erethea"]["segundos"], 4);
+    // Erethea antiga (sai com 2): a Fornalha tenta o teste dela (que aqui não roda, pois a "engine" é falsa)
+    std::fs::write(&falsa, "#!/bin/sh\nexit 2\n").unwrap();
+    let e = engine::testar(&eng, &raiz, &tmp.path().join("saida2"), &op).await.unwrap_err();
+    assert_eq!(e.codigo, "jogo_nao_rodou");
+}

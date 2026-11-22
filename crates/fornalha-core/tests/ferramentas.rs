@@ -200,3 +200,20 @@ async fn estado_mostra_versao_fase_e_ignis() {
     assert!(s["ignis"]["conectado"].is_boolean());
     assert!(s["projeto_atual"].is_null());
 }
+
+#[tokio::test]
+async fn musica_grava_os_dados_do_laco_para_a_erethea() {
+    // pedido da Erethea: <situacao>.musica.json ao lado do .wav (bpm, compassos, tônica, loop)
+    let tmp = tempfile::tempdir().unwrap();
+    let f = fornalha(tmp.path(), "rx580");
+    let r = chamar(&f, "create_project", json!({"nome": "Trilha"})).await;
+    let raiz = std::path::PathBuf::from(r["raiz"].as_str().unwrap());
+    chamar(&f, "generate_music", json!({"situacao": "combate", "compassos": 2})).await;
+    assert!(raiz.join("Audio/musica/combate.wav").is_file());
+    let info: Value = serde_json::from_slice(&std::fs::read(raiz.join("Audio/musica/combate.musica.json")).unwrap()).unwrap();
+    assert_eq!(info["situacao"], "combate");
+    assert_eq!(info["compassos"], 2);
+    assert_eq!(info["loop"], true);
+    assert!(info["bpm"].as_u64().unwrap() > 0);
+    assert!(!info["tonica"].as_str().unwrap().is_empty());
+}

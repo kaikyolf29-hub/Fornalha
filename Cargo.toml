@@ -15,7 +15,7 @@ repository = "https://github.com/kaikyolf29-hub/Fornalha"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 tower = { version = "0.5", features = ["util"] }
 http = "1"
 http-body-util = "0.1"

@@ -28,6 +28,11 @@ pub struct Fornalha {
     ignis: crate::ignis::Cache,
     programas: tokio::sync::Mutex<std::collections::HashMap<crate::externas::Programa, crate::externas::Achado>>,
     ponte: Mutex<(u64, Vec<String>)>,
+    /// Avisos da ponte para a engine ligada por WebSocket (Erethea).
+    ponte_tx: tokio::sync::broadcast::Sender<(u64, Vec<String>)>,
+    /// O que a engine disse no "ola" (programa, versão, projeto, monta_cenas) e o último relatório de cenas.
+    engine_ao_vivo: Mutex<Option<Value>>,
+    cenas_da_engine: Mutex<Option<Value>>,
     /// Uma tarefa da fila por vez (a placa e o Blender são um só).
     pub(crate) fila: tokio::sync::Mutex<()>,
 }
@@ -49,6 +54,9 @@ impl Fornalha {
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
             programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             ponte: Mutex::new((0, Vec::new())),
+            ponte_tx: tokio::sync::broadcast::channel(32).0,
+            engine_ao_vivo: Mutex::new(None),
+            cenas_da_engine: Mutex::new(None),
             fila: tokio::sync::Mutex::new(()),
         })
     }
@@ -70,6 +78,9 @@ impl Fornalha {
             ignis: crate::ignis::Cache::new(std::time::Duration::from_secs(10)),
             programas: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             ponte: Mutex::new((0, Vec::new())),
+            ponte_tx: tokio::sync::broadcast::channel(32).0,
+            engine_ao_vivo: Mutex::new(None),
+            cenas_da_engine: Mutex::new(None),
             fila: tokio::sync::Mutex::new(()),
         })
     }
@@ -263,6 +274,34 @@ impl Fornalha {
         let mut p = self.ponte.lock().unwrap();
         p.0 += 1;
         p.1 = arquivos;
+        let _ = self.ponte_tx.send(p.clone()); // sem ninguém ligado, tudo bem
+    }
+
+    /// Para o WebSocket da ponte: recebe cada aviso novo.
+    pub fn assinar_ponte(&self) -> tokio::sync::broadcast::Receiver<(u64, Vec<String>)> {
+        self.ponte_tx.subscribe()
+    }
+
+    /// A engine ligada ao vivo (o "ola" dela), ou `None` quando desligou.
+    pub fn registrar_engine(&self, ola: Option<Value>) {
+        *self.engine_ao_vivo.lock().unwrap() = ola;
+    }
+
+    pub fn engine_ao_vivo(&self) -> Option<Value> {
+        self.engine_ao_vivo.lock().unwrap().clone()
+    }
+
+    /// A engine ligada disse que monta as cenas ela mesma (a Fornalha não roda o montar.gd).
+    pub fn engine_monta_cenas(&self) -> bool {
+        self.engine_ao_vivo().is_some_and(|v| v["monta_cenas"] == true)
+    }
+
+    pub fn registrar_cenas(&self, relatorio: Value) {
+        *self.cenas_da_engine.lock().unwrap() = Some(relatorio);
+    }
+
+    pub fn cenas_da_engine(&self) -> Option<Value> {
+        self.cenas_da_engine.lock().unwrap().clone()
     }
 
     pub fn estado_ponte(&self) -> (u64, Vec<String>) {

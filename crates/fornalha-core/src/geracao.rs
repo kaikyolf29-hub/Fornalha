@@ -626,7 +626,8 @@ async fn gerar_fala(f: &Fornalha, p: &Projeto, id: &str, texto: &str, idioma: &s
     let (taxa, amostras) = audio::ler_wav_16(&wav).ok_or_else(|| Erro::novo("ignis_recusou", "a voz não veio em WAV"))?;
     let boca = audio::curva_da_boca(taxa, &amostras, 30);
     let arq_boca = arq.with_extension("boca.json");
-    crate::paths::write_json(&arq_boca, &json!({"quadros_por_segundo": 30, "abertura": boca})).map_err(|e| Erro::io(&arq_boca, e))?;
+    crate::paths::write_json(&arq_boca, &json!({"personagem": id, "texto": texto, "quadros_por_segundo": 30, "abertura": boca}))
+        .map_err(|e| Erro::io(&arq_boca, e))?;
     recibo(f, p, &arq, "chatterbox-ptbr", Some(texto.into()), Some(seed), json!({"idioma": idioma}), quem).await?;
     Ok(json!({"arquivo": arq, "boca": arq_boca, "segundos": amostras.len() as f64 / taxa as f64}))
 }
@@ -1001,6 +1002,13 @@ pub async fn gerar_musica(f: &Fornalha, a: ArgsMusica, quem: &str) -> Resultado<
     std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
     let arq = pasta.join(format!("{}.wav", m.situacao));
     std::fs::write(&arq, audio::wav_mono_16(&m.amostras)).map_err(|e| Erro::io(&arq, e))?;
+    // para a Erethea marcar o laço e trocar de música no fim do compasso
+    let arq_info = pasta.join(format!("{}.musica.json", m.situacao));
+    crate::paths::write_json(
+        &arq_info,
+        &json!({"situacao": m.situacao, "bpm": m.bpm, "compassos": m.compassos, "tonica": m.tonica, "loop": true}),
+    )
+    .map_err(|e| Erro::io(&arq_info, e))?;
     recibo(
         f,
         &p,
@@ -1012,8 +1020,8 @@ pub async fn gerar_musica(f: &Fornalha, a: ArgsMusica, quem: &str) -> Resultado<
         quem,
     )
     .await?;
-    f.avisar_ponte(vec![rel(&p.raiz, &arq)]);
-    Ok(json!({"arquivo": arq, "situacao": m.situacao, "bpm": m.bpm, "compassos": m.compassos, "tonica": m.tonica,
+    f.avisar_ponte(vec![rel(&p.raiz, &arq), rel(&p.raiz, &arq_info)]);
+    Ok(json!({"arquivo": arq, "info": arq_info, "situacao": m.situacao, "bpm": m.bpm, "compassos": m.compassos, "tonica": m.tonica,
               "segundos": m.amostras.len() as f64 / audio::TAXA as f64, "loop": true}))
 }
 
@@ -1177,8 +1185,15 @@ pub async fn importar_na_engine(f: &Fornalha, a: ArgsEngine, quem: &str) -> Resu
     if manifesto["personagens"].as_array().is_none_or(|v| v.is_empty()) {
         avisos.push("Ainda não há personagem nem inimigo: crie com create_character para o jogo ter quem jogar.".into());
     }
-    let montado = engine::montar(&eng, &p.raiz).await?;
-    f.avisar_ponte(vec!["principal.tscn".into()]);
+    // com a Erethea ligada ao vivo dizendo que monta as cenas, a Fornalha só avisa (sem o montar.gd)
+    let montado = if f.engine_monta_cenas() {
+        f.avisar_ponte(vec![".fornalha/cena.json".into()]);
+        json!({"cenas": f.cenas_da_engine().unwrap_or(json!({"montadas_pela": "erethea"})), "erros_da_engine": []})
+    } else {
+        let m = engine::montar(&eng, &p.raiz).await?;
+        f.avisar_ponte(vec!["principal.tscn".into()]);
+        m
+    };
     Ok(
         json!({"engine": eng.programa.nome(), "versao": eng.versao, "cenas": montado["cenas"], "erros_da_engine": montado["erros_da_engine"],
               "scripts_escritos": preparo.escritos, "scripts_mantidos": preparo.mantidos, "manifesto": manifesto, "avisos": avisos}),

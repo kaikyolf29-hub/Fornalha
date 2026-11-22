@@ -1,6 +1,6 @@
 extends Node
-## Toca os efeitos sonoros gerados pela Fornalha (Audio/efeitos) e a música da
-## área (Audio/musica). Autoload "Sons".
+## Toca os efeitos sonoros gerados pela Fornalha (Audio/efeitos), a música da área pela
+## situação (Audio/musica) e as falas presas ao personagem (Audio/dublagem). Autoload "Sons".
 
 var efeitos := {}   # nome -> lista de AudioStream (variações)
 var musica: AudioStreamPlayer
@@ -37,8 +37,15 @@ func tocar(nome: String, onde := Vector3.ZERO) -> void:
 	p.finished.connect(p.queue_free)
 
 
-func tocar_musica(caminho: String) -> void:
-	var original := load(caminho)
+func tocar_musica(qual: String) -> void:
+	## Pede a música pela situação ("combate", "vila"...) ou pelo caminho do arquivo. Na Erethea
+	## (nós no grupo "erethea_musica"), quem troca a música é ela, no fim do compasso.
+	var situacao := qual.get_file().get_basename() if qual.begins_with("res://") else qual
+	var caminho := qual if qual.begins_with("res://") else "res://Audio/musica/%s.wav" % qual
+	if get_tree() and get_tree().has_group("erethea_musica"):
+		get_tree().call_group("erethea_musica", "tocar", situacao)
+		return
+	var original := load(caminho) if ResourceLoader.exists(caminho) else null
 	if original == null:
 		return
 	# cópia: mexer no loop do recurso em cache deixa ele preso na saída do jogo
@@ -49,6 +56,37 @@ func tocar_musica(caminho: String) -> void:
 		stream.loop_end = int(stream.get_length() * stream.mix_rate)
 	musica.stream = stream
 	musica.play()
+
+
+func falar(personagem: String, arquivo: String) -> AudioStreamPlayer3D:
+	## Toca a fala presa ao personagem (o som sai da cabeça dele e acompanha quando ele anda).
+	## arquivo: "res://Audio/dublagem/<id>_01.wav" ou só "<id>_01".
+	var caminho := arquivo if arquivo.begins_with("res://") else "res://Audio/dublagem/%s.wav" % arquivo
+	var stream: AudioStream = load(caminho) if ResourceLoader.exists(caminho) else null
+	if stream == null:
+		return null
+	var dono := _personagem(personagem)
+	var p := AudioStreamPlayer3D.new()
+	p.stream = stream
+	p.unit_size = 4.0
+	p.name = "Fala"
+	if dono:
+		dono.add_child(p)
+		p.position = Vector3(0, 1.6, 0)
+	else:
+		add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
+	return p
+
+
+func _personagem(id: String) -> Node3D:
+	if get_tree() == null:
+		return null
+	for n in get_tree().get_nodes_in_group("personagens"):
+		if n is Node3D and (n.get_meta("fornalha_id", "") == id or n.name == id):
+			return n
+	return null
 
 
 func _exit_tree() -> void:

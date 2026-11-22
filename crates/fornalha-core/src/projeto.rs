@@ -148,6 +148,10 @@ pub struct Area {
     /// vila, floresta, montanha, masmorra, arena...
     pub tipo: String,
     pub descricao: String,
+    /// Acústica escolhida à mão (caverna, castelo, salao, floresta, vila, aberto…). Sem ela, a
+    /// Erethea escolhe o eco pelo tipo da área.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acustica: Option<String>,
     #[serde(flatten)]
     pub extras: Map<String, Value>,
 }

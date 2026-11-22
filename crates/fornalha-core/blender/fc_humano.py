@@ -397,9 +397,34 @@ class Humano:
             if d.get("parent"):
                 ebs[osso].parent = ebs[d["parent"]]
                 ebs[osso].use_connect = bool(d.get("use_connect", False))
+        # mandíbula (do rig padrão do MakeHuman): a engine abre a boca pela curva da fala
+        jaw = None
+        if "jaw" not in defs and "head" in ebs:
+            arq = os.path.join(self.dados, "rigs", "standard", "rig.default.json")
+            if os.path.isfile(arq):
+                with open(arq) as f:
+                    jaw = json.load(f).get("jaw")
+            if jaw:
+                eb = dados.edit_bones.new("jaw")
+                eb.head = self._posicao(jaw["head"])
+                eb.tail = self._posicao(jaw["tail"])
+                if (eb.tail - eb.head).length < 1e-4:
+                    eb.tail = eb.head + Vector((0, -0.04, -0.05))
+                eb.roll = float(jaw.get("roll", 0.0))
+                eb.parent = ebs["head"]
         bpy.ops.object.mode_set(mode="OBJECT")
         with open(os.path.join(self.dados, "rigs", "standard", f"weights.{rig}.json")) as f:
             self.pesos = json.load(f)["weights"]
+        if jaw:
+            with open(os.path.join(self.dados, "rigs", "standard", "weights.default.json")) as f:
+                w_jaw = json.load(f)["weights"].get("jaw", [])
+            if w_jaw:
+                # o queixo e o lábio de baixo passam da cabeça para a mandíbula (a soma continua 1)
+                jw = {int(vi): float(w) for vi, w in w_jaw}
+                for osso in ("head", "neck_01"):
+                    if osso in self.pesos:
+                        self.pesos[osso] = [[vi, w * (1.0 - jw.get(int(vi), 0.0))] for vi, w in self.pesos[osso]]
+                self.pesos["jaw"] = [[vi, w] for vi, w in jw.items()]
         self.arm = arm
         return arm
 

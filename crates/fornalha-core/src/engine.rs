@@ -360,6 +360,12 @@ pub struct OpcoesTeste {
 /// run_test: abre o jogo em modo de teste e devolve o relatório. Se a janela
 /// não abrir (máquina sem placa nem OpenGL), roda de novo sem janela.
 pub async fn testar(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Value> {
+    // a Erethea tem o teste de agente dela (--agent-test); se ela não conhecer as opções, cai no da Fornalha
+    if engine.programa == externas::Programa::Erethea {
+        if let Some(rel) = testar_na_erethea(engine, raiz, pasta_saida, op).await? {
+            return Ok(rel);
+        }
+    }
     match testar_uma_vez(engine, raiz, pasta_saida, op).await {
         Err(e) if e.codigo == "jogo_nao_rodou" && !op.sem_janela => {
             let sem = OpcoesTeste { sem_janela: true, video: false, ..op.clone() };
@@ -429,6 +435,55 @@ async fn testar_uma_vez(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &O
     rel["engine_versao"] = json!(engine.versao);
     rel["passou"] = json!(erros.is_empty() && rel["jogador"]["caiu_do_mapa"] != Value::Bool(true));
     Ok(rel)
+}
+
+/// Teste de agente da Erethea: `--agent-test=<pasta>` (+ segundos e entradas), lê `<pasta>/report.json`.
+/// Sai 0 quando passa, 1 quando falha, 2 quando as opções estão erradas (aí devolve `None` e a Fornalha
+/// usa o teste_automatico dela).
+async fn testar_na_erethea(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Option<Value>> {
+    let pasta = pasta_saida.join("erethea");
+    std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
+    let _ = std::fs::remove_file(pasta.join("report.json"));
+    let segundos = if op.segundos > 0.0 { op.segundos } else { 9.0 };
+    let r = caminho_str(raiz);
+    let a_teste = format!("--agent-test={}", caminho_str(&pasta));
+    let a_seg = format!("--agent-test-seconds={segundos}");
+    let entradas = raiz.join(".fornalha/entradas_teste.json");
+    let a_ent = format!("--agent-test-inputs={}", caminho_str(&entradas));
+    let mut args: Vec<&str> = vec!["--path", &r, &a_teste, &a_seg];
+    if entradas.is_file() {
+        args.push(&a_ent);
+    }
+    if op.sem_janela {
+        args.push("--headless");
+    } else if op.sem_placa {
+        args.extend(["--rendering-driver", "opengl3", "--rendering-method", "gl_compatibility"]);
+    }
+    let s = externas::rodar(&engine.caminho, &args, Duration::from_secs_f64(segundos * 12.0 + 120.0), None).await?;
+    if s.codigo == Some(2) {
+        return Ok(None);
+    }
+    let Some(relatorio) = std::fs::read(pasta.join("report.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) else {
+        return Ok(None); // Erethea sem o teste de agente: usa o da Fornalha
+    };
+    let texto = format!("{}\n{}", s.stdout, s.stderr);
+    let erros = erros_da_saida(&texto);
+    let mut assets = Vec::new();
+    for p in walk_glb(raiz) {
+        if let Some((tris, bytes)) = estatisticas_glb(&p) {
+            assets.push(json!({"arquivo": p.strip_prefix(raiz).unwrap_or(&p).to_string_lossy().replace('\\', "/"), "triangulos": tris, "bytes": bytes}));
+        }
+    }
+    Ok(Some(json!({
+        "teste": "erethea --agent-test",
+        "erethea": relatorio,
+        "erros": erros,
+        "assets": assets,
+        "modo": if op.sem_janela { "sem janela" } else { "normal" },
+        "engine_caminho": caminho_str(&engine.caminho),
+        "engine_versao": engine.versao,
+        "passou": s.codigo == Some(0) && erros.is_empty(),
+    })))
 }
 
 fn walk_glb(raiz: &Path) -> Vec<PathBuf> {

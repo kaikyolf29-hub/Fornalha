@@ -163,7 +163,58 @@ async fn mcp_delete(State(e): State<Estado>, headers: HeaderMap) -> StatusCode {
 /// Ponte com a engine: o plugin do editor (Godot/Erethea) pergunta se há assets novos.
 async fn ponte(State(e): State<Estado>) -> Json<Value> {
     let (versao, arquivos) = e.fornalha.estado_ponte();
-    Json(json!({"versao": versao, "arquivos": arquivos}))
+    Json(json!({"versao": versao, "arquivos": arquivos, "websocket": "/fornalha/ponte/ws", "engine": e.fornalha.engine_ao_vivo(),
+                "cenas": e.fornalha.cenas_da_engine()}))
+}
+
+/// Elo ao vivo com a engine (Erethea): ela manda {"tipo":"ola",…,"monta_cenas"} e {"tipo":"cenas",…};
+/// a Fornalha empurra {"tipo":"ponte","versao","arquivos"} sempre que grava algo.
+async fn ponte_ws(State(e): State<Estado>, ws: axum::extract::ws::WebSocketUpgrade) -> Response {
+    ws.on_upgrade(move |socket| conversa_da_ponte(e.fornalha, socket))
+}
+
+async fn conversa_da_ponte(f: Arc<Fornalha>, mut socket: axum::extract::ws::WebSocket) {
+    use axum::extract::ws::Message;
+    use tokio::sync::broadcast::error::RecvError;
+    let mut avisos = f.assinar_ponte();
+    let msg_ponte = |(versao, arquivos): (u64, Vec<String>)| {
+        Message::Text(json!({"tipo": "ponte", "versao": versao, "arquivos": arquivos}).to_string().into())
+    };
+    if socket.send(msg_ponte(f.estado_ponte())).await.is_err() {
+        return;
+    }
+    loop {
+        tokio::select! {
+            m = socket.recv() => match m {
+                Some(Ok(Message::Text(t))) => {
+                    let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+                    match v["tipo"].as_str() {
+                        Some("ola") => {
+                            f.registrar_engine(Some(v));
+                            let r = json!({"tipo": "ola", "programa": crate::consts::APP_NAME, "versao": crate::consts::APP_VERSION});
+                            if socket.send(Message::Text(r.to_string().into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some("cenas") => f.registrar_cenas(v),
+                        _ => {}
+                    }
+                }
+                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                _ => {}
+            },
+            a = avisos.recv() => match a {
+                Ok(p) => {
+                    if socket.send(msg_ponte(p)).await.is_err() {
+                        break;
+                    }
+                }
+                Err(RecvError::Lagged(_)) => continue,
+                Err(RecvError::Closed) => break,
+            },
+        }
+    }
+    f.registrar_engine(None);
 }
 
 async fn nao_encontrado() -> Response {
@@ -182,6 +233,7 @@ pub fn router(fornalha: Arc<Fornalha>) -> Router {
         .route("/fornalha/ferramentas", get(lista))
         .route("/fornalha/ferramentas/{nome}", post(chamar))
         .route("/fornalha/ponte", get(ponte))
+        .route("/fornalha/ponte/ws", get(ponte_ws))
         .route("/mcp", post(mcp_post).delete(mcp_delete).get(|| async { StatusCode::METHOD_NOT_ALLOWED }))
         .fallback(nao_encontrado)
         .with_state(estado_app)

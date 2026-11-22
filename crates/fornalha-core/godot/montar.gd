@@ -67,6 +67,9 @@ func _personagem(p: Dictionary) -> String:
 	var jogador: bool = p.get("tipo", "inimigo") == "jogador"
 	var raiz := CharacterBody3D.new()
 	raiz.name = p["id"]
+	# Sons.falar(id, …) acha o personagem mesmo com o nome trocado (inimigo_01…)
+	raiz.set_meta("fornalha_id", p["id"])
+	raiz.add_to_group("personagens", true)
 	var script := _script("res://Scripts/fornalha/%s.gd" % ("jogador" if jogador else "inimigo"))
 	if script == null:
 		raiz.free()

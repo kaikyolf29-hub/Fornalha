@@ -183,3 +183,59 @@ async fn servidor_de_verdade_numa_porta() {
     let v: Value = reqwest::get(format!("http://127.0.0.1:{porta}/fornalha/estado")).await.unwrap().json().await.unwrap();
     assert_eq!(v["app"], "Fornalha");
 }
+
+#[tokio::test]
+async fn ponte_ao_vivo_por_websocket() {
+    // pedido da Erethea: /fornalha/ponte/ws; ela diz "ola" (monta_cenas) e manda o relatório de cenas;
+    // a Fornalha empurra {"tipo":"ponte"} quando grava algo
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let tmp = tempfile::tempdir().unwrap();
+    let f = Fornalha::para_testes(Paths::under(tmp.path()), comum::detection("rx580"));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let porta = listener.local_addr().unwrap().port();
+    let f2 = f.clone();
+    tokio::spawn(async move { axum::serve(listener, api::router(f2)).await.unwrap() });
+    let v: Value = reqwest::get(format!("http://127.0.0.1:{porta}/fornalha/ponte")).await.unwrap().json().await.unwrap();
+    assert_eq!(v["websocket"], "/fornalha/ponte/ws");
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{porta}/fornalha/ponte/ws")).await.unwrap();
+    let ler = |m: Option<Result<Message, _>>| -> Value {
+        match m {
+            Some(Ok(Message::Text(t))) => serde_json::from_str(&t).unwrap(),
+            outro => panic!("mensagem inesperada: {outro:?}"),
+        }
+    };
+    let primeira = ler(ws.next().await);
+    assert_eq!(primeira["tipo"], "ponte");
+    let ola = json!({"tipo": "ola", "programa": "Erethea", "versao": "0.1", "projeto": "x", "monta_cenas": true});
+    ws.send(Message::Text(ola.to_string().into())).await.unwrap();
+    assert_eq!(ler(ws.next().await)["tipo"], "ola");
+    // espera a Fornalha registrar a engine
+    for _ in 0..50 {
+        if f.engine_monta_cenas() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(f.engine_monta_cenas());
+    ws.send(Message::Text(json!({"tipo": "cenas", "principal": "res://principal.tscn"}).to_string().into())).await.unwrap();
+    f.avisar_ponte(vec!["Characters/heroi/heroi.glb".into()]);
+    let aviso = ler(ws.next().await);
+    assert_eq!(aviso["tipo"], "ponte");
+    assert_eq!(aviso["arquivos"][0], "Characters/heroi/heroi.glb");
+    for _ in 0..50 {
+        if f.cenas_da_engine().is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(f.cenas_da_engine().unwrap()["principal"], "res://principal.tscn");
+    ws.close(None).await.unwrap();
+    for _ in 0..50 {
+        if f.engine_ao_vivo().is_none() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(f.engine_ao_vivo().is_none(), "ao desligar, a Fornalha volta a montar as cenas");
+}

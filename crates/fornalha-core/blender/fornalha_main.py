@@ -103,7 +103,12 @@ def tarefa_humano(t):
     st = estatisticas(pecas, arm, acoes)
     st["pecas"] = [o.name for o in pecas]
     st["qa"] = qa
-    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+    r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+    if arm is not None and "jaw" in arm.data.bones:
+        # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do
+        # modelo, no sentido positivo, até ~20° (medido: o queixo desce 1,5 cm e os dentes de baixo vão junto)
+        r["boca"] = {"osso": "jaw", "eixo_modelo": [1.0, 0.0, 0.0], "graus_aberta": 20}
+    return r
 
 
 def tarefa_arma(t):

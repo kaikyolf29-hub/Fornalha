@@ -34,3 +34,5 @@ windows = { version = "0.61", features = [
 tempfile.workspace = true
 tower.workspace = true
 http-body-util.workspace = true
+tokio-tungstenite = "0.29"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }

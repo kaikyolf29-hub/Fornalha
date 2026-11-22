@@ -578,7 +578,13 @@ pub async fn conceito_avulso(f: &Fornalha, p: &Projeto, descricao: &str, destino
 async fn gerar_imagem_conceito(f: &Fornalha, p: &Projeto, prompt: &str, destino: &Path, seed: u64, quem: &str) -> Resultado<String> {
     let sem_placa = f.deteccao(false).await.principal().is_none();
     // 1º o ComfyUI (o motor de fluxos na placa da pessoa: NVIDIA, AMD ou processador), 2º o Ignis
-    let comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
+    let mut comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
+    if !comfy.conectado && crate::comfyui::instalacao(&f.paths).is_some() {
+        // instalado pela Fornalha e fechado: abre sozinho
+        if let Ok(e) = crate::comfyui::abrir(&f.paths, f.porta_comfyui()).await {
+            comfy = e;
+        }
+    }
     let modelo_comfy = if comfy.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
     let (png, modelo, parametros) = if let Some(m) = modelo_comfy {
         let lado = if sem_placa { 512 } else { 1024 };

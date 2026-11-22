@@ -462,7 +462,9 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
             let comfyui = {
                 let e = crate::comfyui::consultar(f.porta_comfyui()).await;
                 let modelo = if e.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
-                json!({"estado": e, "modelo_de_imagem": modelo})
+                let caminho = crate::comfyui::caminho_para(&f.deteccao(false).await);
+                json!({"estado": e, "modelo_de_imagem": modelo, "instalacao": crate::comfyui::estado_instalacao(&f.paths),
+                       "caminho": caminho})
             };
             let sugestao = f.sugestao().await;
             let mut programas = serde_json::Map::new();

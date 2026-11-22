@@ -193,12 +193,14 @@ pub async fn modelo_de_imagem(porta: u16) -> Option<ModeloImagem> {
     let mut difusao = modelos(porta, "diffusion_models").await;
     let mut texto = modelos(porta, "text_encoders").await;
     let vae = modelos(porta, "vae").await;
-    // sem o nó do GGUF, os arquivos .gguf não servem
-    if !tem_no(porta, "UnetLoaderGGUF").await {
-        difusao.retain(|n| !n.ends_with(".gguf"));
+    // os .gguf o nó ComfyUI-GGUF lista em pastas próprias ("unet_gguf", "clip_gguf"); sem o nó, não servem
+    difusao.retain(|n| !n.ends_with(".gguf"));
+    texto.retain(|n| !n.ends_with(".gguf"));
+    if tem_no(porta, "UnetLoaderGGUF").await {
+        difusao.extend(modelos(porta, "unet_gguf").await.into_iter().filter(|n| n.ends_with(".gguf")));
     }
-    if !tem_no(porta, "CLIPLoaderGGUF").await {
-        texto.retain(|n| !n.ends_with(".gguf"));
+    if tem_no(porta, "CLIPLoaderGGUF").await {
+        texto.extend(modelos(porta, "clip_gguf").await.into_iter().filter(|n| n.ends_with(".gguf")));
     }
     escolher_imagem(&difusao, &texto, &vae, vram < 13_000)
 }
@@ -287,6 +289,194 @@ pub async fn gerar_imagem(porta: u16, prompt: &str, largura: u32, altura: u32, s
     Ok((png, json!({"modelo": m, "segundos": inicio.elapsed().as_secs_f64(), "largura": largura, "altura": altura, "passos": passos})))
 }
 
+// ------------------------------------------------------------------ instalação e abertura
+
+/// Como o ComfyUI roda nesta máquina (escolhido pela placa).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Caminho {
+    /// "nvidia" (CUDA), "rocm" (AMD no Linux), "directml" (AMD/Intel no Windows) ou "cpu"
+    pub backend: &'static str,
+    /// HSA_OVERRIDE_GFX_VERSION para as AMD RDNA2 menores no ROCm (RX 6600/6700)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hsa: Option<&'static str>,
+    /// "gguf" (quantizado, cabe em 8 GB e no processador) ou "inteiro"
+    pub modelos: &'static str,
+    pub motivo: String,
+}
+
+/// Escolhe o caminho do ComfyUI para a placa principal da máquina.
+pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
+    use crate::gpu::Vendor;
+    let windows = det.sistema.familia == crate::distro::Familia::Windows;
+    let Some(g) = det.principal() else {
+        return Caminho {
+            backend: "cpu",
+            hsa: None,
+            modelos: "gguf",
+            motivo: "sem placa de vídeo: no processador (lento, mas funciona)".into(),
+        };
+    };
+    let vram = g.vram_total_mb.unwrap_or(0);
+    let modelos = if vram >= 16_000 { "inteiro" } else { "gguf" };
+    match g.fabricante {
+        Vendor::Nvidia => Caminho { backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome) },
+        Vendor::Amd if windows => Caminho {
+            backend: "directml",
+            hsa: None,
+            modelos: "gguf",
+            motivo: format!("{} no Windows pelo DirectML (funciona em qualquer AMD com DirectX 12, inclusive a RX 580)", g.nome),
+        },
+        Vendor::Amd => {
+            let gfx = g.alvo_gfx.as_deref().unwrap_or("");
+            let hsa = matches!(gfx, "gfx1031" | "gfx1032" | "gfx1033" | "gfx1034" | "gfx1035" | "gfx1036").then_some("10.3.0");
+            let rocm =
+                gfx == "gfx1030" || hsa.is_some() || gfx.starts_with("gfx110") || gfx.starts_with("gfx115") || gfx.starts_with("gfx120");
+            if rocm {
+                Caminho { backend: "rocm", hsa, modelos, motivo: format!("{} ({gfx}) pelo ROCm", g.nome) }
+            } else {
+                Caminho {
+                    backend: "cpu",
+                    hsa: None,
+                    modelos: "gguf",
+                    motivo: format!(
+                        "{} ({}) não tem ROCm no Linux: o ComfyUI roda no processador; para imagem rápida nesta placa use o Ignis pelo Vulkan",
+                        g.nome,
+                        if gfx.is_empty() { "alvo desconhecido" } else { gfx }
+                    ),
+                }
+            }
+        }
+        Vendor::Intel if windows => {
+            Caminho { backend: "directml", hsa: None, modelos: "gguf", motivo: format!("{} pelo DirectML", g.nome) }
+        }
+        _ => Caminho { backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome) },
+    }
+}
+
+/// Pasta da instalação do ComfyUI feita pela Fornalha.
+pub fn pasta(paths: &crate::paths::Paths) -> std::path::PathBuf {
+    paths.data_dir.join("comfyui")
+}
+
+/// O que o instalador gravou (`instalacao.json`): como abrir o ComfyUI.
+pub fn instalacao(paths: &crate::paths::Paths) -> Option<Value> {
+    let arq = pasta(paths).join("instalacao.json");
+    serde_json::from_str(&std::fs::read_to_string(arq).ok()?).ok()
+}
+
+/// Situação da instalação, para a janela e o get_status.
+pub fn estado_instalacao(paths: &crate::paths::Paths) -> Value {
+    let p = pasta(paths);
+    let log: Vec<String> = std::fs::read_to_string(p.join("instalacao.log"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.starts_with('['))
+        .map(String::from)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .take(6)
+        .rev()
+        .collect();
+    json!({"instalado": instalacao(paths).is_some(), "instalando": p.join("instalando").is_file(), "pasta": p, "log": log,
+           "instalacao": instalacao(paths)})
+}
+
+async fn comando_de_instalacao(
+    paths: &crate::paths::Paths,
+    c: &Caminho,
+    porta: u16,
+) -> Resultado<(tokio::process::Command, std::path::PathBuf)> {
+    let python = crate::workers::python_do_sistema().await.ok_or_else(|| {
+        Erro::novo("python_ausente", "Precisa do Python 3.10 ou mais novo instalado (python.org) para instalar o ComfyUI.")
+    })?;
+    let scripts = crate::workers::preparar_scripts(&paths.data_dir)?;
+    let destino = pasta(paths);
+    std::fs::create_dir_all(&destino).map_err(|e| Erro::io(&destino, e))?;
+    let mut cmd = tokio::process::Command::new(&python);
+    cmd.arg(scripts.join("instalar_comfyui.py")).arg(&destino).arg(c.backend).args(["--modelos", c.modelos, "--porta", &porta.to_string()]);
+    if let Some(h) = c.hsa {
+        cmd.args(["--hsa", h]);
+    }
+    Ok((cmd, destino))
+}
+
+/// Instala aqui mesmo, mostrando o progresso no terminal (linha de comando).
+pub async fn instalar_e_esperar(paths: &crate::paths::Paths, c: &Caminho, porta: u16) -> Resultado<Value> {
+    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta).await?;
+    let ok = cmd.status().await.map(|s| s.success()).unwrap_or(false);
+    if !ok {
+        return Err(Erro::novo(
+            "instalacao_falhou",
+            format!("A instalação do ComfyUI falhou: veja {}", destino.join("instalacao.log").display()),
+        ));
+    }
+    Ok(estado_instalacao(paths))
+}
+
+/// Começa a instalação em segundo plano (vários GB). O progresso fica em `<pasta>/instalacao.log`.
+pub async fn instalar(paths: &crate::paths::Paths, c: &Caminho, porta: u16) -> Resultado<Value> {
+    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta).await?;
+    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut filho = cmd.spawn().map_err(|e| Erro::novo("instalacao_falhou", format!("Não consegui abrir o instalador do ComfyUI: {e}")))?;
+    std::fs::write(destino.join("instalando"), crate::util::agora_iso()).ok();
+    let marca = destino.join("instalando");
+    tokio::spawn(async move {
+        let _ = filho.wait().await;
+        let _ = std::fs::remove_file(marca);
+    });
+    Ok(json!({"iniciado": true, "caminho": c, "log": destino.join("instalacao.log")}))
+}
+
+/// Abre o ComfyUI instalado pela Fornalha (se ainda não estiver aberto) e espera ele responder.
+pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoComfy> {
+    let e = consultar(porta).await;
+    if e.conectado {
+        return Ok(e);
+    }
+    let inst =
+        instalacao(paths).ok_or_else(|| Erro::novo("comfyui_ausente", "O ComfyUI não está instalado (Máquina → ComfyUI → Instalar)."))?;
+    let python = inst["python"].as_str().unwrap_or_default();
+    let dir = inst["pasta_comfyui"].as_str().unwrap_or_default();
+    let mut args: Vec<String> = inst["argumentos"].as_array().into_iter().flatten().filter_map(|a| a.as_str().map(String::from)).collect();
+    if let Some(i) = args.iter().position(|a| a == "--port") {
+        if let Some(v) = args.get_mut(i + 1) {
+            *v = porta.to_string();
+        }
+    }
+    let log = std::fs::File::create(pasta(paths).join("comfyui.log")).map_err(|e| Erro::io(&pasta(paths), e))?;
+    let mut cmd = tokio::process::Command::new(python);
+    cmd.args(&args)
+        .current_dir(dir)
+        .stdin(std::process::Stdio::null())
+        .stdout(log.try_clone().map_err(|e| Erro::io(&pasta(paths), e))?)
+        .stderr(log);
+    for (k, v) in inst["ambiente"].as_object().into_iter().flatten() {
+        if let Some(v) = v.as_str() {
+            cmd.env(k, v);
+        }
+    }
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd.kill_on_drop(false);
+    cmd.spawn().map_err(|e| Erro::novo("comfyui_fora", format!("Não consegui abrir o ComfyUI: {e}")))?;
+    let inicio = Instant::now();
+    while inicio.elapsed() < Duration::from_secs(180) {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let e = consultar(porta).await;
+        if e.conectado {
+            return Ok(e);
+        }
+    }
+    Err(Erro::novo("comfyui_fora", "O ComfyUI não respondeu em 3 minutos depois de aberto (veja comfyui.log na pasta dele)."))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -324,6 +514,55 @@ mod testes {
         let grande = escolher_imagem(&d, &t, &v, false).unwrap();
         assert_eq!(grande.difusao, "z_image_turbo_bf16.safetensors");
         assert!(!grande.texto_gguf);
+    }
+
+    fn deteccao(
+        familia: crate::distro::Familia,
+        vendor: crate::gpu::Vendor,
+        nome: &str,
+        vram: u64,
+        gfx: Option<&str>,
+    ) -> crate::gpu::Detection {
+        let g = crate::gpu::Gpu {
+            fabricante: vendor,
+            nome: nome.to_string(),
+            pci_dispositivo: None,
+            vram_total_mb: Some(vram),
+            vram_livre_mb: None,
+            driver: None,
+            versao_driver: None,
+            alvo_gfx: gfx.map(String::from),
+            integrada: false,
+            fontes: vec![],
+        };
+        crate::gpu::Detection {
+            sistema: crate::distro::Sistema { familia, nome: String::new(), versao: None, flatpak: false, appimage: false },
+            arq: "x86_64".into(),
+            placas: vec![g],
+            ram_total_mb: 16000,
+            ram_livre_mb: 8000,
+            libs: Default::default(),
+            kfd_acessivel: false,
+            ferramentas: vec![],
+            fontes_brutas: Default::default(),
+        }
+    }
+
+    #[test]
+    fn caminho_pela_placa() {
+        use crate::distro::Familia;
+        use crate::gpu::Vendor;
+        let rx580_win = caminho_para(&deteccao(Familia::Windows, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
+        assert_eq!((rx580_win.backend, rx580_win.modelos), ("directml", "gguf"));
+        let rx580_linux = caminho_para(&deteccao(Familia::Fedora, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
+        assert_eq!(rx580_linux.backend, "cpu");
+        assert!(rx580_linux.motivo.contains("Vulkan"));
+        let rx6600 = caminho_para(&deteccao(Familia::Fedora, Vendor::Amd, "Radeon RX 6600", 8176, Some("gfx1032")));
+        assert_eq!((rx6600.backend, rx6600.hsa), ("rocm", Some("10.3.0")));
+        let rx9060 = caminho_para(&deteccao(Familia::Arch, Vendor::Amd, "Radeon RX 9060 XT", 16304, Some("gfx1200")));
+        assert_eq!((rx9060.backend, rx9060.hsa, rx9060.modelos), ("rocm", None, "inteiro"));
+        let rtx = caminho_para(&deteccao(Familia::Windows, Vendor::Nvidia, "GeForce RTX 3060", 12288, None));
+        assert_eq!((rtx.backend, rtx.modelos), ("nvidia", "gguf"));
     }
 
     #[test]

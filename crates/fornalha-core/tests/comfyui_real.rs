@@ -34,6 +34,10 @@ async fn comfyui_de_verdade_gera_referencias() {
     let e = comfyui::consultar(porta).await;
     assert!(e.conectado, "o ComfyUI não respondeu na porta {porta}");
     eprintln!("ComfyUI {:?} em {:?}", e.versao, e.dispositivos);
+    for pasta in ["diffusion_models", "text_encoders", "vae", "unet_gguf", "clip_gguf"] {
+        eprintln!("{pasta}: {:?}", comfyui::modelos(porta, pasta).await);
+    }
+    eprintln!("nós GGUF: {} {}", comfyui::tem_no(porta, "UnetLoaderGGUF").await, comfyui::tem_no(porta, "CLIPLoaderGGUF").await);
     let m = comfyui::modelo_de_imagem(porta).await.expect("modelo de imagem instalado (Z-Image Turbo)");
     eprintln!("modelo: {m:?}");
     let lado: u32 = std::env::var("FORNALHA_TESTE_LADO").ok().and_then(|v| v.parse().ok()).unwrap_or(512);

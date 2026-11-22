@@ -20,6 +20,8 @@ Uso:
   fornalha-cli pacotes                     pacotes de conteúdo (MakeHuman, animações, materiais)
   fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
+  fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|directml|cpu]
+                                           ComfyUI local na placa desta máquina
   fornalha-cli versao
 
 A variável FORNALHA_HOME coloca configuração e projetos numa pasta só.";
@@ -110,6 +112,38 @@ async fn main() {
                 }
             }
             imprimir(workers::instalar_e_esperar(&paths, w, args.iter().any(|a| a == "--pular-pesos")).await)
+        }
+        Some("comfyui") => {
+            use fornalha_core::comfyui;
+            let f = Fornalha::new(paths.clone());
+            let opcao = |nome: &str| args.iter().position(|a| a == nome).and_then(|i| args.get(i + 1)).cloned();
+            let mut c = comfyui::caminho_para(&f.deteccao(false).await);
+            if let Some(m) = opcao("--modelos") {
+                c.modelos = match m.as_str() {
+                    "inteiro" => "inteiro",
+                    "nenhum" => "nenhum",
+                    _ => "gguf",
+                };
+            }
+            if let Some(b) = opcao("--backend") {
+                c.backend = match b.as_str() {
+                    "nvidia" => "nvidia",
+                    "rocm" => "rocm",
+                    "directml" => "directml",
+                    _ => "cpu",
+                };
+            }
+            match args.get(1).map(String::as_str) {
+                Some("instalar") => {
+                    eprintln!("Instalando o ComfyUI: {} ({}), modelos {}", c.backend, c.motivo, c.modelos);
+                    imprimir(comfyui::instalar_e_esperar(&paths, &c, f.porta_comfyui()).await)
+                }
+                Some("abrir") => imprimir(comfyui::abrir(&paths, f.porta_comfyui()).await.map(|e| serde_json::json!(e))),
+                _ => {
+                    let e = comfyui::consultar(f.porta_comfyui()).await;
+                    imprimir(Ok(serde_json::json!({"estado": e, "caminho": c, "instalacao": comfyui::estado_instalacao(&paths)})))
+                }
+            }
         }
         Some("versao" | "--version" | "-V") => {
             println!("fornalha-cli {}", fornalha_core::consts::APP_VERSION);

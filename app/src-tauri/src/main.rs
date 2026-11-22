@@ -272,6 +272,24 @@ mod nucleo {
         }
     }
 
+    /// Instalar ou abrir o ComfyUI: só a pessoa, pela janela (downloads de vários GB).
+    async fn comfyui(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        use fornalha_core::comfyui;
+        let f = &c.fornalha;
+        let r = match v["acao"].as_str() {
+            Some("instalar") => {
+                let det = f.deteccao(false).await;
+                comfyui::instalar(&f.paths, &comfyui::caminho_para(&det), f.porta_comfyui()).await
+            }
+            Some("abrir") => comfyui::abrir(&f.paths, f.porta_comfyui()).await.map(|e| json!(e)),
+            _ => return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Ação desconhecida."}}))).into_response(),
+        };
+        match r {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
     /// Baixar um pacote de conteúdo CC0: só a pessoa, pela janela (fala com sites de fora).
     async fn baixar_pacote(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
         use fornalha_core::pacotes::{self, Pacote};
@@ -298,6 +316,7 @@ mod nucleo {
                     .route("/janela/ajustes", post(definir_ajustes))
                     .route("/janela/modelo-de-placa", post(modelo_de_placa))
                     .route("/janela/pacote", post(baixar_pacote))
+                    .route("/janela/comfyui", post(comfyui))
                     .with_state(canal),
             )
             .layer(middleware::from_fn_with_state(senha, checar_senha));

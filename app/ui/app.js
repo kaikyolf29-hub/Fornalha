@@ -626,6 +626,7 @@ async function pintarMaquina() {
       <div class="lado">${p.achado ? "" : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`}<button class="botao" data-programa="${id}">Escolher</button></div></div>`;
   }).join(""));
   pintarModelosDePlaca(a.cuda);
+  pintarComfyUI();
   pintarPacotes();
   $("nivel-maquina").value = (info && info.nivel_da_maquina) || "auto";
   const emUso = niveis.nivel_em_uso;
@@ -673,6 +674,44 @@ function pintarModelosDePlaca(cuda) {
   clearTimeout(vigiaModelos);
   if (lista.some((m) => m.instalando)) vigiaModelos = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
 }
+let vigiaComfy = null;
+function pintarComfyUI() {
+  const c = (estado && estado.comfyui) || {};
+  const e = c.estado || {};
+  const inst = c.instalacao || {};
+  const cam = c.caminho || {};
+  const placas = (e.dispositivos || []).map((d) => d.nome).filter(Boolean).join(", ");
+  const situacao = e.conectado ? `Aberto${e.versao ? " (" + e.versao + ")" : ""}${placas ? " — " + placas : ""}`
+    : inst.instalando ? "Instalando…" : inst.instalado ? "Instalado (fechado)" : "Não instalado";
+  const modelo = c.modelo_de_imagem ? `Imagem: ${c.modelo_de_imagem.id}` : e.conectado ? "Sem modelo de imagem de licença comercial instalado" : "";
+  const ultima = inst.log && inst.log.length ? inst.log[inst.log.length - 1] : "";
+  const botoes = inst.instalando ? "" : !inst.instalado
+    ? `<button class="botao" data-comfy="instalar">Instalar</button>`
+    : e.conectado ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`;
+  pinta($("comfyui"), `<div class="item"><div><strong>${esc(situacao)}</strong>`
+    + `<small>${esc(cam.backend ? "Caminho nesta máquina: " + cam.backend + " — " + (cam.motivo || "") : "")}</small>`
+    + (modelo ? `<small>${esc(modelo)}</small>` : "")
+    + (ultima && (inst.instalando || !inst.instalado) ? `<small class="mono">${esc(ultima)}</small>` : "")
+    + `</div><div class="lado">${botoes}</div></div>`);
+  clearTimeout(vigiaComfy);
+  if (inst.instalando) vigiaComfy = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
+}
+$("comfyui").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-comfy]");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.comfy === "instalar") {
+      await api("POST", "/janela/comfyui", { acao: "instalar" });
+      mensagem("Instalação do ComfyUI começou (alguns GB). Dá para continuar usando a Fornalha.");
+    } else {
+      mensagem("Abrindo o ComfyUI…");
+      await api("POST", "/janela/comfyui", { acao: "abrir" });
+      mensagem("ComfyUI aberto.");
+    }
+  } catch (err) { mensagem(err.message, "erro"); }
+  carregar("maquina");
+});
 $("modelos-placa").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-modelo]");
   if (!b) return;

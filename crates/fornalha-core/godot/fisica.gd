@@ -33,6 +33,7 @@ static func esqueleto(no: Node) -> Skeleton3D:
 
 ## Prepara a física do personagem. Devolve o simulador do ragdoll (ou null).
 static func preparar(modelo: Node3D, corpo: PhysicsBody3D) -> PhysicalBoneSimulator3D:
+	materiais(modelo)
 	var sk := esqueleto(modelo)
 	if sk == null:
 		return null
@@ -104,3 +105,38 @@ static func cair(sim: PhysicalBoneSimulator3D, anim: AnimationPlayer, empurrao :
 			if pb is PhysicalBone3D and String(pb.bone_name) in ["spine_03", "pelvis"]:
 				pb.apply_central_impulse(empurrao)
 	return true
+
+
+## Materiais especiais: os cards de cabelo ganham o shader de cabelo (hash, brilho anisotrópico), o
+## couro cabeludo vira hash e a pele ganha espalhamento sob a superfície (orelha contra a luz).
+static func materiais(no: Node) -> void:
+	var mi := no as MeshInstance3D
+	if mi != null and mi.mesh != null:
+		for i in mi.mesh.get_surface_count():
+			var mat: Material = mi.mesh.surface_get_material(i)
+			if mat == null:
+				continue
+			var nome := String(mat.resource_name)
+			var base := mat as BaseMaterial3D
+			if nome.contains("cabelo_cards") and base != null:
+				var sm := ShaderMaterial.new()
+				sm.shader = load("res://Scripts/fornalha/cabelo.gdshader")
+				sm.set_shader_parameter("atlas", base.albedo_texture)
+				if base.ao_texture:
+					sm.set_shader_parameter("dados", base.ao_texture)
+				mi.set_surface_override_material(i, sm)
+				mi.lod_bias = 8.0  # a simplificação de longe não pode comer as mechas finas
+			elif nome.contains("couro_cabeludo") and base != null:
+				# camada 0: fade pontilhado na linha do cabelo (sem erro de ordem com os cards)
+				var cc := ShaderMaterial.new()
+				cc.shader = load("res://Scripts/fornalha/couro_cabeludo.gdshader")
+				cc.set_shader_parameter("textura", base.albedo_texture)
+				mi.set_surface_override_material(i, cc)
+			elif nome.ends_with("_pele") and base != null:
+				var pele: BaseMaterial3D = base.duplicate()
+				pele.subsurf_scatter_enabled = true
+				pele.subsurf_scatter_strength = 0.35
+				pele.subsurf_scatter_skin_mode = true
+				mi.set_surface_override_material(i, pele)
+	for f in no.get_children():
+		materiais(f)

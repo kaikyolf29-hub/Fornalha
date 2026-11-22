@@ -143,11 +143,19 @@ Feita por um agente lendo as páginas de licença (nada baixado nem executado). 
 - **Nuvem:** Meshy 7.1 (API a partir de US$ 20/mês; no pago o modelo é do cliente), Rodin Gen-2.5
   (até 10M de faces; texto da licença tem um campo vazio). Depende da decisão abaixo.
 
+## Plano em 3 etapas (21/11/2026)
+O caminho até o nível das referências está em [docs/PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md), e a
+régua técnica em [docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md) (enviada pelo criador).
+**Etapa 1 em andamento:** cabelo AAA em cards (penteado fio a fio como fonte), depois look-dev/QA,
+rosto/olhos, corpo/roupa, armadura, movimento base, ferramenta por partes, ComfyUI/APIs/app do primo.
+
 ## Decisões que são do criador
-- **Modo nuvem (pendente):** Meshy/Rodin/Tripo dariam o detalhe mais alto hoje, mas quebram a regra
-  "a Fornalha só fala com 127.0.0.1", gastam créditos com a chave da pessoa e a licença depende do
-  plano. Se o criador autorizar, entra como opção desligada por padrão, com a chave digitada na janela,
-  preço e licença mostrados antes de cada geração e recibo.
+- **APIs de geração (decidido em 21/11):** o criador autorizou APIs (Gemini imagem, Rodin, Meshy,
+  Tripo e outras do plano). Entram como opção desligada por padrão, com a chave digitada na janela,
+  preço e licença mostrados antes de cada geração e recibo. Continua sem telemetria.
+- **App do primo:** o criador quer que a Fornalha aproveite o que o app do primo faz melhor (sem
+  copiar). O zip no Drive tem 575 MB e não passa pela ferramenta do Drive: falta um zip só com o
+  código-fonte ou um repositório. Código só entra com a permissão do primo.
 - **Rede**: o CLAUDE.md diz que a Fornalha só fala com 127.0.0.1. Os pacotes CC0 e os modelos de placa
   baixam de sites de fora **só quando você clica** (nada é enviado). Se preferir, eles podem ir dentro
   do instalador (fica ~500 MB maior).
@@ -174,6 +182,15 @@ Turbo), reserva da placa, `uso_comercial` nos modelos, aceleradores em `/motor/e
    (a pesquisa achou FLUX.2 klein Apache 2.0 e Marigold OpenRAIL++, conferir no Ignis).
 6. **Placas AMD:** rodar a imagem (Z-Image ou a do pedido 4) na RX 580 e na RX 6600 por Vulkan, e na
    RX 9060 XT 16 GB pelo que for mais rápido, com o mesmo endpoint.
+
+## Pedidos para a Erethea Engine (o criador leva para o chat da Erethea)
+1. **Cabelo fio a fio nativo** (fitas viradas para a câmera ou curvas, com alfa por hash e brilho
+   anisotrópico), para a Fornalha mandar o penteado direto em vez de cards no nível Máximo.
+2. **SSS de pele melhor** (perfil de espalhamento por canal e mapa de espessura) e sombra de contato.
+3. **Geometria virtual / LOD contínuo** (estilo Nanite) para cenário denso (castelos, vilas).
+4. **Terreno nativo** compatível com Terrain3D (clipmap, 32 materiais, detiling, triplanar).
+5. **Upscaling (FSR) e efeitos de compositor** prontos (névoa de altura, raios de luz).
+A Fornalha usa o que a Erethea tiver e cai para o caminho da Godot quando não houver.
 
 ## Notas para a Erethea Engine
 A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.exe` em

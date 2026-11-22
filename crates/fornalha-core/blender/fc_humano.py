@@ -543,7 +543,9 @@ def criar_humano(dados, assets, ficha):
         ("eyelashes", ficha.get("cilios", "eyelashes01"), True, None),
         ("teeth", "teeth_base", False, None),
     ]
-    if ficha.get("cabelo", "short02") not in (None, "", "nenhum"):
+    res_pele = int(ficha.get("textura_pele") or 0)
+    tem_cabelo = ficha.get("cabelo", "short02") not in (None, "", "nenhum")
+    if tem_cabelo and not res_pele:
         acessorios.append(("hair", ficha.get("cabelo", "short02"), True, ficha.get("cor_cabelo")))
     for roupa in ficha.get("roupas_makehuman", []):
         acessorios.append(("clothes", roupa, False, None))
@@ -569,7 +571,6 @@ def criar_humano(dados, assets, ficha):
 
         r = ficha["roupa"]
         pecas.extend(fc_roupa.vestir(h, nome, r.get("estilo", "campones"), r.get("cores", {}), capa=r.get("capa", True)))
-    res_pele = int(ficha.get("textura_pele") or 0)
     if res_pele and corpo.data.polygons:
         # pele em alta: poros, rugas pela idade, barba rala e vermelhidão assados em cor/rugosidade/normal
         import fc_pele
@@ -585,6 +586,23 @@ def criar_humano(dados, assets, ficha):
         sub.levels = 0
         sub.render_levels = 2
         sub.quality = 3
+        if tem_cabelo:
+            # cabelo em cards (mechas com textura de fios), no lugar do "capacete" do pacote
+            import fc_cabelo
+
+            g = corpo.vertex_groups.get("head")
+            peso = np.zeros(len(corpo.data.vertices))
+            if g is not None:
+                for v in corpo.data.vertices:
+                    for ge in v.groups:
+                        if ge.group == g.index:
+                            peso[v.index] = ge.weight
+            pontos = fc_pele.pontos_do_rosto(corpo, olhos, dentes)
+            cor_cab = ficha.get("cor_cabelo") or "#3b2a1e"
+            # padrão AAA (bíblia técnica, seção 4): o penteado fio a fio é a fonte; o render e a
+            # engine recebem o couro cabeludo com fade e os cards em 3 camadas com o atlas de mechas
+            pecas.extend(fc_cabelo.cabelo_em_cards(nome, corpo, pontos, peso, cor_cab, fc_cabelo.estilo_de(ficha.get("cabelo")), arm,
+                                                   escala_n=1.0 if res_pele >= 4096 else 0.7))
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":
         import fc_armas_pbr

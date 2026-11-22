@@ -83,6 +83,11 @@ def tarefa_humano(t):
 
         acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"))
     saida = t["saida"]
+    # QA automático (bíblia técnica 9.3): o resultado vai junto, para a janela e o agente verem
+    import fc_lookdev
+
+    qa = fc_lookdev.qa([arm] + pecas, arm, corpo=pecas[0] if pecas else None,
+                       cabelo=[o for o in pecas if o.name.endswith("_hair") or "couro_cabeludo" in o.name] or None)
     tamanho = c.exportar_glb(saida, [arm] + pecas, animacoes=bool(acoes))
     arquivos = {"modelo": saida}
     arquivos.update(previas(t, pecas, saida, arm if acoes else None, acoes))
@@ -97,6 +102,7 @@ def tarefa_humano(t):
         arm.data.pose_position = pose
     st = estatisticas(pecas, arm, acoes)
     st["pecas"] = [o.name for o in pecas]
+    st["qa"] = qa
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 

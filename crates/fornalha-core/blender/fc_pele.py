@@ -261,10 +261,28 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     # ---------- cor
     base = _redimensionar(_pixels(base_img), res) if base_img is not None else np.full((res, res, 3), (0.8, 0.62, 0.52), dtype=np.float32)
     if ficha.get("cabelo") in (None, "", "nenhum"):
+        # careca: tira os pontinhos de cabelo raspado que a textura do MakeHuman tem no couro
         couro = cabeca * sstep(oz + 0.045 * s, oz + 0.075 * s, z)
         couro = np.maximum(couro, cabeca * sstep(oy + 0.03 * s, oy + 0.07 * s, y) * sstep(oz - 0.01 * s, oz + 0.02 * s, z))
         liso = borrar(base, round(14 * px))
         base = base * (1 - couro[..., None]) + liso * couro[..., None]
+    cc = np.zeros((res, res), dtype=np.float32)
+    if ficha.get("cabelo") not in (None, "", "nenhum"):
+        # embaixo do cabelo o couro fica da cor do cabelo, com pontinhos de fio curto (como nas
+        # laterais raspadas): não aparece pele clara entre os fios
+        import fc_cabelo
+
+        irregular = 0.5 * _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(2 * px)))
+        cc = fc_cabelo.mascara_couro(x, y, z, P, irregular, suave=3.0) * mask
+        cc = borrar(cc.astype(np.float32), round(4 * px))
+        # degradê: mais denso no alto, mais ralo perto da linha (como cabelo cortado)
+        cc = np.clip(cc * 1.4, 0, 1) * (0.7 + 0.3 * sstep(0.2, 0.9, cc))
+        # na testa os fios já cobrem a linha: pintura bem mais leve ali (sem faixa escura)
+        cc = cc * (0.35 + 0.65 * sstep(oy + 0.045 * s, oy + 0.08 * s, y))
+        ccab = np.array([int((ficha.get("cor_cabelo") or "#3b2a1e").lstrip("#")[i:i + 2], 16) / 255.0 for i in (0, 2, 4)], dtype=np.float32)
+        pontinhos = np.clip(ruido(1) + 0.3, 0, 1)[..., None]
+        fio_curto = ccab * (0.3 + 0.3 * pontinhos)
+        base = base * (1 - 0.6 * cc[..., None]) + fio_curto * 0.6 * cc[..., None]
     lin = base ** 2.2
     # pele com menos "plástico": um pouco mais escura e quente, com variação de tom em manchas grandes
     var = _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(40 * px)))[..., None]
@@ -301,6 +319,7 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
 
     # ---------- rugosidade
     rug = 0.5 - 0.14 * zona_t - 0.16 * labios + 0.1 * poros * dens + 0.12 * np.clip(rugas / 0.0006, 0, 1) + 0.06 * (1 - cabeca)
+    rug = rug + 0.3 * cc  # couro embaixo do cabelo fosco (não brilha entre os fios)
     rug = np.clip(rug, 0.2, 0.9).astype(np.float32)
 
     # ---------- normal a partir do relevo (texel em metros)
@@ -320,14 +339,16 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
             _imagem(f"{nome}_pele_normal", nor, True))
 
 
-def _imagem(nome, arr, dados):
+def _imagem(nome, arr, dados, alfa=False):
     h, w = arr.shape[:2]
-    img = bpy.data.images.new(nome, w, h, alpha=False)
+    img = bpy.data.images.new(nome, w, h, alpha=alfa)
     if dados:
         img.colorspace_settings.name = "Non-Color"
     rgba = np.ones((h, w, 4), dtype=np.float32)
     if arr.ndim == 2:
         rgba[..., 0] = rgba[..., 1] = rgba[..., 2] = arr
+    elif arr.shape[2] == 4:
+        rgba[...] = arr
     else:
         rgba[..., :3] = arr
     # Blender guarda de baixo para cima

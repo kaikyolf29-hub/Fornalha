@@ -38,10 +38,16 @@ def mascara_couro(x, y, z, pontos, ruido=None, suave=1.0):
     testa = oz + 0.06 * s - 0.008 * s * _sstep(0.025 * s, 0.05 * s, ax)
     tempora = oz + 0.008 * s
     nuca = qz + 0.03 * s
-    linha = testa + (tempora - testa) * _sstep(0.03 * s, 0.06 * s, atras)
+    # têmpora em curva (entrada arredondada), não em canto reto
+    linha = testa + (tempora - testa) * _sstep(0.018 * s, 0.075 * s, atras)
     linha = linha + (nuca - linha) * _sstep(0.11 * s, 0.15 * s, atras)
-    cost = (_sstep(0.057 * s - 0.003 * s * k, 0.057 * s + 0.003 * s * k, ax) * _sstep(0.053 * s - 0.003 * s * k, 0.053 * s + 0.003 * s * k, atras)
-            * _sstep(0.074 * s + 0.004 * s * k, 0.074 * s - 0.004 * s * k, atras))
+    # costeleta: desce na frente da orelha e afina para baixo (a borda da frente recua com a altura)
+    fundo = tempora - (oz - 0.012 * s)
+    desce = np.clip((tempora - z) / max(fundo, 1e-6), 0.0, 1.0)
+    frente = 0.053 * s + 0.01 * s * desce
+    cost = (_sstep(0.057 * s - 0.003 * s * k, 0.057 * s + 0.003 * s * k, ax)
+            * _sstep(frente - 0.004 * s * k, frente + 0.004 * s * k, atras)
+            * _sstep(0.075 * s + 0.005 * s * k, 0.075 * s - 0.005 * s * k, atras))
     linha = linha * (1 - cost) + (oz - 0.012 * s) * cost
     if ruido is not None:
         linha = linha + ruido * 0.004 * s
@@ -442,8 +448,9 @@ def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None):
     liso = giro <= np.percentile(giro, 85)
     camadas = [
         # (n cards, largura min/max m, altura extra m, variantes, só borda?)
-        (int(440 * escala_n), (0.012, 0.024), 0.0, (0, 1, 2), False),
-        (int(620 * escala_n), (0.006, 0.012), 0.0011, (2, 3, 4, 5), False),
+        (int(520 * escala_n), (0.012, 0.024), 0.0, (0, 1, 2), False),
+        # camada do meio mais densa: o couro cabeludo aparecia entre as mechas no alto (manchas)
+        (int(860 * escala_n), (0.006, 0.012), 0.0011, (2, 3, 4, 5), False),
         (int(220 * escala_n), (0.0022, 0.0045), 0.0018, (6, 7), True),
     ]
     V, F, UV = [], [], []
@@ -588,7 +595,7 @@ def couro_cabeludo_cap(corpo, pontos, cor, res=2048, semente=9):
     base = np.array(c.cor_hex(cor), dtype=np.float32)
     # o que aparece entre os cards é a massa de cabelo na sombra: cor uniforme, um pouco mais escura que
     # as mechas e com pouco contraste (manchas grandes viravam "camuflagem" no topo e nos lados)
-    cor_img = base[None, None, :] * (0.7 + 0.08 * pontinhos[..., None])
+    cor_img = base[None, None, :] * (0.78 + 0.06 * pontinhos[..., None])
     # opaco por dentro (não aparece pele entre os cards); só a faixa de fora da linha esmaece, irregular
     borda_fina = np.clip(_sstep(0.12, 0.55, a) - 0.18 * (1.0 - a) * pontinhos, 0, 1)
     alfa = np.where(a > 0.55, 1.0, borda_fina)

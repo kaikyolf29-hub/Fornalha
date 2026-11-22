@@ -54,14 +54,18 @@ em 2 frequências, expressões (FACS/ICT FaceKit MIT).
 
 **1.4 Cabelo em camadas** — ✅ couro cabeludo (touca) com fade, cards em 3 camadas a partir de fios,
 atlas, normais da casca, shader Kajiya-Kay com transparência pontilhada (roda na RX 580 e no
-renderizador de compatibilidade) e brilho que quebra fio a fio. Falta: tirar as manchas dos lados e
-da nuca; normal map do cabelo; mapa ORM empacotado (R oclusão, G deslocamento do brilho, B id do fio)
+renderizador de compatibilidade) e brilho que quebra fio a fio; as manchas dos lados vinham da
+normal invertida no verso dos cards (corrigido no shader) e de pouca densidade (mais cards nas duas
+camadas de cima). Falta: o desenho da entrada (têmpora e costeleta ainda quadradas), o risco de
+brilho na nuca; normal map do cabelo; mapa ORM empacotado (R oclusão, G deslocamento do brilho, B id do fio)
 como no complemento; médio/comprido com gravidade e colisão nos ombros; barba e sobrancelha em cards;
 molas (spring bones) na cabeça.
 
 **1.5 Roupa e armadura** — ✅ pano simulado (sobreveste franzida, abas sobre as pernas, capa caindo,
-estampa que acompanha as dobras), armadura PBR com desgaste assado, elmos modelados. Falta: camadas
-separadas sem a pele atravessar (máscara em vez de apagar), costuras, sujeira/lama na barra, capuz,
+estampa que acompanha as dobras), armadura PBR com desgaste assado, elmos modelados; cada peça de
+pano ganha textura própria assada (lama que sobe da barra com borda irregular, pingos, sujeira nas
+dobras, bainha mais escura e rugosidade de acordo). Falta: camadas separadas sem a pele atravessar
+(máscara em vez de apagar), costuras, barra rasgada, capuz,
 o mesmo pano nas outras roupas (soldado, nobre, camponês), ombreira em lâminas, manopla articulada,
 gravuras e rebites em normal, validador PBR (aço 0,55–0,78; rugosidade 0,22–0,45).
 
@@ -82,8 +86,9 @@ IK também correndo, inertialization nas trocas, molas no cabelo e nas abas, mai
 pescoço em S, cabeça, mandíbula "jaw", cauda com 10 ossos, asas com membrana, patas digitígradas),
 malha por metaballs remalhada (~50 mil triângulos), asas recolhidas apontando os ossos para alvos,
 9 animações (parado, andar, correr, voar, rugir, atacar, chicotada, dano, morrer); entra pelo
-create_character com tipo "dragao" e roda na engine como inimigo. Falta: escamas de verdade
-(textura assada), membrana translúcida, IK em quatro patas, quadrúpede (lobo, leão), golem, aranha.
+create_character com tipo "dragao" e roda na engine como inimigo; escamas procedurais (Voronoi nas
+costas, placas no ventre) assadas em 4K (cor e normal). Falta: membrana translúcida, IK em quatro
+patas, quadrúpede (lobo, leão), golem, aranha; mandíbula nos personagens simples da Forja.
 
 **1.9 ComfyUI como motor geral e conexões** — ✅ conector (só 127.0.0.1), instalador pela placa
 (CUDA, ROCm, DirectML para a RX 580, processador), Máquina → ComfyUI, CLI, teste real no CI. Falta:

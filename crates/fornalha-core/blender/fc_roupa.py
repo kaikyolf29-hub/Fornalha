@@ -438,6 +438,10 @@ class Alfaiate:
         self.h.esconder_sob_roupa(sorted(self.cobertos))
 
 
+# peças de tecido (ganham sujeira/lama assada no nível de qualidade); couro e metal têm o caminho deles
+PECAS_DE_PANO = ("_sobreveste", "_capa", "_gibao", "_tunica", "_calcas_pano", "_manto", "_vestido", "_saia", "_capuz")
+
+
 def normalizar_pesos(obj, arm):
     """Pesos de osso de cada vértice somando 1 (a capa e as peças com dois ossos somavam mais ou menos)."""
     ossos = {b.name for b in arm.data.bones}
@@ -656,5 +660,15 @@ def vestir(h, prefixo, estilo, cores, capa=True, pano=False):
         a.casca("cinto", TRONCO, 0.02, 0.008, _mat(f"{prefixo}_cinto", "couro_escuro"), filtro=lambda co: abs(co[2] - (cintura - 0.02)) < 0.03, cobrir=0)
         if estilo == "mercenario":
             a.casca("couraca", ["spine_02", "spine_03"], 0.016, 0.006, _mat(f"{prefixo}_couraca", "couro", "#5a3a22"), limiar=0.6)
+    if a.pano:
+        # nível de qualidade: cada peça de pano ganha textura única com lama na barra, dobras e bainha
+        import fc_pano
+
+        for o in list(a.pecas):
+            if o.type == "MESH" and o.name.endswith(PECAS_DE_PANO):
+                try:
+                    fc_pano.assar_desgaste_pano(o, o.name, z_chao=0.0, res=2048 if o.name.endswith(("_sobreveste", "_capa")) else 1024)
+                except Exception as e:  # sem o desgaste, a peça fica com o tecido limpo
+                    print(f"[roupa] desgaste de {o.name} não assou: {e}")
     a.esconder_corpo()
     return a.pecas

@@ -112,7 +112,8 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         "tom_de_pele": pele,
         "cabelo": if pesado { "nenhum" } else if feminino { "long01" } else { "short02" },
         "cor_cabelo": ficha["cor_cabelo"],
-        "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(matches!(estilo, "cavaleiro" | "templario")),
+        // caimento simulado (sobreveste franzida no cinto, capa caindo pelas costas) junto com a pele em alta
+        "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(matches!(estilo, "cavaleiro" | "templario")), "pano": textura_pele > 0,
                   "cores": {"principal": ficha["cor_roupa"], "secundaria": ficha["cor_roupa_secundaria"], "detalhe": "#3d2a1c",
                             "emblema": if matches!(estilo, "cavaleiro" | "templario") && !inimigo { "cruz" } else { "nenhum" },
                             "textura": textura}},

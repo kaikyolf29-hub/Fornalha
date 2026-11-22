@@ -163,8 +163,9 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     rng = np.random.default_rng(semente)
     m = ficha.get("macro", {})
     idade = float(m.get("idade", 0.5))
-    a = float(np.clip((idade - 0.5) / 0.4, 0.0, 1.0))  # 0 jovem … 1 idoso
     homem = float(m.get("genero", 0.5)) >= 0.5
+    # 0 jovem … 1 idoso (no MakeHuman 0,5 ≈ 25 anos e 1,0 ≈ 90); rugas começam depois dos ~30
+    a = float(np.clip((idade - 0.6) / 0.33, 0.0, 1.0)) * (1.0 if homem else 0.75)
     barba = ficha.get("barba", "rala" if homem else "nenhuma")
     pos, mask, escala = rasterizar(corpo, res)
     P = pontos_do_rosto(corpo, olhos, dentes)

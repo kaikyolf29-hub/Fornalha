@@ -7,6 +7,27 @@
 > placas com escudo, rosto Snappers, velho careca, templário de jogo com manto) **sem placa NVIDIA**.
 > Ao chegar lá, a ferramenta fica parada até a NVIDIA; com ela, entra a IA de 3D.
 
+## Onde estamos (atualizado a cada bloco de trabalho)
+**Etapa 1** em andamento. Ordem de agora (decisão do criador, 22/11/2026):
+1. ✅ 1.1 look-dev/QA (base) · ✅ 1.3 pele 4K · 🟡 1.2 cabelo curto (ligado, sem tigela; falta tirar as
+   manchas dos lados/nuca e o comprido com gravidade)
+2. 🟡 **1.4 corpo e roupa** — feito: pano simulado de verdade (sobreveste franzida no cinto, abas que
+   caem sobre pernas e placas, capa caindo pelas costas, cruz que acompanha as dobras). Falta: costuras,
+   sujeira na barra, capuz, as outras roupas (soldado, nobre, camponês) com o mesmo pano.
+3. ⏭️ **1.8 ComfyUI** (adiantado): conector local na placa da pessoa (AMD inclusive), testado no
+   processador nas máquinas do GitHub; referência/textura/mapas melhores para tudo (personagem,
+   cenário, criaturas).
+4. 1.5 armadura · 1.6 movimento (agente em paralelo; falta juntar) · 1.7 por partes na janela.
+5. **Bateria do preset máximo**: personagem, dragão, monstro, zumbi (e os outros), com a folha
+   lado a lado com as referências.
+6. **Teste no computador do criador** (RX 580, Windows): ele baixa a versão de desktop ou abre uma
+   sessão no terminal com acesso; a Fornalha é baixada, instalada e testada lá.
+
+**Teto de qualidade** (criador, 22/11): RE4 Remake / Final Fantasy — vale a geração demorar horas se
+chegar lá. Estilos mais simples (PS2, PS1, medieval estilizado…) são escolha da pessoa.
+**Plataforma:** foco no **Windows** (instalador, testes, placa da pessoa); o Linux continua no CI, sem
+prioridade.
+
 Regras que valem nas 3 etapas:
 - **Um item por vez, por partes:** rosto → corpo → cabelo → roupa → armadura → arma (ou: corpo da
   criatura → pele/pelo → chifres/asas → movimento). Cada parte só passa depois do look-dev e da
@@ -37,8 +58,11 @@ Regras que valem nas 3 etapas:
 **1.2 Cabelo AAA** (em andamento)
 - Feito: penteado fio a fio colado no crânio de verdade (campo de distância), cards em 3 camadas,
   atlas de mechas, couro cabeludo com fade, normais da casca, shader com hash e Kajiya-Kay na Godot.
-- Falta: corrigir o couro cabeludo que sai branco na Godot e as falhas entre cards; perfil em "U"
-  real; mais estilos (risca, comprido, coque, barba cheia, sobrancelha em cards); fios soltos na linha.
+- Feito também: transparência pontilhada (funciona até no renderizador de compatibilidade), brilho
+  calibrado, couro sem degrau, QA de cobertura 100%. O curto já usa o pipeline novo.
+- Falta: cabelo médio/comprido com risca, queda pela gravidade e colisão nos ombros e costas (até lá,
+  esses estilos usam o cabelo do pacote); coque, rabo, barba cheia e sobrancelha em cards; fio a fio
+  com física como opção para placa forte (pedido à Erethea).
 
 **1.3 Rosto e pele**
 - Feito: pele 4K com poros, rugas por idade, barba rala, vermelhidão; olho natural.
@@ -46,10 +70,14 @@ Regras que valem nas 3 etapas:
   pálpebra), mapa de espessura (SSS nas orelhas), penugem (sheen), detalhe de poros em 2 frequências,
   rugosidade dual-lobe; expressões (blendshapes FACS do MakeHuman/ICT FaceKit MIT).
 
-**1.4 Corpo e roupa**
-- Sem recorte serrilhado (máscara em vez de apagar faces), roupa com caimento de pano simulado no
-  Blender e assado (sobreveste, manto, capuz), costuras, couro com grão, cintos com fivelas,
-  sujeira/lama perto dos pés, barra rasgada; capuz do templário.
+**1.4 Corpo e roupa** (em andamento)
+- Feito (fc_pano): pano simulado no Blender e aplicado na malha (no jogo não pesa nada): abas da
+  sobreveste mais largas que a cintura, franzidas pelo cinto, caindo sobre um colisor liso (o "barbante
+  esticado" sobre coxas e joelheiras), capa que nasce fora de tudo e cai pelas costas; cada lado da aba
+  segue a sua coxa (não atravessa na animação); desenhos recortados pela posição do pano antes de cair.
+- Falta: sem recorte serrilhado (máscara em vez de apagar faces), costuras, couro com grão, sujeira/lama
+  perto dos pés, barra rasgada, capuz do templário; o mesmo pano nas outras roupas; molas na Godot
+  para as abas (como a capa).
 
 **1.5 Armadura no nível das referências**
 - Peças modeladas (elmo armet/barril feitos; falta ombreira em lâminas de verdade, cotoveleira com
@@ -71,10 +99,17 @@ Regras que valem nas 3 etapas:
 - **App do primo:** analisar e trazer o que for melhor (precisa do código-fonte num zip pequeno ou
   num repositório; usar ideias, e código só com a permissão dele).
 - **ComfyUI** (processo à parte, local, pela API HTTP; NVIDIA, AMD por ROCm/DirectML/ZLUDA):
-  texturas, imagens de referência e mapas (com modelos de licença comercial).
+  texturas, imagens de referência e mapas (com modelos de licença comercial). Adiantado pelo criador
+  (22/11): vale também para cenário e criaturas; testar no processador nas máquinas do GitHub.
 - **APIs opcionais** (decisão do criador, 21/11): Gemini (imagem), Rodin, Meshy, Tripo — desligadas
   por padrão, chave na janela, preço e licença antes de cada geração, recibo.
 - **Ignis:** pedidos 4–6 do ESTADO (imagem guiada pela forma, textura sem emenda, AMD por Vulkan).
+
+**1.8b Godot 4.8 (base da Erethea)**
+- Testar também na Godot 4.8 beta (CI e máquina), ao lado da 4.6; o projeto gerado liga sozinho o que a
+  engine tiver: streaming de texturas por mip (VRAM menor, cabelo/folhagem melhores de longe), sombra de
+  contato em tela na luz direcional, oclusão ambiente com vários rebotes, especular no lightmap
+  direcional e Trail3D (rastro de espada).
 
 **1.9 Estilos de jogo** (pedido do criador: qualquer jogo, não só realista)
 - Fotorrealista e fantasia sombria (o alvo das referências), pintado à mão, cel-shaded (anime),

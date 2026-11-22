@@ -67,7 +67,7 @@ def couro_cabeludo(corpo, pontos, cabeca_peso, estilo):
 
 FIOS = {
     # comprimento em cima / nos lados (m), altura do volume na frente / em cima / nos lados (m)
-    "curto": dict(cima=(0.09, 0.115), lados=(0.02, 0.03), h_frente=0.01, h_cima=0.0055, h_lados=0.003, grav=0.1, fios=70000, guias=0, segs=16),
+    "curto": dict(cima=(0.09, 0.115), lados=(0.02, 0.03), h_frente=0.016, h_cima=0.009, h_lados=0.004, grav=0.1, fios=70000, guias=0, segs=16),
     "medio": dict(cima=(0.15, 0.2), lados=(0.13, 0.18), h_frente=0.01, h_cima=0.007, h_lados=0.006, grav=0.9, fios=70000, guias=2400, segs=18),
     "longo": dict(cima=(0.32, 0.42), lados=(0.3, 0.4), h_frente=0.01, h_cima=0.007, h_lados=0.006, grav=1.3, fios=80000, guias=2600, segs=24),
 }
@@ -362,7 +362,7 @@ def malha_de_fios(nome, P, cor, n_jogo, largura=0.0005, arm=None, semente=5):
 VARIANTES = 8
 
 
-def atlas_de_mechas(cor, res=2048, semente=3):
+def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0):
     """Atlas com 8 mechas lado a lado, da mais densa (0) à mais rala (7). Raiz em cima (V=1).
     Devolve (imagem_cor RGBA, imagem_dados RGB: R=oclusão, G=profundidade, B=raiz→ponta)."""
     rng = np.random.default_rng(semente)
@@ -395,7 +395,13 @@ def atlas_de_mechas(cor, res=2048, semente=3):
             pf = rng.uniform(0.0, 1.0)
             sub = alfa[:, x0:x0 + W]
             muda = a > sub
-            tom = base * (0.8 + 0.4 * idf)
+            # cada fio com o seu tom: a maioria perto da cor, alguns mais claros (sol) ou mais escuros;
+            # com a idade, uma parte dos fios fica branca/grisalha
+            tom = base * (0.84 + 0.3 * idf)
+            if rng.random() < 0.06:
+                tom = np.clip(base * 1.3 + 0.02, 0, 1)
+            if rng.random() < grisalho:
+                tom = np.array([0.55, 0.53, 0.5], dtype=np.float32) * rng.uniform(0.8, 1.1)
             cs = cor_img[:, x0:x0 + W]
             cs[muda] = np.broadcast_to(tom, cs.shape)[muda]
             ps = prof[:, x0:x0 + W]
@@ -406,8 +412,10 @@ def atlas_de_mechas(cor, res=2048, semente=3):
     # oclusão: onde há muitos fios e perto da raiz fica mais escuro
     import fc_pele
 
-    ao = 1.0 - 0.55 * np.clip(fc_pele.borrar(dens, 3) / 3.0, 0, 1) * (1.0 - 0.6 * raiz)
-    cor_img = cor_img * (0.5 + 0.5 * raiz[..., None]) * ao[..., None]
+    ao = 1.0 - 0.35 * np.clip(fc_pele.borrar(dens, 3) / 3.0, 0, 1) * (1.0 - 0.6 * raiz)
+    # raiz só um pouco mais escura: nas mechas curtas (lados e nuca) raiz escura + ponta clara virava
+    # "carimbo" claro/escuro repetido; o escuro de profundidade vem do couro e da oclusão
+    cor_img = cor_img * (0.76 + 0.24 * raiz[..., None]) * ao[..., None]
     vazio = alfa < 0.01
     cor_img[vazio] = base * 0.6
     srgb = np.clip(cor_img, 0, 1) ** (1 / 2.2)
@@ -574,13 +582,16 @@ def couro_cabeludo_cap(corpo, pontos, cor, res=2048, semente=9):
     # textura no UV do corpo: cor do cabelo com fios curtos e alfa = máscara com linha irregular
     pos, mask, _ = fc_pele.rasterizar(corpo, res)
     irregular = fc_pele._normalizar(fc_pele.borrar(rng.standard_normal((res, res)).astype(np.float32), 1)) * 0.6
-    a = mascara_couro(pos[..., 0], pos[..., 1], pos[..., 2], pontos, irregular) * mask
+    # bordas mais largas que as das raízes dos cards: a linha da têmpora e a costeleta sem cantos retos
+    a = mascara_couro(pos[..., 0], pos[..., 1], pos[..., 2], pontos, irregular, suave=2.2) * mask
     pontinhos = np.clip(fc_pele._normalizar(fc_pele.borrar(rng.standard_normal((res, res)).astype(np.float32), 1)) * 0.5 + 0.5, 0, 1)
     base = np.array(c.cor_hex(cor), dtype=np.float32)
-    cor_img = base[None, None, :] * (0.45 + 0.35 * pontinhos[..., None])
-    # opaco por dentro (não aparece pele entre os cards); só a linha do cabelo esmaece, irregular
-    borda_fina = np.clip(a * 1.6 - 0.25 * pontinhos, 0, 1)
-    alfa = np.where(a > 0.85, 1.0, borda_fina)
+    # o que aparece entre os cards é a massa de cabelo na sombra: cor uniforme, um pouco mais escura que
+    # as mechas e com pouco contraste (manchas grandes viravam "camuflagem" no topo e nos lados)
+    cor_img = base[None, None, :] * (0.7 + 0.08 * pontinhos[..., None])
+    # opaco por dentro (não aparece pele entre os cards); só a faixa de fora da linha esmaece, irregular
+    borda_fina = np.clip(_sstep(0.12, 0.55, a) - 0.18 * (1.0 - a) * pontinhos, 0, 1)
+    alfa = np.where(a > 0.55, 1.0, borda_fina)
     rgba = np.concatenate([np.clip(cor_img, 0, 1) ** (1 / 2.2), alfa[..., None]], -1)
     rgba = fc_pele.dilatar(rgba, mask)
     img = fc_pele._imagem(malha.name + "_cor", rgba, False, alfa=True)
@@ -620,12 +631,12 @@ def transferir_normais(alvo, casca):
         alvo.modifiers.remove(mod)
 
 
-def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n=1.0, res_atlas=2048):
+def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n=1.0, res_atlas=2048, grisalho=0.0):
     """Pipeline completo de cabelo AAA. Devolve [couro_cabeludo, cards] (objetos do jogo)."""
     P, raios, campo = crescer_fios(corpo, pontos, cabeca_peso, estilo, devolver_campo=True)
     if P is None:
         return []
-    img_cor, img_dados = atlas_de_mechas(cor, res_atlas)
+    img_cor, img_dados = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
     V, F, UV = cards_do_penteado(P, campo, pontos, escala_n=escala_n)
     malha = bpy.data.meshes.new(f"{nome}_hair")
     malha.from_pydata(V.tolist(), [], F)

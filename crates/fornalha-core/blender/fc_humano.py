@@ -545,7 +545,12 @@ def criar_humano(dados, assets, ficha):
     ]
     res_pele = int(ficha.get("textura_pele") or 0)
     tem_cabelo = ficha.get("cabelo", "short02") not in (None, "", "nenhum")
-    if tem_cabelo and not res_pele:
+    import fc_cabelo
+
+    # cabelo curto: penteado fio a fio + cards (pipeline AAA); médio/comprido: ainda o do pacote,
+    # até a queda com colisão nos ombros ficar pronta (plano, etapa 1.2)
+    cards = bool(res_pele) and tem_cabelo and fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto"
+    if tem_cabelo and not cards:
         acessorios.append(("hair", ficha.get("cabelo", "short02"), True, ficha.get("cor_cabelo")))
     for roupa in ficha.get("roupas_makehuman", []):
         acessorios.append(("clothes", roupa, False, None))
@@ -570,7 +575,8 @@ def criar_humano(dados, assets, ficha):
         import fc_roupa
 
         r = ficha["roupa"]
-        pecas.extend(fc_roupa.vestir(h, nome, r.get("estilo", "campones"), r.get("cores", {}), capa=r.get("capa", True)))
+        pecas.extend(fc_roupa.vestir(h, nome, r.get("estilo", "campones"), r.get("cores", {}), capa=r.get("capa", True),
+                                    pano=r.get("pano", False)))
     if res_pele and corpo.data.polygons:
         # pele em alta: poros, rugas pela idade, barba rala e vermelhidão assados em cor/rugosidade/normal
         import fc_pele
@@ -586,9 +592,8 @@ def criar_humano(dados, assets, ficha):
         sub.levels = 0
         sub.render_levels = 2
         sub.quality = 3
-        if tem_cabelo:
+        if cards:
             # cabelo em cards (mechas com textura de fios), no lugar do "capacete" do pacote
-            import fc_cabelo
 
             g = corpo.vertex_groups.get("head")
             peso = np.zeros(len(corpo.data.vertices))
@@ -601,8 +606,10 @@ def criar_humano(dados, assets, ficha):
             cor_cab = ficha.get("cor_cabelo") or "#3b2a1e"
             # padrão AAA (bíblia técnica, seção 4): o penteado fio a fio é a fonte; o render e a
             # engine recebem o couro cabeludo com fade e os cards em 3 camadas com o atlas de mechas
+            idade = float(ficha.get("macro", {}).get("idade", 0.5))
             pecas.extend(fc_cabelo.cabelo_em_cards(nome, corpo, pontos, peso, cor_cab, fc_cabelo.estilo_de(ficha.get("cabelo")), arm,
-                                                   escala_n=1.0 if res_pele >= 4096 else 0.7))
+                                                   escala_n=1.0 if res_pele >= 4096 else 0.7,
+                                                   grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":
         import fc_armas_pbr

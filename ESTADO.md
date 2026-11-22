@@ -143,11 +143,16 @@ Feita por um agente lendo as páginas de licença (nada baixado nem executado). 
 - **Nuvem:** Meshy 7.1 (API a partir de US$ 20/mês; no pago o modelo é do cliente), Rodin Gen-2.5
   (até 10M de faces; texto da licença tem um campo vazio). Depende da decisão abaixo.
 
-## Plano em 3 etapas (21/11/2026)
-O caminho até o nível das referências está em [docs/PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md), e a
-régua técnica em [docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md) (enviada pelo criador).
-**Etapa 1 em andamento:** cabelo AAA em cards (penteado fio a fio como fonte), depois look-dev/QA,
-rosto/olhos, corpo/roupa, armadura, movimento base, ferramenta por partes, ComfyUI/APIs/app do primo.
+## Plano em 3 etapas (21/11/2026, atualizado 22/11)
+O caminho até o nível das referências está em [docs/PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md) (a seção
+"Onde estamos" diz o que está feito, o que está em andamento e a ordem), e a régua técnica em
+[docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md) (enviada pelo criador).
+**Etapa 1 em andamento.** Feito: look-dev/QA, pele 4K, cabelo curto em cards, pano simulado
+(sobreveste e capa do templário). Agora: resto do 1.4 (roupa) e o **ComfyUI** (adiantado pelo criador);
+depois armadura, juntar o movimento (agente em paralelo), por partes na janela, bateria do preset
+máximo (personagem, dragão, monstro, zumbi) e teste no computador do criador (RX 580, Windows).
+Decisões do criador em 22/11: teto RE4 Remake / Final Fantasy (pode levar horas); foco no Windows
+(instalador e testes); o trabalho segue sozinho entre um limite de uso e outro.
 
 ## Decisões que são do criador
 - **APIs de geração (decidido em 21/11):** o criador autorizou APIs (Gemini imagem, Rodin, Meshy,

@@ -1,155 +1,145 @@
-# Plano em 3 etapas — Fornalha 3D até o nível das referências
+# Plano em 2 etapas — Fornalha 3D completa
 
-> Pedido do criador (21/11/2026): juntar em 3 etapas tudo o que já foi pedido, tudo o que falta da
-> [Bíblia técnica AAA](BIBLIA_TECNICA_AAA.md) e o que veio depois (níveis GTA, Dark Souls 2/3,
-> Resident Evil Village e RE4 Remake; ComfyUI; APIs; app do primo; placas AMD; Erethea).
-> **Meta de saída:** chegar o mais perto possível das referências (templário branco, cavaleiro de
-> placas com escudo, rosto Snappers, velho careca, templário de jogo com manto) **sem placa NVIDIA**.
-> Ao chegar lá, a ferramenta fica parada até a NVIDIA; com ela, entra a IA de 3D.
+> Pedido do criador (22/11/2026): juntar **tudo o que falta** — o Plano 1 original, o plano em 3
+> etapas, a [Bíblia técnica AAA](BIBLIA_TECNICA_AAA.md), o complemento técnico (corpo, rosto, cabelo,
+> criaturas e teste bruto) e os pedidos da Erethea Engine — em **duas etapas** para terminar a
+> Fornalha 3D. O nome é Fornalha 3D, mas ela gera de tudo (2D também).
+> **Teto de qualidade:** RE4 Remake (realista), Elden Ring e Tales of Fantasy (estilizado) — vale a
+> geração levar horas se chegar lá. Estilos mais simples (PS2, PS1…) são escolha da pessoa.
 
 ## Onde estamos (atualizado a cada bloco de trabalho)
-**Etapa 1** em andamento. Ordem de agora (decisão do criador, 22/11/2026):
-1. ✅ 1.1 look-dev/QA (base) · ✅ 1.3 pele 4K · 🟡 1.2 cabelo curto (ligado, sem tigela; falta tirar as
-   manchas dos lados/nuca e o comprido com gravidade)
-2. 🟡 **1.4 corpo e roupa** — feito: pano simulado de verdade (sobreveste franzida no cinto, abas que
-   caem sobre pernas e placas, capa caindo pelas costas, cruz que acompanha as dobras). Falta: costuras,
-   sujeira na barra, capuz, as outras roupas (soldado, nobre, camponês) com o mesmo pano.
-3. ⏭️ **1.8 ComfyUI** (adiantado): conector local na placa da pessoa (AMD inclusive), testado no
-   processador nas máquinas do GitHub; referência/textura/mapas melhores para tudo (personagem,
-   cenário, criaturas).
-4. 1.5 armadura · 1.6 movimento (agente em paralelo; falta juntar) · 1.7 por partes na janela.
-5. **Bateria do preset máximo**: personagem, dragão, monstro, zumbi (e os outros), com a folha
-   lado a lado com as referências.
-6. **Teste no computador do criador** (RX 580, Windows): ele baixa a versão de desktop ou abre uma
-   sessão no terminal com acesso; a Fornalha é baixada, instalada e testada lá.
+- **Etapa 1 em andamento.** Feito nesta etapa até agora: look-dev/QA, pele 4K, cabelo curto em cards,
+  pano simulado (sobreveste e capa), **ComfyUI** (conector, instalador pela placa, teste real no
+  processador do GitHub no Windows e no Linux), **pedidos 1–7 da Erethea** (música por situação, fala
+  presa ao personagem, mandíbula, acústica, ponte ao vivo por WebSocket, teste de agente).
+- Próximos, nesta ordem: juntar o movimento (agente em paralelo) → criaturas e dragão → suíte de
+  Teste Bruto → modo Teste de Fogo (RX 580, Windows) → cabelo sem manchas → roupa/armadura → folha
+  de modelo pelo ComfyUI → por partes na janela.
 
-**Teto de qualidade** (criador, 22/11): RE4 Remake / Final Fantasy — vale a geração demorar horas se
-chegar lá. Estilos mais simples (PS2, PS1, medieval estilizado…) são escolha da pessoa.
-**Plataforma:** foco no **Windows** (instalador, testes, placa da pessoa); o Linux continua no CI, sem
-prioridade.
-
-Regras que valem nas 3 etapas:
-- **Um item por vez, por partes:** rosto → corpo → cabelo → roupa → armadura → arma (ou: corpo da
-  criatura → pele/pelo → chifres/asas → movimento). Cada parte só passa depois do look-dev e da
-  aprovação; aí a próxima.
-- **Avaliação objetiva:** look-dev padronizado + QA automático (seção 9 da bíblia). Nada de "ficou
-  bom" sem comparação lado a lado com a referência.
-- **Licença:** só o que permite uso comercial. Fora: LAFAN1, AMASS, HumanML3D, Bandai Namco, ZEGGS,
-  Motorica, BONES-SEED, Digital Emily (não comerciais); Texturing.xyz e 3DScanStore (pagos, só se o
-  criador comprar). Dentro: CMU, 100STYLE (crédito), ACCAD (crédito), Mesh2Motion, Quaternius,
-  Mixamo (baixado pela pessoa), Poly Haven (crédito "Powered by Poly Haven"), ambientCG, MakeHuman
-  (dados CC0), Megascans (pela conta da pessoa).
-- **Quanto mais forte a máquina, melhor** — mas tudo funciona em qualquer uma (RX 580 inclusive).
+## Regras que valem nas 2 etapas
+- **Termine o que está fazendo** antes de pegar o próximo item; nada de quebrar o que já funciona.
+- **game.project.json é a fonte única da verdade**; referências do criador (RE4 Remake, Elden Ring,
+  Tales of Fantasy, templários, cavaleiros, Joel/Arthur, dragões…) são a régua, com folha lado a lado.
+- **Placa primeiro, grátis sempre**; **licença comercial obrigatória** (nada CC BY-NC/não comercial;
+  todo modelo novo no manifest com licença conferida na página; aceite só pela janela).
+- **Ignis:** um modelo por vez na VRAM (POST /motor/reservar), recibo de licença por asset.
+- **Divisão:** a Fornalha gera, limpa, faz o rig e exporta glTF; a **Erethea** (fork da Godot 4.8)
+  renderiza em tempo real e aplica os upscalers (FSR, XeSS, DLSS, TAA).
+- **Um item por vez, por partes**, avaliado com look-dev e QA; nunca "ficou bom" sem comparação.
+- Foco no **Windows** (instalador, testes, placa da pessoa); o Linux segue no CI.
+- Não dizer que funciona numa placa sem prova nela (TESTE_DO_CRIADOR.md).
 
 ---
 
-## Etapa 1 — Personagem e item no nível da referência (qualquer placa)
+## Etapa 1 — Fornalha 3D completa, pronta para o Teste de Fogo na RX 580 (Windows)
+Meta: o criador baixa a versão de desktop (ou abre uma sessão no terminal com acesso), instala no
+Windows com a RX 580 8 GB e a suíte de Teste Bruto passa no nível Qualidade e no Máximo.
 
-**1.1 Look-dev e QA (base de tudo)**
-- Estúdio fixo no Blender e na Godot: fundo cinza 18% (#4A4A4A), HDRI neutro + 3 pontos (chave 45°,
-  preenchimento, recorte), esferas de calibração (cromo e cinza 18%), AgX.
-- Câmeras: corpo inteiro (frente, 3/4, perfil, costas), close do rosto, linha do cabelo, coroa, nuca,
-  e pose de estresse (braços a 120°, agachado, pescoço a 60°).
-- QA em código antes de mostrar: escala/rotação zeradas, faces degeneradas, pesos somando 1, cabelo
-  a < 2 mm do crânio e sem buracos (raios de fora para dentro), mapas de dados em Non-Color, albedo
-  dentro da faixa física, normal OpenGL (+Y), pés no chão.
-- Folha de comparação automática: nosso resultado ao lado da referência escolhida.
+**1.1 Look-dev e QA** — ✅ estúdio fixo, câmeras, QA da bíblia (escala, faces, pesos, Non-Color,
+albedo, pés no chão, cobertura do cabelo). Falta: mostrar na janela (1.13) e sobrepor a referência.
 
-**1.2 Cabelo AAA** (em andamento)
-- Feito: penteado fio a fio colado no crânio de verdade (campo de distância), cards em 3 camadas,
-  atlas de mechas, couro cabeludo com fade, normais da casca, shader com hash e Kajiya-Kay na Godot.
-- Feito também: transparência pontilhada (funciona até no renderizador de compatibilidade), brilho
-  calibrado, couro sem degrau, QA de cobertura 100%. O curto já usa o pipeline novo.
-- Falta: cabelo médio/comprido com risca, queda pela gravidade e colisão nos ombros e costas (até lá,
-  esses estilos usam o cabelo do pacote); coque, rabo, barba cheia e sobrancelha em cards; fio a fio
-  com física como opção para placa forte (pedido à Erethea).
+**1.2 Referência e folha de modelo (multi-view)** — ✅ ComfyUI gera referências (Z-Image Turbo).
+Falta: folha frente/perfil/costas em pose neutra (A-pose, braços afastados, pernas levemente
+separadas, mãos com dedos separados, simetria e proporções reais) pelo ComfyUI com o guia visual
+(FLUX.2 klein entra quando a licença do VAE dele for confirmada na fonte); medir a silhueta da folha
+(ideia do app do primo) e usar para ajustar o corpo do MakeHuman e a largura das roupas.
 
-**1.3 Rosto e pele**
-- Feito: pele 4K com poros, rugas por idade, barba rala, vermelhidão; olho natural.
-- Falta (bíblia 3.3/3.4): olho em 4 peças (córnea com refração, menisco lacrimal, malha de sombra da
-  pálpebra), mapa de espessura (SSS nas orelhas), penugem (sheen), detalhe de poros em 2 frequências,
-  rugosidade dual-lobe; expressões (blendshapes FACS do MakeHuman/ICT FaceKit MIT).
+**1.3 Corpo, rosto e pele** — ✅ pele 4K por texel (poros, rugas pela idade, barba rala), olho
+natural, mandíbula com pesos do MakeHuman. Falta: olho em 4 peças (córnea, menisco, sombra da
+pálpebra), mapa de espessura (SSS no rosto, orelhas e mãos — sem "boneco de cera"), penugem, poros
+em 2 frequências, expressões (FACS/ICT FaceKit MIT).
 
-**1.4 Corpo e roupa** (em andamento)
-- Feito (fc_pano): pano simulado no Blender e aplicado na malha (no jogo não pesa nada): abas da
-  sobreveste mais largas que a cintura, franzidas pelo cinto, caindo sobre um colisor liso (o "barbante
-  esticado" sobre coxas e joelheiras), capa que nasce fora de tudo e cai pelas costas; cada lado da aba
-  segue a sua coxa (não atravessa na animação); desenhos recortados pela posição do pano antes de cair.
-- Falta: sem recorte serrilhado (máscara em vez de apagar faces), costuras, couro com grão, sujeira/lama
-  perto dos pés, barra rasgada, capuz do templário; o mesmo pano nas outras roupas; molas na Godot
-  para as abas (como a capa).
+**1.4 Cabelo em camadas** — ✅ couro cabeludo (touca) com fade, cards em 3 camadas a partir de fios,
+atlas, normais da casca, shader Kajiya-Kay com transparência pontilhada (roda na RX 580 e no
+renderizador de compatibilidade) e brilho que quebra fio a fio. Falta: tirar as manchas dos lados e
+da nuca; normal map do cabelo; mapa ORM empacotado (R oclusão, G deslocamento do brilho, B id do fio)
+como no complemento; médio/comprido com gravidade e colisão nos ombros; barba e sobrancelha em cards;
+molas (spring bones) na cabeça.
 
-**1.5 Armadura no nível das referências**
-- Peças modeladas (elmo armet/barril feitos; falta ombreira em lâminas de verdade, cotoveleira com
-  asa, manopla articulada, sapato de placas), gravuras e rebites em normal, correias de couro,
-  ORM empacotado, validador PBR (aço 0.55–0.78, rugosidade 0.22–0.45, ferrugem com metal 0).
-- Escudo, espada e bainha no mesmo nível; ouro/latão envelhecido.
+**1.5 Roupa e armadura** — ✅ pano simulado (sobreveste franzida, abas sobre as pernas, capa caindo,
+estampa que acompanha as dobras), armadura PBR com desgaste assado, elmos modelados. Falta: camadas
+separadas sem a pele atravessar (máscara em vez de apagar), costuras, sujeira/lama na barra, capuz,
+o mesmo pano nas outras roupas (soldado, nobre, camponês), ombreira em lâminas, manopla articulada,
+gravuras e rebites em normal, validador PBR (aço 0,55–0,78; rugosidade 0,22–0,45).
 
-**1.6 Movimento base**
-- Root motion, pés no chão (IK de duas juntas com raio no calcanhar e na ponta, travamento pelo
-  contato), BlendSpace2D com ajuste de passada, camadas (pernas × braços), olhar (LookAtModifier3D).
-- Bibliotecas comerciais: 100STYLE, CMU, ACCAD (artes marciais), Mesh2Motion, Mixamo da pessoa.
-- Física: capa e abas da sobreveste por mola, ragdoll com mistura em golpes.
+**1.6 Da imagem à malha de jogo (IA)** — ✅ workers TRELLIS.2/UniRig/HY-Motion prontos (NVIDIA).
+Falta: imagem → 3D também pelo ComfyUI (Hunyuan3D 2.1 depois de conferir a licença: tem restrição de
+território); retopologia (QuadriFlow) com mais polígonos nas dobras (rosto, ombros, cotovelos, mãos,
+quadril, joelhos); bake de normal da malha alta na baixa; PBR completo (albedo, normal, rugosidade,
+AO).
 
-**1.7 Ferramenta "por partes" na janela**
-- Forjar → Personagem por etapas: cada parte com prévia de look-dev, "aceitar" ou "refazer com
-  ajuste"; o MCP ganha as mesmas etapas para o Claude Code e outros agentes.
+**1.7 Rig e movimento** — ✅ esqueleto único humanoide (nomes Unreal), retarget da captura
+(Quaternius CC0, CMU), molas na capa. Falta: juntar o trabalho do agente (AnimationTree por velocidade,
+camada de cima para atacar andando, IK dos pés, olhar), molas no cabelo e nas abas, transições suaves
+(blend in/out), mais bibliotecas comerciais (100STYLE, ACCAD, Mesh2Motion, Mixamo da pessoa).
 
-**1.8 Conexões**
-- **App do primo:** analisar e trazer o que for melhor (precisa do código-fonte num zip pequeno ou
-  num repositório; usar ideias, e código só com a permissão dele).
-- **ComfyUI** (processo à parte, local, pela API HTTP; NVIDIA, AMD por ROCm/DirectML/ZLUDA):
-  texturas, imagens de referência e mapas (com modelos de licença comercial). Adiantado pelo criador
-  (22/11): vale também para cenário e criaturas; testar no processador nas máquinas do GitHub.
-- **APIs opcionais** (decisão do criador, 21/11): Gemini (imagem), Rodin, Meshy, Tripo — desligadas
-  por padrão, chave na janela, preço e licença antes de cada geração, recibo.
-- **Ignis:** pedidos 4–6 do ESTADO (imagem guiada pela forma, textura sem emenda, AMD por Vulkan).
+**1.8 Criaturas e dragões** — o rig não pode travar em humanos. Esqueletos próprios (quadrúpede;
+dragão com coluna longa, pescoço articulado, cauda com vários ossos, asas com membrana e mandíbula;
+aranha), malha procedural no Blender (dragão, lobo, golem) e, com placa, por IA; animações
+procedurais (voo, bater de asas, rugido, bote, caminhada pesada) e IK em quatro patas.
 
-**1.8b Godot 4.8 (base da Erethea)**
-- Testar também na Godot 4.8 beta (CI e máquina), ao lado da 4.6; o projeto gerado liga sozinho o que a
-  engine tiver: streaming de texturas por mip (VRAM menor, cabelo/folhagem melhores de longe), sombra de
-  contato em tela na luz direcional, oclusão ambiente com vários rebotes, especular no lightmap
-  direcional e Trail3D (rastro de espada).
+**1.9 ComfyUI como motor geral e conexões** — ✅ conector (só 127.0.0.1), instalador pela placa
+(CUDA, ROCm, DirectML para a RX 580, processador), Máquina → ComfyUI, CLI, teste real no CI. Falta:
+fluxos de textura sem emenda e mapas (normal/rugosidade), concept de cenário, 3D (1.6) e movimento
+(quando houver modelo comercial); APIs opcionais (Gemini, Rodin, Meshy, Tripo) desligadas por padrão;
+pedidos do Ignis (imagem guiada pela forma, textura sem emenda, AMD por Vulkan).
 
-**1.9 Estilos de jogo** (pedido do criador: qualquer jogo, não só realista)
-- Fotorrealista e fantasia sombria (o alvo das referências), pintado à mão, cel-shaded (anime),
-  low poly moderno, retrô 3D (PS1), voxel e miniatura (toy) — e os outros estilos de jogo que
-  existirem (estilizado tipo cartoon/Pixar, pixel art 2.5D, noir, aquarela, sci-fi limpo etc.).
-  A régua continua a das referências: cada estilo tem de sair no nível de um jogo grande daquele estilo. O mesmo personagem sai em qualquer estilo:
-  o estilo escolhe materiais (PBR calibrado, pintado, toon com contorno, cores chapadas), geometria
-  (decimação, voxelização, malha tipo PS1 com vértice "tremido" e textura em baixa), shader na Godot
-  e a folha de modelo (frente, perfil, costas) no look-dev.
+**1.10 Erethea** — ✅ pedidos 1–7 (música .musica.json, Sons por situação e grupo erethea_musica,
+fala presa ao personagem, boca no forja.json, acústica, WebSocket da ponte, --agent-test). Falta:
+Godot 4.8 beta no CI ao lado da 4.6; pedido 8 (prévia da Erethea na Galeria pela LibGodot) quando a
+Erethea tiver.
 
-## Etapa 2 — Mundo, criaturas e combate (nível Dark Souls / RE Village / RE4 Remake)
+**1.11 Suíte de Teste Bruto** (comando na API, no MCP e na linha de comando, e no CI):
+caso 1 protagonista completo (corpo, rosto, cabelo em camadas, roupa, rig + andar e combate);
+caso 2 inimigo humanoide armado (encaixe da arma na mão, retarget); caso 3 dragão (malha grande,
+asas, cauda, rig não humanoide, voo e ataque). Valida Blender sem janela, glTF, esquema do
+game.project.json, recibos de licença comercial de tudo e o jogo rodando na engine.
 
-**2.1 Terreno e cenário**
-- Heightmap com erosão hidráulica e térmica (numpy), máscaras de inclinação/fluxo/sedimento/altitude,
-  integração com **Terrain3D** (MIT) na Godot e na Erethea, biomas por Poisson (árvores com impostor,
-  rochas, arbustos, grama em MultiMesh com vento), decals e pintura de vértice.
-- Kits modulares em grade (2/4/8 m) com trim sheets: castelo, muralha, catedral, vila medieval,
-  masmorra, interiores (RE Village); presets de luz e atmosfera (SDFGI/VoxelGI/Lightmap, névoa
-  volumétrica, SSR, sondas, sombras PSSM 4) por estilo: "Dark Souls", "RE Village", "GTA dia".
+**1.12 Modo Teste de Fogo (RX 580 8 GB, Windows)** — forçar Qualidade ou Máximo numa placa de 8 GB
+(pouca VRAM, descarregar para a RAM, fila sequencial, um modelo por vez), Leve rápido para o dia a
+dia; instalador do Windows com tudo; roteiro no TESTE_DO_CRIADOR.md; teste no computador do criador.
 
-**2.2 Criaturas, inimigos e chefes** (no nível das referências, inclusive fotorrealista)
-- Quadrúpedes (leão com pelo em shell + juba em cards, lobo, cavalo), dragão extremamente realista
-  (escamas, membrana das asas translúcida, voo, fogo), goblins, orcs, mortos-vivos, golem de pedra,
-  cavaleiro inimigo, insetos/aranhas gigantes, chefes colossais (deus gigante da mitologia, Buda
-  gigante andando) com escala, peso e física de verdade (passos que tremem o chão, partes que caem,
-  colisão por parte do corpo); esqueletos próprios por tipo de criatura e animação (procedural +
-  captura comercial), com pés no chão e IK em quatro patas.
+**1.13 Por partes na janela** — Forjar → Personagem por etapas (rosto → corpo → cabelo → roupa →
+armadura → arma), cada parte com prévia de look-dev e "aceitar" ou "refazer com ajuste"; o MCP com
+as mesmas etapas; modo "só ver" e desfazer por edição de agente (ideias do app do primo).
 
-**2.3 Combate AAA**
-- Trava de alvo, estamina, combos com cancelamento, defesa/aparar, reações de dano direcionais,
-  ragdoll misturado, IA de inimigo por estados, inércia nas transições (inertialization).
-- Motion matching opcional com dados comerciais.
+**1.14 Estilos base** — realista (RE4 Remake) e estilizado (Elden Ring / Tales of Fantasy) no mesmo
+personagem, com materiais, shader e folha de modelo próprios.
 
-## Etapa 3 — Máquinas fortes, IA de 3D e a Erethea
+## Etapa 2 — Depois do Teste de Fogo: mundo, combate, todos os estilos e placas fortes
 
-- **NVIDIA:** TRELLIS.2 / Pixal3D (blockout de peças únicas → retopologia → bake → PBR), Kimodo
-  (texto → movimento, licença aberta comercial), SkinTokens/Puppeteer (rig).
-- **AMD:** caminhos ROCm (Linux, RX 6600/9060 XT) e DirectML/ZLUDA (Windows) no ComfyUI e no Ignis.
-- **Erethea Engine** (pedidos na lista do ESTADO): render de cabelo fio a fio nativo, SSS melhor,
-  geometria virtual (estilo Nanite) para cenário denso, terreno nativo, upscaling (FSR), efeitos do
-  compositor; a Fornalha usa o que existir na Erethea e cai para a Godot quando não houver.
-- Laço de crítica por visão (modelo de visão do Ignis) até passar nos critérios.
-- Fase 5 (venda e atualização privada) só quando o criador pedir.
+**2.1 Terreno e cenário** (RE Village, Dark Souls 2/3, GTA) — erosão, máscaras, Terrain3D (MIT),
+biomas por Poisson (árvores com impostor, grama em MultiMesh com vento), kits modulares com trim
+sheets (castelo, muralha, catedral, vila, masmorra, interiores), presets de luz e atmosfera;
+gerador de masmorra e leitura de mapas do Tilemap 3D (app do primo).
+
+**2.2 Criaturas e chefes colossais** — dragão fotorrealista (escamas, membrana translúcida, fogo),
+leão com pelo e juba, goblins, orcs, mortos-vivos, zumbis, golem, insetos gigantes, deus gigante e
+Buda gigante andando com peso e física de verdade (passos que tremem o chão, colisão por parte).
+
+**2.3 Combate AAA** — trava de alvo, estamina, combos com cancelamento, aparar, reações
+direcionais, ragdoll misturado, IA de inimigo por estados, inertialization, motion matching opcional.
+
+**2.4 Todos os estilos** — pintado à mão, cel-shaded (anime), low poly, PS1/PS2, voxel, miniatura,
+cartoon, noir, aquarela, sci-fi — cada um no nível de um jogo grande daquele estilo.
+
+**2.5 Placas fortes e IA de 3D** — NVIDIA (TRELLIS.2/Pixal3D, Kimodo, SkinTokens/Puppeteer), AMD
+nova (ROCm, ZLUDA), RX 9060 XT 16 GB e RTX 5090; laço de crítica por visão até passar nos critérios.
+
+**2.6 Erethea avançada** — cabelo fio a fio nativo, SSS por canal, geometria virtual (estilo
+Nanite), terreno nativo, compositor (névoa de altura, raios de luz); a Fornalha usa o que existir e
+cai para a Godot quando não houver.
+
+**2.7 Fase 5** (venda e atualização privada) — só quando o criador pedir.
+
+---
+
+### Notas do complemento técnico (22/11)
+- O shader de cabelo sugerido (alpha scissor + depth prepass) vira opção; o padrão continua a
+  transparência pontilhada, que funciona também no renderizador de compatibilidade da RX 580. O mapa
+  ORM com deslocamento do brilho entra no 1.4.
+- FLUX.2 klein 4B: o modelo é Apache 2.0, mas o VAE vem do pacote do FLUX.2-dev (não comercial) até
+  prova em contrário; fica de fora até a licença do VAE ser confirmada na fonte. Z-Image Turbo já
+  cobre a folha de modelo.
+- UniRig/Rigify: o humanoide segue no esqueleto único da Fornalha (MakeHuman, nomes Unreal); UniRig
+  entra para criaturas quando houver NVIDIA.

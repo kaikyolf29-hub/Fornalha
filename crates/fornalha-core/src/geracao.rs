@@ -460,6 +460,13 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             }
             Err(e) => avisos.push(format!("Conceito sem imagem: {}", e.mensagem)),
         }
+        match gerar_folha_de_modelo(f, &p, &ficha, &pasta.join("folha_de_modelo.png"), seed, quem).await {
+            Ok(Some(arq)) => {
+                arquivos.insert("folha_de_modelo".into(), json!(arq));
+            }
+            Ok(None) => {}
+            Err(e) => avisos.push(format!("Folha de modelo sem imagem: {}", e.mensagem)),
+        }
     }
 
     // 3D: com placa NVIDIA e o TRELLIS.2 instalado e liberado, sai da imagem de conceito
@@ -592,6 +599,65 @@ fn descrever_para_imagem(p: &Projeto, ficha: &Value) -> String {
         ficha["armadura"].as_str().unwrap_or(""),
         if evitar.is_empty() { String::new() } else { format!(" Sem: {evitar}.") }
     )
+}
+
+/// Folha de modelo (frente, perfil e costas) para guiar a malha: pose A com os braços afastados do
+/// tronco, pernas um pouco abertas, dedos separados, simetria e proporções reais (plano 1.2).
+fn descrever_folha(p: &Projeto, ficha: &Value) -> String {
+    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
+        "arte de jogo 3D".to_string()
+    } else {
+        p.biblia.guia_visual.texto_de_estilo.clone()
+    };
+    let criatura = ficha["tipo"] == "dragao";
+    let pose = if criatura {
+        "vista de frente, vista de lado e vista de trás do mesmo corpo, asas abertas, de pé nas quatro patas"
+    } else {
+        "vista de frente, vista de perfil e vista de costas do mesmo personagem, corpo inteiro, pose A com os braços afastados do \
+         tronco, pernas levemente separadas, mãos abertas com os dedos separados, simétrico, proporções reais"
+    };
+    format!(
+        "{estilo}. Folha de modelo de personagem de jogo (model sheet), {pose}, fundo cinza neutro liso, iluminação uniforme, sem \
+         sombras fortes, o mesmo design nas três vistas. {} ({}): {}. Roupa nas cores {} e {}.",
+        ficha["nome"].as_str().unwrap_or(""),
+        ficha["tipo"].as_str().unwrap_or(""),
+        ficha["descricao"].as_str().unwrap_or(""),
+        ficha["cor_roupa"].as_str().unwrap_or(""),
+        ficha["cor_roupa_secundaria"].as_str().unwrap_or(""),
+    )
+}
+
+/// A folha de modelo sai do ComfyUI (larga, três vistas). Só com placa: no processador uma imagem
+/// larga leva tempo demais para o dia a dia (o Teste de Fogo e o nível Máximo pedem mesmo assim).
+pub async fn gerar_folha_de_modelo(
+    f: &Fornalha,
+    p: &Projeto,
+    ficha: &Value,
+    destino: &Path,
+    seed: u64,
+    quem: &str,
+) -> Resultado<Option<String>> {
+    let comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
+    if !comfy.conectado {
+        return Ok(None);
+    }
+    let so_processador = comfy.dispositivos.iter().all(|d| d["tipo"] == "cpu");
+    let nivel = f.nivel_em_uso(Some(p)).await;
+    if so_processador && nivel != crate::niveis::Nivel::Maximo {
+        return Ok(None);
+    }
+    let Some(m) = crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await else { return Ok(None) };
+    let (largura, altura) = if so_processador { (768, 320) } else { (1536, 640) };
+    let prompt = descrever_folha(p, ficha);
+    let mb = if m.difusao_gguf { 7_000 } else { 15_000 };
+    let (png, info) =
+        com_placa(f, mb, 40, crate::comfyui::gerar_imagem(f.porta_comfyui(), &prompt, largura, altura, seed.wrapping_add(17), 8)).await?;
+    if let Some(d) = destino.parent() {
+        std::fs::create_dir_all(d).map_err(|e| Erro::io(d, e))?;
+    }
+    std::fs::write(destino, &png).map_err(|e| Erro::io(destino, e))?;
+    recibo(f, p, destino, m.id, Some(prompt), Some(seed.wrapping_add(17)), json!({"comfyui": info, "folha_de_modelo": true}), quem).await?;
+    Ok(Some(destino.to_string_lossy().into_owned()))
 }
 
 /// generate_concept: imagem avulsa com o guia visual junto.

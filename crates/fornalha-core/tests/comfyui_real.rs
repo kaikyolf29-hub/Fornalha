@@ -50,5 +50,14 @@ async fn comfyui_de_verdade_gera_referencias() {
         eprintln!("{nome}: {:.0} s", info["segundos"].as_f64().unwrap_or(0.0));
         relatorio.push(serde_json::json!({"nome": nome, "prompt": prompt, "info": info}));
     }
+    // folha de modelo (frente, perfil, costas) para guiar a malha: larga e baixa
+    let folha = "game character model sheet of a medieval Knight Templar: front view, side view and back view of the same character, \
+                 full body, A-pose with arms away from the body, legs slightly apart, open hands with separated fingers, symmetric, \
+                 white surcoat with red cross, chainmail, neutral flat gray background, even lighting, consistent design";
+    let (png, info) = comfyui::gerar_imagem(porta, folha, lado * 3 / 2, lado * 5 / 8, 2000, 8).await.unwrap();
+    assert!(png.starts_with(&[0x89, b'P', b'N', b'G']));
+    std::fs::write(saida.join("templario_folha.png"), &png).unwrap();
+    eprintln!("folha de modelo: {:.0} s", info["segundos"].as_f64().unwrap_or(0.0));
+    relatorio.push(serde_json::json!({"nome": "templario_folha", "prompt": folha, "info": info}));
     std::fs::write(saida.join("relatorio.json"), serde_json::to_string_pretty(&relatorio).unwrap()).unwrap();
 }

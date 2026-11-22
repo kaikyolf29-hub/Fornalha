@@ -190,3 +190,29 @@ async fn reserva_a_placa_no_ignis_durante_o_comfyui() {
     let p = pedidos.lock().unwrap().clone();
     assert_eq!(p, vec!["reservar 15000".to_string(), "liberar".to_string()], "{p:?}");
 }
+
+/// Folha de modelo (frente, perfil, costas) pelo ComfyUI: só com placa; no processador, só no nível
+/// Máximo (imagem larga demora). O pedido descreve a pose A e os dedos separados.
+#[tokio::test]
+async fn folha_de_modelo_pelo_comfyui() {
+    let (porta, visto) = comfy_falso(true).await; // o falso diz que só tem processador
+    let tmp = tempfile::tempdir().unwrap();
+    let f = Fornalha::para_testes(Paths::under(tmp.path()), comum::detection("rx580"));
+    f.definir_porta_comfyui(porta).unwrap();
+    f.chamar("create_project", json!({"nome": "Folha"}), "claude-code").await.unwrap();
+    let p = f.projeto(None).unwrap();
+    let ficha = json!({"nome": "Aren", "tipo": "humano", "descricao": "cavaleiro de capa", "cor_roupa": "#ffffff", "cor_roupa_secundaria": "#aa0000"});
+    let destino = p.raiz.join("Characters/aren/folha_de_modelo.png");
+    let nada = fornalha_core::geracao::gerar_folha_de_modelo(&f, &p, &ficha, &destino, 3, "claude-code").await.unwrap();
+    assert!(nada.is_none(), "no processador e fora do Máximo, não gera");
+    f.chamar("update_project", json!({"alteracoes": {"nivel": "maximo"}}), "claude-code").await.unwrap();
+    let p = f.projeto(None).unwrap();
+    let arq = fornalha_core::geracao::gerar_folha_de_modelo(&f, &p, &ficha, &destino, 3, "claude-code").await.unwrap().unwrap();
+    assert_eq!(std::fs::read(&arq).unwrap(), PNG);
+    let g = visto.lock().unwrap();
+    let fluxo = g.fluxos.last().unwrap();
+    let texto = fluxo["5"]["inputs"]["text"].as_str().unwrap();
+    assert!(texto.contains("pose A") && texto.contains("dedos separados") && texto.contains("vista de costas"), "{texto}");
+    assert_eq!(fluxo["7"]["inputs"]["width"], 768);
+    assert_eq!(fluxo["7"]["inputs"]["height"], 320);
+}

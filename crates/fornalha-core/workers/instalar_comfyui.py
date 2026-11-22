@@ -2,7 +2,7 @@
 # 127.0.0.1) numa pasta só dele, com ambiente Python próprio, o nó ComfyUI-GGUF e os modelos de
 # licença comercial que a Fornalha usa.
 #   python instalar_comfyui.py <pasta> <nvidia|rocm|directml|cpu> [--modelos gguf|inteiro|nenhum]
-#                              [--hsa 10.3.0] [--porta 8188]
+#                              [--hsa 10.3.0] [--porta 8188] [--pouca-vram]
 # nvidia: CUDA · rocm: AMD no Linux (RX 6000/7000/9000) · directml: AMD/Intel no Windows (inclusive
 # RX 580) · cpu: sem placa (lento, mas funciona).
 # Escreve o progresso em <pasta>/instalacao.log e, no fim, <pasta>/instalacao.json (como abrir).
@@ -108,7 +108,7 @@ class Instalador:
                 time.sleep(10 * (tentativa + 1))
         raise RuntimeError(f"não consegui baixar {nome}")
 
-    def instalar(self, modelos, hsa, porta):
+    def instalar(self, modelos, hsa, porta, pouca_vram=False):
         if shutil.which("git") is None:
             raise RuntimeError("precisa do Git instalado (git-scm.com)")
         self.etapa(f"ComfyUI para {self.backend} em {self.pasta}")
@@ -130,6 +130,8 @@ class Instalador:
             args.append("--directml")
         elif self.backend == "cpu":
             args.append("--cpu")
+        if pouca_vram and self.backend != "cpu":
+            args.append("--lowvram")  # placa de 8 GB (RX 580): o que não couber vai para a RAM
         env = {"HSA_OVERRIDE_GFX_VERSION": hsa} if hsa else {}
         info = {
             "backend": self.backend,
@@ -163,7 +165,7 @@ def main():
         sys.exit(2)
     inst = Instalador(a[0], a[1])
     try:
-        inst.instalar(modelos, opcao("--hsa", ""), int(opcao("--porta", "8188")))
+        inst.instalar(modelos, opcao("--hsa", ""), int(opcao("--porta", "8188")), "--pouca-vram" in a)
     except Exception as e:
         inst.etapa(f"ERRO: {e}")
         sys.exit(1)

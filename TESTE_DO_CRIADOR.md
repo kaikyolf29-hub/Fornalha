@@ -16,6 +16,21 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
    Se ela não achar sozinha, em **Máquina → Programas → Escolher**, aponte o executável (na Godot, o `_console.exe`).
 5. Para ficha, imagem de conceito, voz e pedido livre: o **Ignis 0.4.0** aberto (porta 11470).
 
+## 0b. Teste de Fogo na RX 580 (o roteiro curto)
+Depois de instalar (passo 0), com o Blender e a Godot (ou a Erethea) achados em **Máquina**:
+1. **Máquina → ComfyUI → Instalar.** Esperado: o caminho escolhido é "directml" (DirectML, funciona na
+   RX 580) com modelos "gguf" e pouca VRAM; a instalação baixa alguns GB e mostra o progresso. Precisa do
+   Python 3.10+ e do Git instalados. No fim: **Abrir** → "Aberto — RX 580".
+2. **Máquina → Nível desta máquina → Qualidade** (e depois repita com **Máximo**). Numa placa de 8 GB
+   isso funciona: a Fornalha pede ao Ignis para soltar a placa antes do ComfyUI (um modelo por vez) e o
+   ComfyUI abre com descarga para a RAM.
+3. **Máquina → Teste de Fogo → Rodar o Teste Bruto** (nível Qualidade; depois Máximo). Também dá para
+   pedir ao Claude Code: "rode o run_brute_test no nível qualidade".
+   Esperado: em alguns minutos, os 3 casos (protagonista completo, inimigo armado, dragão) com
+   `"passou": true`, o jogo rodando na engine e "pode vender". O relatório fica em
+   `Documentos\Fornalha\Teste Bruto …\testes\teste_bruto.json` — me mande esse arquivo.
+4. Abra o projeto "Teste Bruto …" na Godot/Erethea e jogue: o dragão aparece como inimigo.
+
 ## 1. Janela e bandeja
 - O visual é o da Fornalha (grafite, cobre e brasa), com a barra de título dela e os botões no estilo do Windows 11.
 - Arrastar pelo topo move; duplo clique maximiza; bordas redimensionam; arrastar até a borda encaixa (Aero Snap).

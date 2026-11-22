@@ -9,12 +9,15 @@
 
 ## Onde estamos (atualizado a cada bloco de trabalho)
 - **Etapa 1 em andamento.** Feito nesta etapa até agora: look-dev/QA, pele 4K, cabelo curto em cards,
-  pano simulado (sobreveste e capa), movimento base, **ComfyUI** (conector, instalador pela placa, teste real no
-  processador do GitHub no Windows e no Linux), **pedidos 1–7 da Erethea** (música por situação, fala
-  presa ao personagem, mandíbula, acústica, ponte ao vivo por WebSocket, teste de agente).
-- Movimento base juntado (árvore de animação, pés no chão, olhar). Próximos, nesta ordem: criaturas e dragão → suíte de
-  Teste Bruto → modo Teste de Fogo (RX 580, Windows) → cabelo sem manchas → roupa/armadura → folha
-  de modelo pelo ComfyUI → por partes na janela.
+  pano simulado (sobreveste e capa), movimento base (árvore de animação, pés no chão, olhar),
+  **ComfyUI** (conector, instalador pela placa, teste real no processador do GitHub no Windows e no
+  Linux), **pedidos 1–7 da Erethea**, **dragão** com esqueleto próprio e 9 animações (1.8),
+  **suíte de Teste Bruto** (1.11: protagonista, inimigo armado, dragão, jogo na engine, QA e licenças)
+  e o começo do **Teste de Fogo** (1.12: botão na janela, reserva da placa no Ignis antes do ComfyUI e
+  dos workers, ComfyUI com descarga para a RAM em placa de 8 GB).
+- Próximos, nesta ordem: Teste Bruto verde no CI → cabelo sem manchas (o verso dos cards já foi
+  corrigido) → roupa/armadura → folha de modelo pelo ComfyUI → criaturas além do dragão → por partes
+  na janela → teste no computador do criador.
 
 ## Regras que valem nas 2 etapas
 - **Termine o que está fazendo** antes de pegar o próximo item; nada de quebrar o que já funciona.
@@ -75,10 +78,12 @@ Falta: root motion, BlendSpace2D/strafe com orientation warping, travamento do p
 IK também correndo, inertialization nas trocas, molas no cabelo e nas abas, mais bibliotecas comerciais
 (100STYLE, ACCAD, Mesh2Motion, Mixamo da pessoa).
 
-**1.8 Criaturas e dragões** — o rig não pode travar em humanos. Esqueletos próprios (quadrúpede;
-dragão com coluna longa, pescoço articulado, cauda com vários ossos, asas com membrana e mandíbula;
-aranha), malha procedural no Blender (dragão, lobo, golem) e, com placa, por IA; animações
-procedurais (voo, bater de asas, rugido, bote, caminhada pesada) e IK em quatro patas.
+**1.8 Criaturas e dragões** — ✅ dragão (`fc_criatura.py`): esqueleto próprio de 50 ossos (coluna,
+pescoço em S, cabeça, mandíbula "jaw", cauda com 10 ossos, asas com membrana, patas digitígradas),
+malha por metaballs remalhada (~50 mil triângulos), asas recolhidas apontando os ossos para alvos,
+9 animações (parado, andar, correr, voar, rugir, atacar, chicotada, dano, morrer); entra pelo
+create_character com tipo "dragao" e roda na engine como inimigo. Falta: escamas de verdade
+(textura assada), membrana translúcida, IK em quatro patas, quadrúpede (lobo, leão), golem, aranha.
 
 **1.9 ComfyUI como motor geral e conexões** — ✅ conector (só 127.0.0.1), instalador pela placa
 (CUDA, ROCm, DirectML para a RX 580, processador), Máquina → ComfyUI, CLI, teste real no CI. Falta:
@@ -91,13 +96,16 @@ fala presa ao personagem, boca no forja.json, acústica, WebSocket da ponte, --a
 Godot 4.8 beta no CI ao lado da 4.6; pedido 8 (prévia da Erethea na Galeria pela LibGodot) quando a
 Erethea tiver.
 
-**1.11 Suíte de Teste Bruto** (comando na API, no MCP e na linha de comando, e no CI):
+**1.11 Suíte de Teste Bruto** — ✅ `run_brute_test` (MCP/API), `fornalha-cli teste-bruto`, botão
+Máquina → Teste de Fogo e teste no CI (gerações de verdade):
 caso 1 protagonista completo (corpo, rosto, cabelo em camadas, roupa, rig + andar e combate);
 caso 2 inimigo humanoide armado (encaixe da arma na mão, retarget); caso 3 dragão (malha grande,
 asas, cauda, rig não humanoide, voo e ataque). Valida Blender sem janela, glTF, esquema do
 game.project.json, recibos de licença comercial de tudo e o jogo rodando na engine.
 
-**1.12 Modo Teste de Fogo (RX 580 8 GB, Windows)** — forçar Qualidade ou Máximo numa placa de 8 GB
+**1.12 Modo Teste de Fogo (RX 580 8 GB, Windows)** — ✅ em parte: botão na janela, a Fornalha pede ao
+Ignis para soltar a placa (POST /motor/reservar) antes do ComfyUI e dos workers e devolve depois, e o
+ComfyUI instala com --lowvram em placa de até 10 GB. Falta: forçar Qualidade ou Máximo numa placa de 8 GB
 (pouca VRAM, descarregar para a RAM, fila sequencial, um modelo por vez), Leve rápido para o dia a
 dia; instalador do Windows com tudo; roteiro no TESTE_DO_CRIADOR.md; teste no computador do criador.
 

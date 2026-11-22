@@ -651,6 +651,16 @@
       ]
     },
     {
+      "id": "forja-criatura",
+      "nome": "Forja de criaturas da Fornalha (dragão com esqueleto próprio, no Blender)",
+      "funcao": "3d",
+      "onde": "fornalha",
+      "licenca": "Do estúdio (gerado pela própria Fornalha)",
+      "url_licenca": "https://github.com/kaikyolf29-hub/Fornalha",
+      "uso_comercial": "sim",
+      "nota": "Malha procedural (metaballs + remalha), esqueleto não humanoide (coluna, pescoço, cauda, asas, mandíbula, patas) e animações procedurais (voo, rugido, bote, chicotada). Roda em qualquer computador."
+    },
+    {
       "id": "forja-3d",
       "nome": "Forja da Fornalha (3D low-poly no Blender)",
       "funcao": "3d",

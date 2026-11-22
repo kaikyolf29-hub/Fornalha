@@ -301,6 +301,9 @@ pub struct Caminho {
     pub hsa: Option<&'static str>,
     /// "gguf" (quantizado, cabe em 8 GB e no processador) ou "inteiro"
     pub modelos: &'static str,
+    /// placa com até ~10 GB: o ComfyUI abre com --lowvram (descarrega para a RAM o que não couber)
+    #[serde(default)]
+    pub pouca_vram: bool,
     pub motivo: String,
 }
 
@@ -313,14 +316,17 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             backend: "cpu",
             hsa: None,
             modelos: "gguf",
+            pouca_vram: false,
             motivo: "sem placa de vídeo: no processador (lento, mas funciona)".into(),
         };
     };
     let vram = g.vram_total_mb.unwrap_or(0);
     let modelos = if vram >= 16_000 { "inteiro" } else { "gguf" };
+    let pouca_vram = vram > 0 && vram <= 10_240;
     match g.fabricante {
-        Vendor::Nvidia => Caminho { backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome) },
+        Vendor::Nvidia => Caminho { pouca_vram, backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome) },
         Vendor::Amd if windows => Caminho {
+            pouca_vram,
             backend: "directml",
             hsa: None,
             modelos: "gguf",
@@ -332,9 +338,10 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             let rocm =
                 gfx == "gfx1030" || hsa.is_some() || gfx.starts_with("gfx110") || gfx.starts_with("gfx115") || gfx.starts_with("gfx120");
             if rocm {
-                Caminho { backend: "rocm", hsa, modelos, motivo: format!("{} ({gfx}) pelo ROCm", g.nome) }
+                Caminho { pouca_vram, backend: "rocm", hsa, modelos, motivo: format!("{} ({gfx}) pelo ROCm", g.nome) }
             } else {
                 Caminho {
+                    pouca_vram,
                     backend: "cpu",
                     hsa: None,
                     modelos: "gguf",
@@ -347,9 +354,9 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             }
         }
         Vendor::Intel if windows => {
-            Caminho { backend: "directml", hsa: None, modelos: "gguf", motivo: format!("{} pelo DirectML", g.nome) }
+            Caminho { pouca_vram, backend: "directml", hsa: None, modelos: "gguf", motivo: format!("{} pelo DirectML", g.nome) }
         }
-        _ => Caminho { backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome) },
+        _ => Caminho { pouca_vram, backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome) },
     }
 }
 
@@ -397,6 +404,9 @@ async fn comando_de_instalacao(
     cmd.arg(scripts.join("instalar_comfyui.py")).arg(&destino).arg(c.backend).args(["--modelos", c.modelos, "--porta", &porta.to_string()]);
     if let Some(h) = c.hsa {
         cmd.args(["--hsa", h]);
+    }
+    if c.pouca_vram && c.backend != "cpu" {
+        cmd.arg("--pouca-vram");
     }
     Ok((cmd, destino))
 }
@@ -553,7 +563,7 @@ mod testes {
         use crate::distro::Familia;
         use crate::gpu::Vendor;
         let rx580_win = caminho_para(&deteccao(Familia::Windows, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
-        assert_eq!((rx580_win.backend, rx580_win.modelos), ("directml", "gguf"));
+        assert_eq!((rx580_win.backend, rx580_win.modelos, rx580_win.pouca_vram), ("directml", "gguf", true));
         let rx580_linux = caminho_para(&deteccao(Familia::Fedora, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
         assert_eq!(rx580_linux.backend, "cpu");
         assert!(rx580_linux.motivo.contains("Vulkan"));

@@ -712,6 +712,25 @@ $("comfyui").addEventListener("click", async (e) => {
   } catch (err) { mensagem(err.message, "erro"); }
   carregar("maquina");
 });
+$("bruto-rodar").addEventListener("click", async (e) => {
+  const b = e.target;
+  const nivel = $("bruto-nivel").value;
+  b.disabled = true;
+  $("bruto-situacao").textContent = "Rodando… (vários minutos; dá para continuar usando a Fornalha)";
+  pinta($("bruto-resultado"), "");
+  try {
+    const r = await ferramenta("run_brute_test", { nivel });
+    const linhas = (r.casos || []).map((c) => `<div class="item"><div><strong>${c.passou ? "✓" : "✗"} ${esc(c.titulo)}</strong>`
+      + `<small>${Math.round(c.segundos)} s${c.erro ? " — " + esc(c.erro) : ""}</small>`
+      + (c.passou ? "" : `<small class="mono">${esc((c.verificacoes || []).filter((v) => !v.ok).map((v) => v.nome + ": " + v.detalhe).join(" | "))}</small>`)
+      + `</div></div>`);
+    if (r.engine) linhas.push(`<div class="item"><div><strong>${r.engine.passou ? "✓" : "✗"} Jogo na engine</strong><small>${Math.round(r.engine.segundos || 0)} s</small></div></div>`);
+    (r.gerais || []).forEach((g) => linhas.push(`<div class="item"><div><strong>${g.ok ? "✓" : "✗"} ${esc(g.nome)}</strong><small>${esc(g.detalhe || "")}</small></div></div>`));
+    pinta($("bruto-resultado"), linhas.join(""));
+    $("bruto-situacao").textContent = r.passou ? `Passou em ${Math.round(r.segundos / 60)} min. Relatório em ${r.projeto}/testes/teste_bruto.json` : "Algum caso falhou: veja abaixo (o relatório está na pasta testes do projeto).";
+  } catch (err) { $("bruto-situacao").textContent = err.message; mensagem(err.message, "erro"); }
+  b.disabled = false;
+});
 $("modelos-placa").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-modelo]");
   if (!b) return;

@@ -170,8 +170,10 @@ def qa(objs, arm=None, corpo=None, cabelo=None):
 
     malhas = _malhas(objs)
     # 1. transformações
-    ruins = [o.name for o in malhas if any(abs(s - 1.0) > 1e-4 for s in o.scale) or any(abs(r) > 1e-4 for r in o.rotation_euler)]
-    item("escala 1 e rotação 0 em tudo que é exportado", not ruins, ", ".join(ruins[:5]))
+    # peça presa num osso (arma na mão, escudo no braço) tem a rotação da pegada: só a escala precisa ser 1
+    ruins = [o.name for o in malhas if any(abs(s - 1.0) > 1e-4 for s in o.scale)
+             or (o.parent_type != "BONE" and any(abs(r) > 1e-4 for r in o.rotation_euler))]
+    item("escala 1 e rotação 0 em tudo que é exportado (presas em osso: só escala 1)", not ruins, ", ".join(ruins[:5]))
     # faces degeneradas
     degeneradas = 0
     for o in malhas:

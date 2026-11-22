@@ -329,8 +329,14 @@ fn caminho_str(p: &Path) -> String {
 /// Importa os assets e monta as cenas dentro da engine (sem janela).
 pub async fn montar(engine: &Achado, raiz: &Path) -> Resultado<Value> {
     let r = caminho_str(raiz);
+    // na primeira montagem a cena principal ainda não existe (o montar.gd é que cria): a engine reclama
+    // dela ao importar, e isso não é erro
+    let sem_principal = !raiz.join("principal.tscn").is_file();
     let imp = externas::rodar(&engine.caminho, &["--headless", "--path", &r, "--import"], Duration::from_secs(600), None).await?;
     let mut erros = erros_da_saida(&format!("{}\n{}", imp.stdout, imp.stderr));
+    if sem_principal {
+        erros.retain(|e| !e.contains("res://principal.tscn"));
+    }
     let script = format!("res://{PASTA_SCRIPTS}/montar.gd");
     let mon = externas::rodar(&engine.caminho, &["--headless", "--path", &r, "--script", &script], Duration::from_secs(300), None).await?;
     let saida = format!("{}\n{}", mon.stdout, mon.stderr);

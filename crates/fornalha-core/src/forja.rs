@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::erro::{Erro, Resultado};
 use crate::externas::{self, Achado};
 
-const SCRIPTS: [(&str, &str); 17] = [
+const SCRIPTS: [(&str, &str); 18] = [
     ("fornalha_main.py", include_str!("../blender/fornalha_main.py")),
     ("fc_comum.py", include_str!("../blender/fc_comum.py")),
     ("fc_personagem.py", include_str!("../blender/fc_personagem.py")),
@@ -29,10 +29,11 @@ const SCRIPTS: [(&str, &str); 17] = [
     ("fc_cabelo.py", include_str!("../blender/fc_cabelo.py")),
     ("fc_lookdev.py", include_str!("../blender/fc_lookdev.py")),
     ("fc_pano.py", include_str!("../blender/fc_pano.py")),
+    ("fc_criatura.py", include_str!("../blender/fc_criatura.py")),
 ];
 
 /// Tipos que a Forja sabe fazer.
-pub const TIPOS_DE_PERSONAGEM: [&str; 7] = ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"];
+pub const TIPOS_DE_PERSONAGEM: [&str; 8] = ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio", "dragao"];
 pub const ARMAS: [&str; 7] = ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo"];
 pub const OBJETOS: [&str; 9] = ["barril", "caixa", "bau", "arvore", "pedra", "casa", "tocha", "cerca", "pocao"];
 pub const ANIMACOES: [&str; 9] = ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"];

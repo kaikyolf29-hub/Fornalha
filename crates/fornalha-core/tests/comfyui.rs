@@ -146,3 +146,47 @@ async fn conceito_usa_o_comfyui_e_registra_a_licenca() {
     assert_eq!(st["comfyui"]["estado"]["conectado"], true);
     assert_eq!(st["comfyui"]["modelo_de_imagem"]["id"], "z-image-turbo-comfyui");
 }
+
+/// Numa placa de 8 GB, um modelo por vez: antes de gerar no ComfyUI a Fornalha pede ao Ignis para
+/// soltar a memória de vídeo (POST /motor/reservar) e devolve no fim (/motor/reservar/liberar).
+#[tokio::test]
+async fn reserva_a_placa_no_ignis_durante_o_comfyui() {
+    let (porta_comfy, _) = comfy_falso(true).await;
+    let pedidos: Arc<Mutex<Vec<String>>> = Arc::default();
+    let p2 = pedidos.clone();
+    let p3 = pedidos.clone();
+    let app = axum::Router::new()
+        .route("/motor/estado", get(|| async { Json(json!({"fase": "pronto", "fase_texto": "Pronto"})) }))
+        .route("/motor/versao", get(|| async { Json(json!({"app": {"nome": "Ignis", "versao": "0.4.0", "api": 1}})) }))
+        .route(
+            "/motor/reservar",
+            post(move |Json(c): Json<Value>| {
+                let p = p2.clone();
+                async move {
+                    p.lock().unwrap().push(format!("reservar {}", c["mb"]));
+                    Json(json!({"ok": true}))
+                }
+            }),
+        )
+        .route(
+            "/motor/reservar/liberar",
+            post(move || {
+                let p = p3.clone();
+                async move {
+                    p.lock().unwrap().push("liberar".into());
+                    Json(json!({"ok": true}))
+                }
+            }),
+        );
+    let l = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let porta_ignis = l.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let tmp = tempfile::tempdir().unwrap();
+    let f = Fornalha::para_testes(Paths::under(tmp.path()), comum::detection("rx580"));
+    f.definir_porta_comfyui(porta_comfy).unwrap();
+    f.definir_porta_ignis(porta_ignis).unwrap();
+    f.chamar("create_project", json!({"nome": "Placa"}), "claude-code").await.unwrap();
+    f.chamar("generate_concept", json!({"descricao": "templário"}), "claude-code").await.unwrap();
+    let p = pedidos.lock().unwrap().clone();
+    assert_eq!(p, vec!["reservar 15000".to_string(), "liberar".to_string()], "{p:?}");
+}

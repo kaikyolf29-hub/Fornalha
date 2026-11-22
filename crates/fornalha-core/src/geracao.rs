@@ -131,8 +131,22 @@ fn altura_do_tipo(tipo: &str) -> f64 {
         "orc" => 1.95,
         "goblin" => 1.15,
         "demonio" => 2.0,
+        "dragao" => 4.0,
         _ => 1.8,
     }
+}
+
+/// Trabalho pesado na placa fora do Ignis (ComfyUI, TRELLIS.2, UniRig, HY-Motion): pede ao Ignis para
+/// soltar a memória de vídeo antes (um modelo por vez na placa, essencial numa RX 580 de 8 GB) e
+/// devolve a placa no fim. Sem o Ignis aberto, só faz o trabalho.
+pub(crate) async fn com_placa<T>(f: &Fornalha, mb: u64, minutos: u32, trabalho: impl std::future::Future<Output = T>) -> T {
+    let porta = f.porta_ignis();
+    let reservou = f.estado_ignis().await.conectado && ignis::reservar_placa(porta, mb, minutos).await.is_ok();
+    let r = trabalho.await;
+    if reservou {
+        let _ = ignis::liberar_placa(porta).await;
+    }
+    r
 }
 
 /// TRELLIS.2 (imagem → malha alta com cor) e Blender (malha leve com textura assada).
@@ -149,12 +163,17 @@ async fn trellis_e_assar(
     colisao: bool,
 ) -> Resultado<(PathBuf, Value)> {
     let alta = pasta.join(format!("{nome}.alta.ply"));
-    let r = workers::rodar(
-        &f.paths,
-        Worker::Trellis2,
-        inst,
-        &json!({"tarefa": "gerar", "imagem": imagem, "saida": alta, "modelo": modelo, "seed": seed}),
-        TEMPO_PLACA,
+    let r = com_placa(
+        f,
+        16_000,
+        30,
+        workers::rodar(
+            &f.paths,
+            Worker::Trellis2,
+            inst,
+            &json!({"tarefa": "gerar", "imagem": imagem, "saida": alta, "modelo": modelo, "seed": seed}),
+            TEMPO_PLACA,
+        ),
     )
     .await?;
     let malha = pasta.join(format!("{nome}.malha.glb"));
@@ -451,7 +470,20 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let mut modelo_3d = "forja-3d".to_string();
     let mut r = Value::Null;
     let conceito = arquivos.get("conceito").and_then(|v| v.as_str()).map(PathBuf::from);
-    if let Some(img) = conceito.filter(|c| c.is_file()) {
+    // criaturas (dragão…) têm esqueleto próprio: saem da Forja de criaturas, não do humano nem do TRELLIS.2
+    let criatura = ficha["tipo"] == "dragao";
+    if criatura {
+        let cores = json!({"principal": ficha["cor_pele"].as_str().or(ficha["cor_roupa"].as_str()),
+                           "secundaria": ficha["cor_roupa_secundaria"]});
+        let tarefa = json!({"tarefa": "criatura", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20,
+                            "criatura": {"id": id, "tipo": "dragao", "altura": altura_do_tipo("dragao"), "cores": cores}});
+        let mut base = crate::pacotes::materiais_da_forja(&f.paths).unwrap_or(json!({}));
+        if let (Some(b), Some(t)) = (base.as_object_mut(), tarefa.as_object()) {
+            b.extend(t.clone());
+        }
+        r = forjar(f, &base).await?;
+        modelo_3d = "forja-criatura".into();
+    } else if let Some(img) = conceito.filter(|c| c.is_file()) {
         if let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, &p, "3d", &mut avisos).await {
             let altura = altura_do_tipo(ficha["tipo"].as_str().unwrap_or(""));
             match trellis_e_assar(f, &inst, &modelo, &img, &pasta, &id, altura, seed, false).await {
@@ -480,7 +512,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             avisos.push("O TRELLIS.2 faz o 3D a partir da imagem de conceito, que não saiu: usei a Forja da Fornalha.".into());
         }
     }
-    if r.is_null() && ficha["tipo"] != "esqueleto" {
+    if r.is_null() && ficha["tipo"] != "esqueleto" && !criatura {
         // humano realista: MakeHuman (CC0) + roupas e armaduras PBR + animações de captura
         if let Some(base) = crate::pacotes::para_a_forja(&f.paths) {
             let mut tarefa = base;
@@ -588,7 +620,8 @@ async fn gerar_imagem_conceito(f: &Fornalha, p: &Projeto, prompt: &str, destino:
     let modelo_comfy = if comfy.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
     let (png, modelo, parametros) = if let Some(m) = modelo_comfy {
         let lado = if sem_placa { 512 } else { 1024 };
-        let (png, info) = crate::comfyui::gerar_imagem(f.porta_comfyui(), prompt, lado, lado, seed, 8).await?;
+        let mb = if m.difusao_gguf { 7_000 } else { 15_000 };
+        let (png, info) = com_placa(f, mb, 30, crate::comfyui::gerar_imagem(f.porta_comfyui(), prompt, lado, lado, seed, 8)).await?;
         (png, m.id, json!({"comfyui": info, "dispositivos": comfy.dispositivos}))
     } else {
         let cap = ignis::capacidades(f.porta_ignis()).await;
@@ -795,12 +828,17 @@ pub async fn criar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Resu
                         "altura_m": a.altura_m, "girar_graus": a.girar_graus, "triangulos_max": 20000, "colisao": false, "previa": false}),
             )
             .await?;
-            match workers::rodar(
-                &f.paths,
-                Worker::UniRig,
-                &inst,
-                &json!({"entrada": limpa, "saida": saida, "pasta_temporaria": f.paths.data_dir.join("tmp").join(format!("unirig_{nome}"))}),
-                TEMPO_PLACA,
+            match com_placa(
+                f,
+                12_000,
+                20,
+                workers::rodar(
+                    &f.paths,
+                    Worker::UniRig,
+                    &inst,
+                    &json!({"entrada": limpa, "saida": saida, "pasta_temporaria": f.paths.data_dir.join("tmp").join(format!("unirig_{nome}"))}),
+                    TEMPO_PLACA,
+                ),
             )
             .await
             {
@@ -869,12 +907,17 @@ async fn animar_por_texto(f: &Fornalha, p: &Projeto, a: &ArgsAnimacao, descricao
     let nome = projeto::nome_de_pasta(a.nome_animacao.as_deref().unwrap_or("movimento")).replace('-', "_");
     let tmp = f.paths.data_dir.join("tmp").join(format!("hymotion_{}", crate::util::id_aleatorio(6)));
     let mov = tmp.join("movimento.json");
-    let r = workers::rodar(
-        &f.paths,
-        Worker::HyMotion,
-        &inst,
-        &json!({"texto": descricao, "segundos": a.segundos.unwrap_or(4.0), "saida": mov, "modelo": modelo, "seed": a.seed.unwrap_or(1), "pasta_temporaria": tmp}),
-        TEMPO_PLACA,
+    let r = com_placa(
+        f,
+        16_000,
+        20,
+        workers::rodar(
+            &f.paths,
+            Worker::HyMotion,
+            &inst,
+            &json!({"texto": descricao, "segundos": a.segundos.unwrap_or(4.0), "saida": mov, "modelo": modelo, "seed": a.seed.unwrap_or(1), "pasta_temporaria": tmp}),
+            TEMPO_PLACA,
+        ),
     )
     .await?;
     let b = forjar(

@@ -65,6 +65,25 @@ def tarefa_personagem(t):
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas(objs, arm, acoes)}
 
 
+def tarefa_criatura(t):
+    """Criatura com esqueleto próprio (hoje: dragão), animações procedurais e prévias."""
+    import fc_criatura
+
+    p = t.get("criatura", {})
+    tipo = p.get("tipo", "dragao")
+    if tipo != "dragao":
+        raise ValueError(f"criatura desconhecida: {tipo} (por enquanto: dragao)")
+    arm, objs, acoes = fc_criatura.criar_dragao(p)
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, [arm] + objs)
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, objs, saida, arm, acoes))
+    r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas(objs, arm, acoes)}
+    r["boca"] = {"osso": "jaw", "eixo_modelo": [1.0, 0.0, 0.0], "graus_aberta": 30}
+    r["esqueleto"] = "dragao"
+    return r
+
+
 def tarefa_humano(t):
     """Humano realista a partir dos dados CC0 do MakeHuman, com esqueleto de jogo."""
     import fc_humano
@@ -536,6 +555,7 @@ TAREFAS = {
     "material": tarefa_material,
     "assar": tarefa_assar,
     "humano": tarefa_humano,
+    "criatura": tarefa_criatura,
     "movimento": tarefa_movimento,
 }
 

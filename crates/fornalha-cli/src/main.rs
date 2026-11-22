@@ -20,6 +20,8 @@ Uso:
   fornalha-cli pacotes                     pacotes de conteúdo (MakeHuman, animações, materiais)
   fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
+  fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,dragao] [--sem-engine]
+                                           suíte de ponta a ponta (protagonista, inimigo armado, dragão, jogo na engine)
   fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|directml|cpu]
                                            ComfyUI local na placa desta máquina
   fornalha-cli versao
@@ -112,6 +114,27 @@ async fn main() {
                 }
             }
             imprimir(workers::instalar_e_esperar(&paths, w, args.iter().any(|a| a == "--pular-pesos")).await)
+        }
+        Some("teste-bruto") => {
+            let f = Fornalha::new(paths.clone());
+            let opcao = |nome: &str| args.iter().position(|a| a == nome).and_then(|i| args.get(i + 1)).cloned();
+            let a = fornalha_core::bruto::ArgsBruto {
+                nivel: opcao("--nivel"),
+                casos: opcao("--casos").map(|c| c.split(',').map(|x| x.trim().to_string()).collect()),
+                testar_na_engine: Some(!args.iter().any(|a| a == "--sem-engine")),
+                pasta: opcao("--pasta").map(std::path::PathBuf::from),
+            };
+            match fornalha_core::bruto::rodar(&f, a, "linha-de-comando").await {
+                Ok(r) => {
+                    println!("{}", serde_json::to_string_pretty(&r).unwrap_or_default());
+                    if r["passou"] == true {
+                        0
+                    } else {
+                        1
+                    }
+                }
+                Err(e) => imprimir(Err(e)),
+            }
         }
         Some("comfyui") => {
             use fornalha_core::comfyui;

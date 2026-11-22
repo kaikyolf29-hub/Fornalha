@@ -150,9 +150,11 @@ rosto/cabelo/criaturas/teste bruto e os pedidos da Erethea) está em
 [docs/PLANO_2_ETAPAS.md](docs/PLANO_2_ETAPAS.md) — a seção "Onde estamos" diz o que está feito, o que
 está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md).
 - **Etapa 1** — Fornalha 3D completa e pronta para o Teste de Fogo na RX 580 (Windows). Em andamento.
-  Feito: look-dev/QA, pele 4K, cabelo curto em cards, pano simulado, ComfyUI (conector, instalador
-  pela placa, teste real no processador do CI), pedidos 1–7 da Erethea. Próximo: movimento do agente,
-  criaturas e dragão, suíte de Teste Bruto, modo Teste de Fogo, cabelo sem manchas, roupa/armadura.
+  Feito: look-dev/QA, pele 4K, cabelo curto em cards, pano simulado, movimento base (juntado do
+  agente), ComfyUI (conector, instalador pela placa, teste real no processador do CI), pedidos 1–7 da
+  Erethea, dragão com esqueleto próprio, suíte de Teste Bruto (MCP `run_brute_test`, CLI
+  `teste-bruto`, botão Máquina → Teste de Fogo), reserva da placa no Ignis antes do ComfyUI/workers.
+  Próximo: Teste Bruto verde no CI, cabelo sem manchas, roupa/armadura, folha de modelo pelo ComfyUI.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

@@ -40,6 +40,11 @@ void fragment() {
 	if (c.a < limiar_pontilhado(FRAGCOORD.xy)) {
 		discard;
 	}
+	// card de duas faces: no verso a engine inverte a normal, mas a normal veio da casca lisa do penteado
+	// e tem de apontar para fora dos dois lados (senão os cards virados de costas ficam escuros: manchas)
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
 	AO = d.r;
 	AO_LIGHT_AFFECT = 0.5;
 	ROUGHNESS = rugosidade;

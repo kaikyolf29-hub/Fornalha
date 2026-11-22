@@ -139,6 +139,7 @@ class Alfaiate:
         bpy.ops.object.modifier_apply(modifier=m.name)
 
     def _vestir(self, obj):
+        normalizar_pesos(obj, self.h.arm)
         mod = obj.modifiers.new("esqueleto", "ARMATURE")
         mod.object = self.h.arm
         obj.parent = self.h.arm
@@ -435,6 +436,18 @@ class Alfaiate:
 
     def esconder_corpo(self):
         self.h.esconder_sob_roupa(sorted(self.cobertos))
+
+
+def normalizar_pesos(obj, arm):
+    """Pesos de osso de cada vértice somando 1 (a capa e as peças com dois ossos somavam mais ou menos)."""
+    ossos = {b.name for b in arm.data.bones}
+    grupos = {g.index: g for g in obj.vertex_groups if g.name in ossos}
+    for v in obj.data.vertices:
+        ws = [(grupos[e.group], e.weight) for e in v.groups if e.group in grupos and e.weight > 0]
+        total = sum(w for _, w in ws)
+        if total > 0 and abs(total - 1.0) > 1e-3:
+            for g, w in ws:
+                g.add([v.index], w / total, "REPLACE")
 
 
 def _fivela(a, nome, centro, material, pesos, larg=0.05, alt=0.042, prof=0.006, aro=0.007):

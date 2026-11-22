@@ -231,3 +231,35 @@ fn copiar(de: &std::path::Path, para: &std::path::Path) {
         }
     }
 }
+
+/// Teste Bruto (plano 1.11): protagonista completo, inimigo humanoide armado e dragão, jogo na
+/// engine, glTF, mandíbula, QA, bíblia e licenças. Precisa do Blender, da engine e dos pacotes.
+#[tokio::test]
+async fn teste_bruto_tres_casos() {
+    let tmp = tempfile::tempdir().unwrap();
+    let Some(f) = fornalha_com_ferramentas(tmp.path()).await else {
+        eprintln!("Blender ou engine não encontrados: teste pulado");
+        return;
+    };
+    if fornalha_core::pacotes::para_a_forja(&f.paths).is_none() {
+        eprintln!("pacotes de conteúdo não encontrados: teste pulado");
+        return;
+    }
+    f.definir_porta_ignis(1).unwrap();
+    let nivel = std::env::var("FORNALHA_TESTE_NIVEL").unwrap_or_else(|_| "qualidade".into());
+    let r = f.chamar("run_brute_test", json!({"nivel": nivel}), "claude-code").await.unwrap();
+    eprintln!("teste bruto: {}", serde_json::to_string_pretty(&r).unwrap());
+    if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(std::path::Path::new(&d).join("teste_bruto.json"), serde_json::to_vec_pretty(&r).unwrap()).unwrap();
+        let raiz = std::path::PathBuf::from(r["projeto"].as_str().unwrap());
+        let destino = std::path::Path::new(&d).join("teste-bruto-projeto");
+        let _ = std::fs::remove_dir_all(&destino);
+        copiar(&raiz, &destino);
+    }
+    for c in r["casos"].as_array().unwrap() {
+        assert_eq!(c["passou"], true, "caso {}: {}", c["caso"], serde_json::to_string_pretty(&c["verificacoes"]).unwrap());
+    }
+    assert_eq!(r["engine"]["passou"], true, "{}", serde_json::to_string_pretty(&r["engine"]["verificacoes"]).unwrap());
+    assert_eq!(r["passou"], true, "{}", serde_json::to_string_pretty(&r["gerais"]).unwrap());
+}

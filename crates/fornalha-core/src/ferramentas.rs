@@ -200,7 +200,8 @@ pub fn lista() -> Vec<Ferramenta> {
                     "nome": {"type": "string"},
                     "papel": {"type": "string", "description": "protagonista, aliado, inimigo, chefe..."},
                     "descricao": {"type": "string"},
-                    "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"]},
+                    "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio", "dragao"],
+                             "description": "dragao: criatura com esqueleto próprio (asas, cauda, pescoço, mandíbula) e animações de voo e ataque."},
                     "arma": {"type": "string", "enum": ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo", "nenhuma"]},
                     "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada", "placas"]},
                     "porte": {"type": "string", "enum": ["magro", "medio", "forte"]},
@@ -315,6 +316,16 @@ pub fn lista() -> Vec<Ferramenta> {
             titulo: "Testar o jogo na engine",
             descricao: "Abre o jogo em modo de teste: o jogador anda, pula e ataca sozinho; devolve os erros da engine, quadros por segundo, polígonos e tamanho de cada modelo, se os inimigos reagiram, capturas de tela e um vídeo (em ai/testes/).",
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "segundos": {"type": "number"}, "video": {"type": "boolean"}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "run_brute_test",
+            titulo: "Teste Bruto (suíte de ponta a ponta)",
+            descricao: "Num projeto só do teste, gera o protagonista completo (corpo, rosto, cabelo em camadas, roupa, andar e combate), um inimigo humanoide armado (arma presa na mão) e um dragão (esqueleto não humanoide, voo e ataque); monta o mundo, roda o jogo na engine e confere glTF (malha, esqueleto, animações), mandíbula para a fala, QA, bíblia válida e a licença comercial de tudo. Devolve o relatório (também em testes/teste_bruto.json). Leva vários minutos.",
+            esquema: json!({"type": "object", "properties": {
+                "nivel": {"type": "string", "enum": ["leve", "equilibrado", "qualidade", "maximo"], "description": "padrão: qualidade"},
+                "casos": {"type": "array", "items": {"type": "string", "enum": ["protagonista", "inimigo", "dragao"]}},
+                "testar_na_engine": {"type": "boolean"}}}),
             so_leitura: false,
         },
         Ferramenta {
@@ -687,6 +698,8 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "generate_code" => geracao::gerar_codigo(f, args(a)?).await,
         "import_to_engine" => geracao::importar_na_engine(f, args(a)?, quem).await,
         "run_test" => geracao::rodar_teste(f, args(a)?).await,
+        // a suíte chama as outras ferramentas: a chamada vai numa caixa (função assíncrona recursiva)
+        "run_brute_test" => Box::pin(crate::bruto::rodar(f, args(a)?, quem)).await,
         "plan_request" => crate::plano::planejar(f, args(a)?, quem).await,
         "queue_job" => {
             #[derive(serde::Deserialize, Default)]

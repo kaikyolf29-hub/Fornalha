@@ -164,8 +164,11 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   chama o `sd-cli` na hora de gerar (com a placa reservada no Ignis e VAE em blocos em 8 GB). Provado:
   teste com executável falso (argumentos, recibo `z-image-turbo-gguf-vulkan`, folha larga) e o
   executável de verdade no CI Linux (instalado pelo instalador da Fornalha, gerou o templário em 256 px
-  em 101 s — no processador: o sd.cpp não usa o Vulkan por software do Mesa). Em prova: o mesmo no
-  Windows. Falta provar: o Vulkan numa placa de verdade, a RX 580 (TESTE_DO_CRIADOR 0b).
+  em 101 s — no processador: o sd.cpp não usa o Vulkan por software do Mesa) e no CI Windows com o
+  mesmo executável que vai para a RX 580 (sem placa, no processador): templário, dragão, castelo e
+  folha de modelo de 3 vistas em 512 px, ~14–16 min cada (metade disso lendo os 6 GB de modelo do
+  disco a cada imagem — próximo ganho: deixar o `sd-server` aberto entre as imagens). Falta provar: o
+  Vulkan numa placa de verdade, a RX 580 (TESTE_DO_CRIADOR 0b).
   **Preparar a máquina (22/11):** Máquina → Programas → Baixar traz o Blender 5.2.4 e a Godot 4.6.1
   para `<dados>/ferramentas` (curl e tar do sistema — no Windows os de System32 —, soma publicada
   conferida: SHA-256 do Blender, SHA-512 da Godot), `fornalha-cli baixar-programa`, e o CI de gerações

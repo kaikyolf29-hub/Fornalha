@@ -528,6 +528,116 @@ pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoC
     Err(Erro::novo("comfyui_fora", "O ComfyUI não respondeu em 3 minutos depois de aberto (veja comfyui.log na pasta dele)."))
 }
 
+// ------------------------------------------------------------------ 3D pela IA (TRELLIS.2)
+
+/// Fluxo oficial do ComfyUI "imagem → malha" (Pixal3D/TRELLIS.2, Comfy-Org/workflow_templates, MIT).
+pub const FLUXO_TRELLIS2: &str = include_str!("../comfyui/trellis2_imagem_para_malha.json");
+
+/// Arquivos do 3D pela IA que precisam estar no ComfyUI (pasta, nome).
+pub const ARQUIVOS_3D: [(&str, &str); 5] = [
+    ("diffusion_models", "trellis_2_int8_convrot.safetensors"),
+    ("vae", "trellis_2_shape_vae_bf16.safetensors"),
+    ("vae", "trellis_2_texture_vae_bf16.safetensors"),
+    ("clip_vision", "dino_v3_vit_l.safetensors"),
+    ("background_removal", "birefnet.safetensors"),
+];
+
+/// Envia uma imagem para a pasta de entrada do ComfyUI (`/upload/image`). Devolve o nome lá dentro.
+pub async fn enviar_imagem(porta: u16, nome: &str, png: Vec<u8>) -> Resultado<String> {
+    let parte = reqwest::multipart::Part::bytes(png)
+        .file_name(nome.to_string())
+        .mime_str("image/png")
+        .map_err(|e| Erro::novo("comfyui_recusou", format!("Imagem inválida: {e}")))?;
+    let form = reqwest::multipart::Form::new().part("image", parte).text("overwrite", "true");
+    let r = cliente(120)
+        .post(url(porta, "/upload/image"))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| Erro::novo("comfyui_fora", format!("Não consegui enviar a imagem ao ComfyUI: {e}")))?;
+    let v: Value = r.json().await.unwrap_or(Value::Null);
+    let nome = v["name"].as_str().ok_or_else(|| Erro::novo("comfyui_recusou", format!("O ComfyUI não aceitou a imagem: {v}")))?;
+    Ok(match v["subfolder"].as_str().filter(|s| !s.is_empty()) {
+        Some(sub) => format!("{sub}/{nome}"),
+        None => nome.to_string(),
+    })
+}
+
+/// Troca, nos nós de um tipo, todo valor fixo igual a `de` por `para` (para mexer nos fluxos oficiais
+/// sem depender do nome interno de cada entrada).
+pub fn trocar_valor(api: &mut Value, tipo: &str, de: &Value, para: Value) -> usize {
+    let mut n = 0;
+    for no in api.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+        if no["class_type"] != tipo {
+            continue;
+        }
+        for v in no["inputs"].as_object_mut().into_iter().flat_map(|e| e.values_mut()) {
+            if v == de {
+                *v = para.clone();
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+/// O fluxo do TRELLIS.2 pronto para a API: ramo do TRELLIS.2 (não o Pixal3D), nossa imagem, nossos
+/// arquivos e, no processador, tamanhos menores (horas em vez de dias).
+pub fn fluxo_trellis2(object_info: &Value, imagem: &str, processador: bool, semente: u64) -> Resultado<Value> {
+    let ui: Value =
+        serde_json::from_str(FLUXO_TRELLIS2).map_err(|e| Erro::novo("comfyui_fluxo", format!("Fluxo 3D embutido inválido: {e}")))?;
+    let mut api = crate::comfyui_ui::para_api(&ui, object_info)?;
+    crate::comfyui_ui::trocar(&mut api, "PrimitiveBoolean", "value", json!(true)); // true = TRELLIS.2
+    crate::comfyui_ui::resolver_interruptores(&mut api);
+    crate::comfyui_ui::podar(&mut api, &["Save3DAdvanced"])?;
+    crate::comfyui_ui::trocar(&mut api, "LoadImage", "image", json!(imagem));
+    trocar_valor(&mut api, "CLIPVisionLoader", &json!("dino_v3_L_naf_fp32.safetensors"), json!("dino_v3_vit_l.safetensors"));
+    for no in api.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+        if no["class_type"] == "KSampler" {
+            no["inputs"]["seed"] = json!(semente);
+        }
+    }
+    if processador {
+        trocar_valor(&mut api, "Trellis2UpsampleStage", &json!(1536), json!(1024));
+        trocar_valor(&mut api, "PrimitiveInt", &json!(4096), json!(2048));
+        trocar_valor(&mut api, "DecimateMesh", &json!(700000), json!(200000));
+        trocar_valor(&mut api, "RemeshMesh", &json!(768), json!(512));
+    }
+    Ok(api)
+}
+
+/// Imagem → malha texturizada (.glb) pelo TRELLIS.2 no ComfyUI aberto. No processador pode levar horas.
+pub async fn gerar_3d(porta: u16, png: Vec<u8>, nome: &str, semente: u64, segundos: u64) -> Resultado<(Vec<u8>, Value)> {
+    let e = consultar(porta).await;
+    if !e.conectado {
+        return Err(Erro::novo("comfyui_fora", "O ComfyUI não está aberto."));
+    }
+    let processador = e.dispositivos.iter().all(|d| d["tipo"] == "cpu");
+    let info: Value = cliente(120)
+        .get(url(porta, "/object_info"))
+        .send()
+        .await
+        .map_err(|e| Erro::novo("comfyui_fora", format!("Não consegui ler os nós do ComfyUI: {e}")))?
+        .json()
+        .await
+        .map_err(|e| Erro::novo("comfyui_recusou", format!("Lista de nós do ComfyUI ilegível: {e}")))?;
+    let imagem = enviar_imagem(porta, nome, png).await?;
+    let fluxo = fluxo_trellis2(&info, &imagem, processador, semente)?;
+    let inicio = Instant::now();
+    let saidas = executar(porta, &fluxo, segundos).await?;
+    let glb = saidas.iter().find(|s| s.nome.to_lowercase().ends_with(".glb")).ok_or_else(|| {
+        Erro::novo(
+            "comfyui_recusou",
+            format!("O fluxo 3D terminou sem .glb (saídas: {:?}).", saidas.iter().map(|s| &s.nome).collect::<Vec<_>>()),
+        )
+    })?;
+    Ok((
+        glb.bytes.clone(),
+        json!({"modelo": "trellis2-comfyui", "segundos": inicio.elapsed().as_secs_f64(), "processador": processador, "nos": fluxo.as_object().map(|m| m.len()),
+               "dispositivos": e.dispositivos}),
+    ))
+}
+
 // ------------------------------------------------------------------ motor Vulkan (stable-diffusion.cpp)
 
 /// O motor Vulkan instalado pela Fornalha: o executável e os três arquivos do Z-Image Turbo.

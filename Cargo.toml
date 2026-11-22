@@ -19,7 +19,7 @@ axum = { version = "0.8", features = ["ws"] }
 tower = { version = "0.5", features = ["util"] }
 http = "1"
 http-body-util = "0.1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "http2", "multipart"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"

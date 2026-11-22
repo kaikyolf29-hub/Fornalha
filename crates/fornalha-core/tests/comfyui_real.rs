@@ -42,13 +42,19 @@ async fn comfyui_de_verdade_gera_referencias() {
     eprintln!("modelo: {m:?}");
     let lado: u32 = std::env::var("FORNALHA_TESTE_LADO").ok().and_then(|v| v.parse().ok()).unwrap_or(512);
     let mut relatorio = vec![];
-    for (i, (nome, prompt)) in PEDIDOS.iter().enumerate() {
+    // FORNALHA_TESTE_SO_UM: só a primeira imagem (prova rápida de um caminho novo, como o DirectML)
+    let so_um = std::env::var("FORNALHA_TESTE_SO_UM").is_ok();
+    for (i, (nome, prompt)) in PEDIDOS.iter().enumerate().take(if so_um { 1 } else { PEDIDOS.len() }) {
         let (png, info) = comfyui::gerar_imagem(porta, prompt, lado, lado, 1000 + i as u64, 8).await.unwrap();
         assert!(png.starts_with(&[0x89, b'P', b'N', b'G']), "{nome}: não é PNG");
         assert!(png.len() > 20_000, "{nome}: imagem pequena demais ({} bytes)", png.len());
         std::fs::write(saida.join(format!("{nome}.png")), &png).unwrap();
         eprintln!("{nome}: {:.0} s", info["segundos"].as_f64().unwrap_or(0.0));
         relatorio.push(serde_json::json!({"nome": nome, "prompt": prompt, "info": info}));
+    }
+    if so_um {
+        std::fs::write(saida.join("relatorio.json"), serde_json::to_string_pretty(&relatorio).unwrap()).unwrap();
+        return;
     }
     // folha de modelo (frente, perfil, costas) para guiar a malha: larga e baixa
     let folha = "game character model sheet of a medieval Knight Templar: front view, side view and back view of the same character, \

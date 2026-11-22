@@ -73,6 +73,12 @@ class Instalador:
     def clonar(self, url, destino):
         if os.path.isdir(os.path.join(destino, ".git")):
             self.rodar(["git", "-C", destino, "pull", "--ff-only"])
+        elif os.path.isdir(destino) and os.listdir(destino):
+            # pasta já com modelos (guardados de antes): baixa o código por cima, sem apagar os modelos
+            self.rodar(["git", "init", "-q", destino])
+            self.rodar(["git", "-C", destino, "remote", "add", "origin", url])
+            self.rodar(["git", "-C", destino, "fetch", "--depth", "1", "origin", "HEAD"])
+            self.rodar(["git", "-C", destino, "checkout", "-f", "FETCH_HEAD"])
         else:
             self.rodar(["git", "clone", "--depth", "1", url, destino])
         return subprocess.run(["git", "-C", destino, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -117,12 +123,21 @@ class Instalador:
         if not os.path.isfile(self.python):
             self.rodar([sys.executable, "-m", "venv", self.venv])
         self.pip("--upgrade", "pip")
+        restricoes = []
         if self.backend == "directml":
-            # DirectML: qualquer placa DirectX 12 no Windows (AMD GCN como a RX 580, RDNA, Intel)
+            # DirectML: qualquer placa DirectX 12 no Windows (AMD GCN como a RX 580, RDNA, Intel). O torch
+            # que ele traz fica preso: sem isso, o requirements do ComfyUI trocaria por outro torch.
             self.pip("torch-directml")
+            versao = subprocess.run([self.python, "-c", "import torch; print(torch.__version__.split('+')[0])"], capture_output=True,
+                                    text=True).stdout.strip()
+            arq = os.path.join(self.pasta, "restricoes.txt")
+            with open(arq, "w", encoding="utf-8") as f:
+                f.write(f"torch=={versao}\n")
+            restricoes = ["-c", arq]
+            self.etapa(f"torch {versao} preso para o DirectML")
         else:
             self.pip("torch", "torchvision", "torchaudio", "--index-url", INDICE[self.backend])
-        self.pip("-r", os.path.join(self.repo, "requirements.txt"))
+        self.pip("-r", os.path.join(self.repo, "requirements.txt"), *restricoes)
         self.pip("-r", os.path.join(self.repo, "custom_nodes", "ComfyUI-GGUF", "requirements.txt"))
         baixados = [self.baixar(*m) for m in MODELOS[modelos]]
         args = ["main.py", "--listen", "127.0.0.1", "--port", str(porta), "--preview-method", "none"]

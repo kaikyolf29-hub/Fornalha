@@ -396,6 +396,182 @@ def _material_membrana(obj, nome, cores):
     obj.data.materials.append(m)
 
 
+# ------------------------------------------------------------------ escamas assadas
+
+
+def _no(nt, tipo, **props):
+    n = nt.nodes.new(tipo)
+    for k, v in props.items():
+        setattr(n, k, v)
+    return n
+
+
+def _hex(h, padrao):
+    h = (h or padrao).lstrip("#")
+    srgb = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb] + [1.0]
+
+
+def _material_escamas_procedural(nome, cores, S):
+    """Escamas em Voronoi (centro alto, borda funda e mais escura, cada escama com o seu tom), barriga em
+    placas transversais mais claras, rugosidade maior nas frestas. Só para assar."""
+    mat = bpy.data.materials.new(nome + "_escamas_proc")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    L = nt.links.new
+    saida = _no(nt, "ShaderNodeOutputMaterial")
+    bsdf = _no(nt, "ShaderNodeBsdfPrincipled")
+    coord = _no(nt, "ShaderNodeTexCoord")
+    mapa = _no(nt, "ShaderNodeMapping")
+    mapa.inputs["Scale"].default_value = (9.0 / S, 9.0 / S, 9.0 / S)  # escamas de ~10 cm no dorso
+    L(coord.outputs["Object"], mapa.inputs["Vector"])
+    vor = _no(nt, "ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
+    L(mapa.outputs["Vector"], vor.inputs["Vector"])
+    vor_c = _no(nt, "ShaderNodeTexVoronoi", feature="F1")
+    L(mapa.outputs["Vector"], vor_c.inputs["Vector"])
+    # altura da escama: borda funda, centro abaulado
+    alt = _no(nt, "ShaderNodeMapRange")
+    alt.inputs["From Min"].default_value = 0.0
+    alt.inputs["From Max"].default_value = 0.3
+    L(vor.outputs["Distance"], alt.inputs["Value"])
+    # barriga: normal virada para baixo; placas transversais (ondas ao longo do corpo)
+    geo = _no(nt, "ShaderNodeNewGeometry")
+    sep = _no(nt, "ShaderNodeSeparateXYZ")
+    L(geo.outputs["Normal"], sep.inputs["Vector"])
+    barriga = _no(nt, "ShaderNodeMapRange")
+    barriga.inputs["From Min"].default_value = -0.25
+    barriga.inputs["From Max"].default_value = -0.6
+    L(sep.outputs["Z"], barriga.inputs["Value"])
+    onda = _no(nt, "ShaderNodeTexWave", wave_type="BANDS", bands_direction="Y")
+    onda.inputs["Scale"].default_value = 1.6 / S
+    onda.inputs["Distortion"].default_value = 1.5
+    L(coord.outputs["Object"], onda.inputs["Vector"])
+    placa = _no(nt, "ShaderNodeMath", operation="POWER")
+    L(onda.outputs["Fac"], placa.inputs[0])
+    placa.inputs[1].default_value = 0.35
+    altura = _no(nt, "ShaderNodeMix", data_type="FLOAT")
+    L(barriga.outputs["Result"], altura.inputs["Factor"])
+    L(alt.outputs["Result"], altura.inputs[2])
+    L(placa.outputs[0], altura.inputs[3])
+    bump = _no(nt, "ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 1.0
+    bump.inputs["Distance"].default_value = 0.02 * S
+    L(altura.outputs[0], bump.inputs["Height"])
+    L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    # cor: tom por escama (cor do Voronoi), frestas escuras, barriga clara
+    tom = _no(nt, "ShaderNodeSeparateColor")
+    L(vor_c.outputs["Color"], tom.inputs["Color"])
+    var = _no(nt, "ShaderNodeMapRange")
+    var.inputs["To Min"].default_value = 0.72
+    var.inputs["To Max"].default_value = 1.18
+    L(tom.outputs["Red"], var.inputs["Value"])
+    dorso = _no(nt, "ShaderNodeRGB")
+    dorso.outputs[0].default_value = _hex(cores.get("principal"), "#4a1712")
+    claro = _no(nt, "ShaderNodeRGB")
+    claro.outputs[0].default_value = _hex(cores.get("secundaria"), "#8a6a3c")
+    escuro = _no(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
+    escuro.inputs["Factor"].default_value = 1.0
+    L(dorso.outputs[0], escuro.inputs[6])
+    fresta = _no(nt, "ShaderNodeMapRange")
+    fresta.inputs["To Min"].default_value = 0.18
+    fresta.inputs["To Max"].default_value = 1.0
+    L(alt.outputs["Result"], fresta.inputs["Value"])
+    cinza = _no(nt, "ShaderNodeCombineColor")
+    m1 = _no(nt, "ShaderNodeMath", operation="MULTIPLY")
+    L(var.outputs["Result"], m1.inputs[0])
+    L(fresta.outputs["Result"], m1.inputs[1])
+    for c in ("Red", "Green", "Blue"):
+        L(m1.outputs[0], cinza.inputs[c])
+    L(cinza.outputs["Color"], escuro.inputs[7])
+    cor = _no(nt, "ShaderNodeMix", data_type="RGBA")
+    L(barriga.outputs["Result"], cor.inputs["Factor"])
+    L(escuro.outputs[2], cor.inputs[6])
+    L(claro.outputs[0], cor.inputs[7])
+    L(cor.outputs[2], bsdf.inputs["Base Color"])
+    rug = _no(nt, "ShaderNodeMapRange")
+    rug.inputs["To Min"].default_value = 0.78
+    rug.inputs["To Max"].default_value = 0.42
+    L(alt.outputs["Result"], rug.inputs["Value"])
+    L(rug.outputs["Result"], bsdf.inputs["Roughness"])
+    L(bsdf.outputs["BSDF"], saida.inputs["Surface"])
+    return mat, cor.outputs[2], rug.outputs["Result"]
+
+
+def assar_escamas(obj, nome, cores, S, res=2048):
+    """Assa as escamas procedurais em cor, normal e rugosidade (imagens que vão para o glb)."""
+    mat, saida_cor, saida_rug = _material_escamas_procedural(nome, cores, S)
+    originais = [ms.material for ms in obj.material_slots]
+    for i in (0, 1):
+        if i < len(obj.material_slots):
+            obj.material_slots[i].material = mat
+    imgs = {k: bpy.data.images.new(f"{nome}_escamas_{k}", res, res, alpha=False) for k in ("cor", "normal", "rugosidade")}
+    for k in ("normal", "rugosidade"):
+        imgs[k].colorspace_settings.name = "Non-Color"
+    materiais = [m for m in {ms.material for ms in obj.material_slots} if m and m.use_nodes]
+    alvos = {}
+    for m in materiais:
+        n = m.node_tree.nodes.new("ShaderNodeTexImage")
+        alvos[m] = n
+    cena = bpy.context.scene
+    motor, amostras = cena.render.engine, cena.cycles.samples
+    cena.render.engine = "CYCLES"
+    cena.cycles.samples = 4
+    try:
+        cena.cycles.device = "CPU"
+    except Exception:
+        pass
+    _ativo(obj)
+    nt = mat.node_tree
+    saida = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    emi = nt.nodes.new("ShaderNodeEmission")
+
+    def assar(tipo, img):
+        for m, n in alvos.items():
+            n.image = img
+            m.node_tree.nodes.active = n
+        bpy.ops.object.bake(type=tipo, margin=8, use_clear=True, normal_space="TANGENT")
+
+    try:
+        nt.links.new(saida_cor, emi.inputs["Color"])
+        nt.links.new(emi.outputs["Emission"], saida.inputs["Surface"])
+        assar("EMIT", imgs["cor"])
+        nt.links.new(saida_rug, emi.inputs["Color"])
+        assar("EMIT", imgs["rugosidade"])
+        nt.links.new(bsdf.outputs["BSDF"], saida.inputs["Surface"])
+        assar("NORMAL", imgs["normal"])
+    finally:
+        cena.render.engine, cena.cycles.samples = motor, amostras
+        for m, n in alvos.items():
+            m.node_tree.nodes.remove(n)
+    for img in imgs.values():
+        img.pack()
+    # material final de jogo: as três imagens
+    final = bpy.data.materials.new(nome + "_escamas")
+    final.use_nodes = True
+    fnt = final.node_tree
+    fb = next(n for n in fnt.nodes if n.type == "BSDF_PRINCIPLED")
+    tc = fnt.nodes.new("ShaderNodeTexImage")
+    tc.image = imgs["cor"]
+    fnt.links.new(tc.outputs["Color"], fb.inputs["Base Color"])
+    tr = fnt.nodes.new("ShaderNodeTexImage")
+    tr.image = imgs["rugosidade"]
+    fnt.links.new(tr.outputs["Color"], fb.inputs["Roughness"])
+    tn = fnt.nodes.new("ShaderNodeTexImage")
+    tn.image = imgs["normal"]
+    nm = fnt.nodes.new("ShaderNodeNormalMap")
+    fnt.links.new(tn.outputs["Color"], nm.inputs["Color"])
+    fnt.links.new(nm.outputs["Normal"], fb.inputs["Normal"])
+    for i in (0, 1):
+        if i < len(obj.material_slots):
+            obj.material_slots[i].material = final
+    for m in originais[:2]:
+        if m and m.users == 0:
+            bpy.data.materials.remove(m)
+    return final
+
+
 # ------------------------------------------------------------------ animações
 
 
@@ -596,6 +772,11 @@ def criar_dragao(p):
     garras = [pata[-1] + Vector((dx * escala, -0.06 * escala, 0)) for lado in ("l", "r") for pata in (d.perna_tras[lado], d.perna_frente[lado])
               for dx in (-0.09, 0.0, 0.09)]
     marcar_osso(corpo, chifres, garras, 0.16 * escala)
+    if p.get("escamas", True):
+        try:
+            assar_escamas(corpo, nome, p.get("cores") or {}, escala, int(p.get("textura") or 4096))
+        except Exception as e:  # sem as escamas, fica o couro tingido
+            print(f"[criatura] escamas não assaram: {e}")
     vestir(corpo, arm)
     membranas = []
     for lado in ("l", "r"):

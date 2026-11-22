@@ -1,9 +1,11 @@
 name: ComfyUI no processador
 
-# ComfyUI de verdade, sem placa (só o processador da máquina do GitHub), no Windows e no Linux:
-# instala o ComfyUI e o nó ComfyUI-GGUF, baixa o Z-Image Turbo quantizado (Apache 2.0) e a Fornalha
-# gera referências (personagem, criatura, cenário) pelo conector. As imagens viram artefato.
-# Roda quando o conector muda, e à mão (Actions → ComfyUI no processador → Run workflow).
+# ComfyUI de verdade instalado pelo PRÓPRIO instalador da Fornalha (o mesmo que roda na máquina da
+# pessoa: `fornalha-cli comfyui instalar`), sem placa, no Windows e no Linux: baixa o Z-Image Turbo
+# quantizado (Apache 2.0) e a Fornalha gera referências (personagem, criatura, cenário e folha de
+# modelo) pelo conector. As imagens viram artefato. Mais um teste experimental do caminho DirectML
+# (o da RX 580 no Windows), que aqui roda no adaptador de software do Windows.
+# Roda quando o conector ou o instalador mudam, e à mão (Actions → ComfyUI no processador → Run workflow).
 
 on:
   workflow_dispatch:
@@ -14,6 +16,7 @@ on:
   push:
     paths:
       - "crates/fornalha-core/src/comfyui.rs"
+      - "crates/fornalha-core/workers/instalar_comfyui.py"
       - "crates/fornalha-core/tests/comfyui_real.rs"
       - ".github/workflows/comfyui.yml"
 
@@ -23,24 +26,31 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  MODELOS: |
-    diffusion_models/z_image_turbo-Q4_K_M.gguf https://huggingface.co/jayn7/Z-Image-Turbo-GGUF/resolve/main/z_image_turbo-Q4_K_M.gguf
-    text_encoders/Qwen3-4B-Q4_K_M.gguf https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf
-    vae/ae.safetensors https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors
 
 jobs:
   comfyui:
-    name: ComfyUI no processador (${{ matrix.nome }})
+    name: ComfyUI ${{ matrix.backend }} (${{ matrix.nome }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
+    timeout-minutes: 200
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - nome: Windows
             os: windows-latest
+            backend: cpu
+            experimental: false
           - nome: Linux
             os: ubuntu-24.04
+            backend: cpu
+            experimental: false
+          - nome: Windows
+            os: windows-latest
+            backend: directml
+            experimental: true
+    env:
+      FORNALHA_HOME: ${{ github.workspace }}/../fornalha-home
     steps:
       - uses: actions/checkout@v4
 
@@ -52,67 +62,51 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Instalar o ComfyUI (só processador) e o nó GGUF
-        shell: bash
-        run: |
-          set -e
-          git clone --depth 1 https://github.com/Comfy-Org/ComfyUI "$RUNNER_TEMP/ComfyUI"
-          git clone --depth 1 https://github.com/city96/ComfyUI-GGUF "$RUNNER_TEMP/ComfyUI/custom_nodes/ComfyUI-GGUF"
-          echo "ComfyUI $(git -C "$RUNNER_TEMP/ComfyUI" rev-parse --short HEAD), ComfyUI-GGUF $(git -C "$RUNNER_TEMP/ComfyUI/custom_nodes/ComfyUI-GGUF" rev-parse --short HEAD)"
-          python -m pip install --upgrade pip
-          python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r "$RUNNER_TEMP/ComfyUI/requirements.txt"
-          python -m pip install -r "$RUNNER_TEMP/ComfyUI/custom_nodes/ComfyUI-GGUF/requirements.txt"
-
       - name: Modelos guardados entre execuções
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/modelos
-          key: comfyui-modelos-z-image-turbo-q4km-v1
+          path: |
+            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/diffusion_models
+            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/text_encoders
+            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/vae
+          key: comfyui-modelos-z-image-turbo-q4km-v2
 
-      - name: Baixar os modelos (licença comercial conferida no manifest)
+      - name: Compilar a Fornalha (linha de comando) e o teste
+        run: |
+          cargo build -p fornalha-cli
+          cargo test -p fornalha-core --test comfyui_real --no-run
+
+      - name: Instalar o ComfyUI pelo instalador da Fornalha
         shell: bash
         run: |
-          set -e
-          while read -r destino endereco; do
-            [ -z "$destino" ] && continue
-            arq="$RUNNER_TEMP/modelos/$destino"
-            mkdir -p "$(dirname "$arq")"
-            if [ ! -s "$arq" ]; then
-              curl -fL --retry 5 --retry-delay 10 -o "$arq" "$endereco"
-            fi
-            mkdir -p "$RUNNER_TEMP/ComfyUI/models/$(dirname "$destino")"
-            cp "$arq" "$RUNNER_TEMP/ComfyUI/models/$destino"
-            ls -la "$RUNNER_TEMP/ComfyUI/models/$destino"
-          done <<< "$MODELOS"
+          cargo run -q -p fornalha-cli -- comfyui instalar --backend ${{ matrix.backend }} --modelos gguf
+          cat "$FORNALHA_HOME/dados/comfyui/instalacao.json"
 
-      - name: Compilar o teste
-        run: cargo test -p fornalha-core --test comfyui_real --no-run
-
-      - name: ComfyUI + Fornalha geram as referências
+      - name: Abrir o ComfyUI pela Fornalha e gerar as referências
         shell: bash
         env:
           FORNALHA_TESTE_COMFYUI: "8188"
           FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/comfyui-saida
-          FORNALHA_TESTE_LADO: ${{ github.event.inputs.lado || '512' }}
+          FORNALHA_TESTE_LADO: ${{ matrix.backend == 'directml' && '256' || github.event.inputs.lado || '512' }}
+          FORNALHA_TESTE_SO_UM: ${{ matrix.backend == 'directml' && '1' || '' }}
           RUST_BACKTRACE: "1"
         run: |
           set -e
+          [ -z "$FORNALHA_TESTE_SO_UM" ] && unset FORNALHA_TESTE_SO_UM
           mkdir -p "$FORNALHA_TESTE_SAIDA"
-          cd "$RUNNER_TEMP/ComfyUI"
-          python main.py --cpu --listen 127.0.0.1 --port 8188 > "$FORNALHA_TESTE_SAIDA/comfyui.log" 2>&1 &
-          for i in $(seq 1 120); do
-            curl -s -m 2 http://127.0.0.1:8188/system_stats > /dev/null && break
-            sleep 2
-          done
-          curl -s http://127.0.0.1:8188/system_stats
-          cd "$GITHUB_WORKSPACE"
+          cargo run -q -p fornalha-cli -- comfyui abrir
           cargo test -p fornalha-core --test comfyui_real -- --nocapture
 
       - name: Imagens e registro
         if: always()
-        uses: actions/upload-artifact@v4
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/comfyui-saida"
+          cp "$FORNALHA_HOME/dados/comfyui/comfyui.log" "$FORNALHA_HOME/dados/comfyui/instalacao.log" "$RUNNER_TEMP/comfyui-saida/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: comfyui-${{ matrix.nome }}
+          name: comfyui-${{ matrix.backend }}-${{ matrix.nome }}
           path: ${{ runner.temp }}/comfyui-saida
           if-no-files-found: warn

@@ -589,7 +589,15 @@ pub fn fluxo_trellis2(object_info: &Value, imagem: &str, processador: bool, seme
     let mut api = crate::comfyui_ui::para_api(&ui, object_info)?;
     crate::comfyui_ui::trocar(&mut api, "PrimitiveBoolean", "value", json!(true)); // true = TRELLIS.2
     crate::comfyui_ui::resolver_interruptores(&mut api);
-    crate::comfyui_ui::podar(&mut api, &["Save3DAdvanced"])?;
+    // a saída do modelo oficial (Save3DAdvanced) pede o estado da câmera da interface: no lugar dela, o
+    // SaveGLB, que só precisa da malha
+    for no in api.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+        if no["class_type"] == "Save3DAdvanced" {
+            let malha = no["inputs"]["model_3d"].clone();
+            *no = json!({"class_type": "SaveGLB", "inputs": {"mesh": malha, "filename_prefix": "3d/fornalha"}, "_meta": {"title": "Salvar a malha"}});
+        }
+    }
+    crate::comfyui_ui::podar(&mut api, &["SaveGLB"])?;
     crate::comfyui_ui::trocar(&mut api, "LoadImage", "image", json!(imagem));
     trocar_valor(&mut api, "CLIPVisionLoader", &json!("dino_v3_L_naf_fp32.safetensors"), json!("dino_v3_vit_l.safetensors"));
     for no in api.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
@@ -789,6 +797,17 @@ pub async fn gerar_imagem_vulkan(
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    /// Com a lista de nós de verdade (FORNALHA_OBJECT_INFO=<object_info.json> baixado do CI), mostra o
+    /// fluxo do TRELLIS.2 convertido. Rodar com `--ignored`.
+    #[test]
+    #[ignore]
+    fn fluxo_trellis2_com_a_lista_real() {
+        let Ok(arq) = std::env::var("FORNALHA_OBJECT_INFO") else { return };
+        let info: Value = serde_json::from_str(&std::fs::read_to_string(arq).unwrap()).unwrap();
+        let f = fluxo_trellis2(&info, "conceito.png", true, 7).unwrap();
+        println!("{}", serde_json::to_string_pretty(&f).unwrap());
+    }
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()

@@ -87,13 +87,37 @@ impl<'a> Grafo<'a> {
     }
 }
 
+/// Tipos que a interface mostra como campo (widget) e guarda em `widgets_values`.
+const TIPOS_WIDGET: [&str; 11] =
+    ["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO", "COMFY_DYNAMICCOMBO_V3", "LOAD_3D", "CURVE", "COLOR", "IMAGECOMPARE", "AUDIO_RECORD"];
+
 /// O valor de entrada é um "widget" (número, texto, lista de opções) e não um link de outro nó?
 fn eh_widget(spec: &Value) -> bool {
     match spec.get(0) {
         Some(Value::Array(_)) => true,
-        Some(Value::String(t)) => matches!(t.as_str(), "INT" | "FLOAT" | "STRING" | "BOOLEAN" | "COMBO"),
+        Some(Value::String(t)) => TIPOS_WIDGET.contains(&t.as_str()),
         _ => false,
     }
+}
+
+/// Depois deste valor a interface guarda mais um (o "fixed"/"randomize" da semente, o botão de enviar)?
+fn valores_extras(nome: &str, spec: &Value) -> usize {
+    let o = opcoes(spec);
+    let verdade = |v: &Value| match v {
+        Value::Bool(b) => *b,
+        Value::String(s) => !s.is_empty(),
+        Value::Null => false,
+        _ => true,
+    };
+    let semente = spec.get(0).and_then(Value::as_str) == Some("INT") && matches!(nome, "seed" | "noise_seed");
+    let mut n = 0;
+    if verdade(&o["control_after_generate"]) || semente {
+        n += 1;
+    }
+    if verdade(&o["image_upload"]) || verdade(&o["video_upload"]) || verdade(&o["audio_upload"]) {
+        n += 1;
+    }
+    n
 }
 
 fn opcoes(spec: &Value) -> &Value {
@@ -131,27 +155,41 @@ pub fn para_api(ui: &Value, object_info: &Value) -> Resultado<Value> {
                 }
             }
         }
-        for (nome, spec) in ordem {
-            let link = entradas_ui.get(nome.as_str()).and_then(|e| e["link"].as_u64());
-            if eh_widget(spec) {
-                // valores guardados pela interface, na ordem dos widgets (por nome, nos fluxos que guardam objeto)
+        // entradas na ordem dos widgets; os combos dinâmicos trazem as entradas da opção escolhida logo
+        // depois deles, com o nome "combo.entrada"
+        let mut fila: std::collections::VecDeque<(String, Value)> = ordem.into_iter().map(|(n, s)| (n, s.clone())).collect();
+        while let Some((nome, spec)) = fila.pop_front() {
+            let na_ui = entradas_ui.get(nome.as_str());
+            let link = na_ui.and_then(|e| e["link"].as_u64());
+            // é campo se a interface marcou como widget, ou se nem aparece entre os encaixes do nó
+            let widget = match na_ui {
+                Some(e) => e.get("widget").is_some_and(|w| !w.is_null()),
+                None => eh_widget(&spec),
+            };
+            if widget {
                 let valor = match valores_ui {
                     Value::Array(a) => {
                         let v = a.get(indice).cloned();
-                        indice += 1;
-                        let o = opcoes(spec);
-                        let semente = spec.get(0).and_then(Value::as_str) == Some("INT") && matches!(nome.as_str(), "seed" | "noise_seed");
-                        if o["control_after_generate"] == true || semente {
-                            indice += 1; // "fixed" / "randomize" logo depois da semente
-                        }
-                        if o["image_upload"] == true || o["video_upload"] == true || o["audio_upload"] == true {
-                            indice += 1; // o botão de enviar arquivo também guarda um valor
-                        }
+                        indice += 1 + valores_extras(&nome, &spec);
                         v
                     }
                     Value::Object(m) => m.get(&nome).cloned(),
                     _ => None,
                 };
+                if spec.get(0).and_then(Value::as_str) == Some("COMFY_DYNAMICCOMBO_V3") {
+                    let chave = valor.as_ref().and_then(Value::as_str).unwrap_or("");
+                    if let Some(op) = opcoes(&spec)["options"].as_array().and_then(|o| o.iter().find(|o| o["key"] == chave)) {
+                        let mut aninhadas = vec![];
+                        for grupo in ["required", "optional"] {
+                            for (sub, sspec) in op["inputs"][grupo].as_object().into_iter().flatten() {
+                                aninhadas.push((format!("{nome}.{sub}"), sspec.clone()));
+                            }
+                        }
+                        for item in aninhadas.into_iter().rev() {
+                            fila.push_front(item);
+                        }
+                    }
+                }
                 match link.map(|l| g.resolver(l, 0)) {
                     Some(Fonte::No(de, saida)) => {
                         entradas.insert(nome, json!([de, saida]));

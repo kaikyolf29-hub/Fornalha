@@ -28,6 +28,8 @@ pub enum Onde {
     Ignis,
     /// No ComfyUI sem janela.
     Comfyui,
+    /// No stable-diffusion.cpp pelo Vulkan (AMD/Intel sem CUDA nem ROCm, inclusive a RX 580).
+    Vulkan,
     /// Workers Python próprios (3D, rig, animação).
     Worker,
     /// Blender em segundo plano.

@@ -22,8 +22,10 @@ Uso:
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
   fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,dragao] [--sem-engine]
                                            suíte de ponta a ponta (protagonista, inimigo armado, dragão, jogo na engine)
-  fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|directml|cpu]
-                                           ComfyUI local na placa desta máquina
+  fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|vulkan|cpu]
+                                           motor de imagem local (ComfyUI ou Vulkan) na placa desta máquina
+  fornalha-cli comfyui gerar <pedido> [--lado 512] [--saida imagem.png]
+                                           uma imagem pelo motor instalado (para testar a placa)
   fornalha-cli versao
 
 A variável FORNALHA_HOME coloca configuração e projetos numa pasta só.";
@@ -152,7 +154,8 @@ async fn main() {
                 c.backend = match b.as_str() {
                     "nvidia" => "nvidia",
                     "rocm" => "rocm",
-                    "directml" => "directml",
+                    // o ComfyUI tirou o DirectML: AMD/Intel sem ROCm vão pelo Vulkan (stable-diffusion.cpp)
+                    "vulkan" | "directml" => "vulkan",
                     _ => "cpu",
                 };
             }
@@ -162,9 +165,30 @@ async fn main() {
                     imprimir(comfyui::instalar_e_esperar(&paths, &c, f.porta_comfyui()).await)
                 }
                 Some("abrir") => imprimir(comfyui::abrir(&paths, f.porta_comfyui()).await.map(|e| serde_json::json!(e))),
+                Some("gerar") => {
+                    // uma imagem direto pelo motor instalado (ComfyUI aberto ou Vulkan): para testar a placa
+                    let prompt = args.get(2).cloned().unwrap_or_else(|| "medieval knight templar, white surcoat with red cross".into());
+                    let lado: u32 = opcao("--lado").and_then(|v| v.parse().ok()).unwrap_or(512);
+                    let saida = std::path::PathBuf::from(opcao("--saida").unwrap_or_else(|| "imagem.png".into()));
+                    let r = if let Some(m) = comfyui::motor_vulkan(&paths) {
+                        eprintln!("Motor Vulkan: {:?}", comfyui::dispositivos_vulkan(&m).await);
+                        comfyui::gerar_imagem_vulkan(&m, &prompt, lado, lado, 1000, 8).await
+                    } else {
+                        comfyui::gerar_imagem(f.porta_comfyui(), &prompt, lado, lado, 1000, 8).await
+                    };
+                    imprimir(r.and_then(|(png, info)| {
+                        std::fs::write(&saida, &png).map_err(|e| fornalha_core::erro::Erro::io(&saida, e))?;
+                        Ok(serde_json::json!({"arquivo": saida, "info": info}))
+                    }))
+                }
                 _ => {
                     let e = comfyui::consultar(f.porta_comfyui()).await;
-                    imprimir(Ok(serde_json::json!({"estado": e, "caminho": c, "instalacao": comfyui::estado_instalacao(&paths)})))
+                    let vulkan = match comfyui::motor_vulkan(&paths) {
+                        Some(m) => serde_json::json!({"motor": m, "dispositivos": comfyui::dispositivos_vulkan(&m).await}),
+                        None => serde_json::Value::Null,
+                    };
+                    imprimir(Ok(serde_json::json!({"estado": e, "caminho": c, "instalacao": comfyui::estado_instalacao(&paths),
+                                                   "vulkan": vulkan})))
                 }
             }
         }

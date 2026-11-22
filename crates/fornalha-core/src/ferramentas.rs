@@ -474,8 +474,11 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 let e = crate::comfyui::consultar(f.porta_comfyui()).await;
                 let modelo = if e.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
                 let caminho = crate::comfyui::caminho_para(&f.deteccao(false).await);
+                let vulkan = crate::comfyui::motor_vulkan(&f.paths).map(
+                    |m| json!({"id_do_modelo": m.id(), "dispositivos": crate::comfyui::dispositivos_vulkan_guardados(&m), "motor": m}),
+                );
                 json!({"estado": e, "modelo_de_imagem": modelo, "instalacao": crate::comfyui::estado_instalacao(&f.paths),
-                       "caminho": caminho})
+                       "caminho": caminho, "vulkan": vulkan})
             };
             let sugestao = f.sugestao().await;
             let mut programas = serde_json::Map::new();

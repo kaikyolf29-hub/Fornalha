@@ -1,7 +1,11 @@
 //! ComfyUI local: o motor de fluxos (imagem, referência, textura, 3D, movimento) que roda na placa
-//! da pessoa — NVIDIA (CUDA), AMD (ROCm no Linux, DirectML/ZLUDA no Windows) ou só no processador.
-//! A Fornalha só fala com ele em 127.0.0.1 (nada sai do computador): manda um fluxo no formato de API
-//! do ComfyUI, espera terminar e baixa as saídas (imagens, malhas .glb, vídeos).
+//! da pessoa — NVIDIA (CUDA), AMD com ROCm (Linux) ou só no processador. A Fornalha só fala com ele em
+//! 127.0.0.1 (nada sai do computador): manda um fluxo no formato de API do ComfyUI, espera terminar e
+//! baixa as saídas (imagens, malhas .glb, vídeos).
+//!
+//! Placas sem CUDA nem ROCm (AMD e Intel no Windows, inclusive a RX 580; AMD antigas no Linux) usam o
+//! motor Vulkan: o stable-diffusion.cpp (MIT) chamado pela linha de comando com os mesmos arquivos de
+//! modelo. O ComfyUI tirou o DirectML em 11/11/2026 (o último PyTorch com DirectML é o 2.5).
 //!
 //! Só entram fluxos com modelos de licença comercial conferida (manifest/modelos.json, `onde: comfyui`).
 
@@ -22,7 +26,7 @@ pub struct EstadoComfy {
     pub endereco: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub versao: Option<String>,
-    /// Placas que o ComfyUI enxerga (nome, tipo: cuda/directml/cpu…, VRAM em MB).
+    /// Placas que o ComfyUI enxerga (nome, tipo: cuda/cpu…, VRAM em MB).
     pub dispositivos: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub erro: Option<String>,
@@ -294,14 +298,16 @@ pub async fn gerar_imagem(porta: u16, prompt: &str, largura: u32, altura: u32, s
 /// Como o ComfyUI roda nesta máquina (escolhido pela placa).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Caminho {
-    /// "nvidia" (CUDA), "rocm" (AMD no Linux), "directml" (AMD/Intel no Windows) ou "cpu"
+    /// "nvidia" (ComfyUI com CUDA), "rocm" (ComfyUI na AMD no Linux), "vulkan" (stable-diffusion.cpp:
+    /// AMD/Intel sem CUDA nem ROCm, inclusive a RX 580) ou "cpu" (ComfyUI no processador)
     pub backend: &'static str,
     /// HSA_OVERRIDE_GFX_VERSION para as AMD RDNA2 menores no ROCm (RX 6600/6700)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hsa: Option<&'static str>,
     /// "gguf" (quantizado, cabe em 8 GB e no processador) ou "inteiro"
     pub modelos: &'static str,
-    /// placa com até ~10 GB: o ComfyUI abre com --lowvram (descarrega para a RAM o que não couber)
+    /// placa com até ~10 GB: o ComfyUI abre com --lowvram e o motor Vulkan decodifica em blocos
+    /// (o que não couber vai para a RAM)
     #[serde(default)]
     pub pouca_vram: bool,
     pub motivo: String,
@@ -327,10 +333,10 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
         Vendor::Nvidia => Caminho { pouca_vram, backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome) },
         Vendor::Amd if windows => Caminho {
             pouca_vram,
-            backend: "directml",
+            backend: "vulkan",
             hsa: None,
             modelos: "gguf",
-            motivo: format!("{} no Windows pelo DirectML (funciona em qualquer AMD com DirectX 12, inclusive a RX 580)", g.nome),
+            motivo: format!("{} no Windows pelo Vulkan (stable-diffusion.cpp; funciona em qualquer AMD, inclusive a RX 580)", g.nome),
         },
         Vendor::Amd => {
             let gfx = g.alvo_gfx.as_deref().unwrap_or("");
@@ -342,20 +348,24 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             } else {
                 Caminho {
                     pouca_vram,
-                    backend: "cpu",
+                    backend: "vulkan",
                     hsa: None,
                     modelos: "gguf",
                     motivo: format!(
-                        "{} ({}) não tem ROCm no Linux: o ComfyUI roda no processador; para imagem rápida nesta placa use o Ignis pelo Vulkan",
+                        "{} ({}) não tem ROCm no Linux: imagem pelo Vulkan (stable-diffusion.cpp)",
                         g.nome,
                         if gfx.is_empty() { "alvo desconhecido" } else { gfx }
                     ),
                 }
             }
         }
-        Vendor::Intel if windows => {
-            Caminho { pouca_vram, backend: "directml", hsa: None, modelos: "gguf", motivo: format!("{} pelo DirectML", g.nome) }
-        }
+        Vendor::Intel => Caminho {
+            pouca_vram,
+            backend: "vulkan",
+            hsa: None,
+            modelos: "gguf",
+            motivo: format!("{} pelo Vulkan (stable-diffusion.cpp)", g.nome),
+        },
         _ => Caminho { pouca_vram, backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome) },
     }
 }
@@ -450,6 +460,12 @@ pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoC
     }
     let inst =
         instalacao(paths).ok_or_else(|| Erro::novo("comfyui_ausente", "O ComfyUI não está instalado (Máquina → ComfyUI → Instalar)."))?;
+    if inst["motor"] == "sdcpp" {
+        return Err(Erro::novo(
+            "motor_vulkan",
+            "Esta máquina usa o motor Vulkan (stable-diffusion.cpp): ele não fica aberto, a Fornalha chama na hora de gerar.",
+        ));
+    }
     let python = inst["python"].as_str().unwrap_or_default();
     let dir = inst["pasta_comfyui"].as_str().unwrap_or_default();
     let mut args: Vec<String> = inst["argumentos"].as_array().into_iter().flatten().filter_map(|a| a.as_str().map(String::from)).collect();
@@ -485,6 +501,154 @@ pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoC
         }
     }
     Err(Erro::novo("comfyui_fora", "O ComfyUI não respondeu em 3 minutos depois de aberto (veja comfyui.log na pasta dele)."))
+}
+
+// ------------------------------------------------------------------ motor Vulkan (stable-diffusion.cpp)
+
+/// O motor Vulkan instalado pela Fornalha: o executável e os três arquivos do Z-Image Turbo.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MotorVulkan {
+    pub sd_cli: std::path::PathBuf,
+    pub difusao: std::path::PathBuf,
+    pub texto: std::path::PathBuf,
+    pub vae: std::path::PathBuf,
+    pub pouca_vram: bool,
+    pub versao: String,
+}
+
+impl MotorVulkan {
+    /// Id do modelo no manifesto (para o recibo de licença).
+    pub fn id(&self) -> &'static str {
+        "z-image-turbo-gguf-vulkan"
+    }
+}
+
+/// O motor Vulkan, se foi ele que o instalador deixou pronto (com o executável e os modelos no disco).
+pub fn motor_vulkan(paths: &crate::paths::Paths) -> Option<MotorVulkan> {
+    let inst = instalacao(paths)?;
+    if inst["motor"] != "sdcpp" {
+        return None;
+    }
+    let arq = |k: &str| inst[k].as_str().map(std::path::PathBuf::from).filter(|p| p.is_file());
+    Some(MotorVulkan {
+        sd_cli: arq("sd_cli")?,
+        difusao: arq("difusao")?,
+        texto: arq("texto")?,
+        vae: arq("vae")?,
+        pouca_vram: inst["pouca_vram"].as_bool().unwrap_or(false),
+        versao: inst["sdcpp_versao"].as_str().unwrap_or("").to_string(),
+    })
+}
+
+/// Argumentos do sd-cli para o Z-Image Turbo (o mesmo fluxo do ComfyUI: CFG 1, 8 passos).
+pub fn argumentos_vulkan(
+    m: &MotorVulkan,
+    prompt: &str,
+    largura: u32,
+    altura: u32,
+    semente: u64,
+    passos: u32,
+    saida: &std::path::Path,
+) -> Vec<String> {
+    let mut a: Vec<String> = vec![
+        "--diffusion-model".into(),
+        m.difusao.to_string_lossy().into_owned(),
+        "--llm".into(),
+        m.texto.to_string_lossy().into_owned(),
+        "--vae".into(),
+        m.vae.to_string_lossy().into_owned(),
+        "-p".into(),
+        prompt.to_string(),
+        "--cfg-scale".into(),
+        "1.0".into(),
+        "--steps".into(),
+        passos.to_string(),
+        "-W".into(),
+        (largura / 16 * 16).to_string(),
+        "-H".into(),
+        (altura / 16 * 16).to_string(),
+        "-s".into(),
+        (semente % (i64::MAX as u64)).to_string(),
+        "--rng".into(),
+        "cpu".into(),
+        "-o".into(),
+        saida.to_string_lossy().into_owned(),
+    ];
+    if m.pouca_vram {
+        // placa de 8 GB (RX 580): o VAE decodifica em blocos; os pesos que não couberem vão para a RAM
+        // sozinhos (o --auto-fit do sd.cpp vem ligado)
+        a.push("--vae-tiling".into());
+    }
+    a
+}
+
+/// Dispositivos que o motor Vulkan enxerga (`sd-cli --list-devices`): "Vulkan0\tAMD Radeon RX 580…",
+/// "CPU\t…". Lista vazia se não rodar.
+pub async fn dispositivos_vulkan(m: &MotorVulkan) -> Vec<String> {
+    let d: Vec<String> = match crate::externas::rodar(&m.sd_cli, &["--list-devices"], Duration::from_secs(60), m.sd_cli.parent()).await {
+        Ok(s) => s.stdout.lines().map(str::trim).filter(|l| l.contains('\t')).map(String::from).collect(),
+        Err(_) => vec![],
+    };
+    if !d.is_empty() {
+        // guardado para o estado da janela (que não roda o executável a cada consulta)
+        let _ = std::fs::write(arquivo_de_dispositivos(m), serde_json::to_string(&d).unwrap_or_default());
+    }
+    d
+}
+
+fn arquivo_de_dispositivos(m: &MotorVulkan) -> std::path::PathBuf {
+    m.sd_cli.with_file_name("dispositivos.json")
+}
+
+/// Os dispositivos da última vez que o motor Vulkan rodou (sem rodar de novo).
+pub fn dispositivos_vulkan_guardados(m: &MotorVulkan) -> Vec<String> {
+    std::fs::read_to_string(arquivo_de_dispositivos(m)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+/// Se só o processador aparece (sem Vulkan): imagem larga leva tempo demais para o dia a dia.
+pub fn so_processador(dispositivos: &[String]) -> bool {
+    !dispositivos.iter().any(|d| {
+        let n = d.split('\t').next().unwrap_or("").to_lowercase();
+        n.starts_with("vulkan") || n.starts_with("cuda") || n.starts_with("rocm") || n.starts_with("metal")
+    })
+}
+
+/// Gera uma imagem pelo motor Vulkan. Devolve o PNG e um resumo (tempo, dispositivos, versão).
+pub async fn gerar_imagem_vulkan(
+    m: &MotorVulkan,
+    prompt: &str,
+    largura: u32,
+    altura: u32,
+    semente: u64,
+    passos: u32,
+) -> Resultado<(Vec<u8>, Value)> {
+    let pasta = std::env::temp_dir().join(format!("fornalha-sdcpp-{}", std::process::id()));
+    std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
+    let saida = pasta.join(format!("{semente}-{largura}x{altura}.png"));
+    let _ = std::fs::remove_file(&saida);
+    let args = argumentos_vulkan(m, prompt, largura, altura, semente, passos, &saida);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let inicio = Instant::now();
+    // no processador (sem Vulkan) uma imagem grande pode levar muitos minutos: margem larga
+    let r = crate::externas::rodar(&m.sd_cli, &refs, Duration::from_secs(90 * 60), m.sd_cli.parent()).await?;
+    let png = std::fs::read(&saida).map_err(|_| {
+        Erro::novo("vulkan_falhou", format!("O motor Vulkan não gerou a imagem. Final da saída:\n{}", r.final_da_saida(25)))
+    })?;
+    let _ = std::fs::remove_file(&saida);
+    let usou: Vec<String> = format!("{}\n{}", r.stdout, r.stderr)
+        .lines()
+        .filter(|l| {
+            let l = l.to_lowercase();
+            l.contains("vulkan") || l.contains("using cpu") || l.contains("backend")
+        })
+        .take(6)
+        .map(|l| l.trim().to_string())
+        .collect();
+    Ok((
+        png,
+        json!({"motor": "stable-diffusion.cpp", "versao": m.versao, "segundos": inicio.elapsed().as_secs_f64(),
+               "largura": largura, "altura": altura, "passos": passos, "pouca_vram": m.pouca_vram, "registro": usou}),
+    ))
 }
 
 #[cfg(test)]
@@ -563,16 +727,42 @@ mod testes {
         use crate::distro::Familia;
         use crate::gpu::Vendor;
         let rx580_win = caminho_para(&deteccao(Familia::Windows, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
-        assert_eq!((rx580_win.backend, rx580_win.modelos, rx580_win.pouca_vram), ("directml", "gguf", true));
+        assert_eq!((rx580_win.backend, rx580_win.modelos, rx580_win.pouca_vram), ("vulkan", "gguf", true));
         let rx580_linux = caminho_para(&deteccao(Familia::Fedora, Vendor::Amd, "Radeon RX 580", 8192, Some("gfx803")));
-        assert_eq!(rx580_linux.backend, "cpu");
+        assert_eq!(rx580_linux.backend, "vulkan");
         assert!(rx580_linux.motivo.contains("Vulkan"));
+        let rx7800_win = caminho_para(&deteccao(Familia::Windows, Vendor::Amd, "Radeon RX 7800 XT", 16368, Some("gfx1101")));
+        assert_eq!(rx7800_win.backend, "vulkan");
+        let arc = caminho_para(&deteccao(Familia::Windows, Vendor::Intel, "Arc A770", 16000, None));
+        assert_eq!(arc.backend, "vulkan");
         let rx6600 = caminho_para(&deteccao(Familia::Fedora, Vendor::Amd, "Radeon RX 6600", 8176, Some("gfx1032")));
         assert_eq!((rx6600.backend, rx6600.hsa), ("rocm", Some("10.3.0")));
         let rx9060 = caminho_para(&deteccao(Familia::Arch, Vendor::Amd, "Radeon RX 9060 XT", 16304, Some("gfx1200")));
         assert_eq!((rx9060.backend, rx9060.hsa, rx9060.modelos), ("rocm", None, "inteiro"));
         let rtx = caminho_para(&deteccao(Familia::Windows, Vendor::Nvidia, "GeForce RTX 3060", 12288, None));
         assert_eq!((rtx.backend, rtx.modelos), ("nvidia", "gguf"));
+    }
+
+    #[test]
+    fn argumentos_do_motor_vulkan() {
+        let m = MotorVulkan {
+            sd_cli: "sd-cli".into(),
+            difusao: "z_image_turbo-Q4_K_M.gguf".into(),
+            texto: "Qwen3-4B-Q4_K_M.gguf".into(),
+            vae: "ae.safetensors".into(),
+            pouca_vram: true,
+            versao: "x".into(),
+        };
+        let a = argumentos_vulkan(&m, "um templário", 1530, 640, 42, 8, std::path::Path::new("saida.png"));
+        let par = |k: &str| a.iter().position(|x| x == k).map(|i| a[i + 1].clone());
+        assert_eq!(par("--diffusion-model").as_deref(), Some("z_image_turbo-Q4_K_M.gguf"));
+        assert_eq!(par("--llm").as_deref(), Some("Qwen3-4B-Q4_K_M.gguf"));
+        assert_eq!(par("--cfg-scale").as_deref(), Some("1.0"));
+        assert_eq!(par("-W").as_deref(), Some("1520"), "múltiplo de 16");
+        assert_eq!(par("-s").as_deref(), Some("42"));
+        assert!(a.contains(&"--vae-tiling".to_string()));
+        assert!(so_processador(&["CPU\tAMD Ryzen".into()]));
+        assert!(!so_processador(&["Vulkan0\tAMD Radeon RX 580 Series".into(), "CPU\tx".into()]));
     }
 
     #[test]

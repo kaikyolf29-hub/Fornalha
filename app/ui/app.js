@@ -681,13 +681,19 @@ function pintarComfyUI() {
   const inst = c.instalacao || {};
   const cam = c.caminho || {};
   const placas = (e.dispositivos || []).map((d) => d.nome).filter(Boolean).join(", ");
+  const vk = c.vulkan;
+  const placaVk = vk ? (vk.dispositivos || []).map((d) => d.split("\t")[1] || d).join(", ") : "";
   const situacao = e.conectado ? `Aberto${e.versao ? " (" + e.versao + ")" : ""}${placas ? " — " + placas : ""}`
-    : inst.instalando ? "Instalando…" : inst.instalado ? "Instalado (fechado)" : "Não instalado";
-  const modelo = c.modelo_de_imagem ? `Imagem: ${c.modelo_de_imagem.id}` : e.conectado ? "Sem modelo de imagem de licença comercial instalado" : "";
+    : inst.instalando ? "Instalando…"
+    : vk ? `Motor Vulkan pronto (stable-diffusion.cpp)${placaVk ? " — " + placaVk : ""}`
+    : inst.instalado ? "Instalado (fechado)" : "Não instalado";
+  const modelo = c.modelo_de_imagem ? `Imagem: ${c.modelo_de_imagem.id}`
+    : vk ? `Imagem: ${vk.id_do_modelo} (roda na hora de gerar, não fica aberto)`
+    : e.conectado ? "Sem modelo de imagem de licença comercial instalado" : "";
   const ultima = inst.log && inst.log.length ? inst.log[inst.log.length - 1] : "";
   const botoes = inst.instalando ? "" : !inst.instalado
     ? `<button class="botao" data-comfy="instalar">Instalar</button>`
-    : e.conectado ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`;
+    : e.conectado || vk ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`;
   pinta($("comfyui"), `<div class="item"><div><strong>${esc(situacao)}</strong>`
     + `<small>${esc(cam.backend ? "Caminho nesta máquina: " + cam.backend + " — " + (cam.motivo || "") : "")}</small>`
     + (modelo ? `<small>${esc(modelo)}</small>` : "")
@@ -703,7 +709,7 @@ $("comfyui").addEventListener("click", async (e) => {
   try {
     if (b.dataset.comfy === "instalar") {
       await api("POST", "/janela/comfyui", { acao: "instalar" });
-      mensagem("Instalação do ComfyUI começou (alguns GB). Dá para continuar usando a Fornalha.");
+      mensagem("Instalação do motor de imagem começou (alguns GB). Dá para continuar usando a Fornalha.");
     } else {
       mensagem("Abrindo o ComfyUI…");
       await api("POST", "/janela/comfyui", { acao: "abrir" });

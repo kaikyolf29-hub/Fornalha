@@ -154,7 +154,20 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   agente), ComfyUI (conector, instalador pela placa, teste real no processador do CI), pedidos 1–7 da
   Erethea, dragão com esqueleto próprio, suíte de Teste Bruto (MCP `run_brute_test`, CLI
   `teste-bruto`, botão Máquina → Teste de Fogo), reserva da placa no Ignis antes do ComfyUI/workers.
-  Próximo: Teste Bruto verde no CI, cabelo sem manchas, roupa/armadura, folha de modelo pelo ComfyUI.
+  Também: Teste Bruto verde no CI (Windows e Linux), folha de modelo pelo motor de imagem, pano com
+  desgaste assado (lama na barra, pingos, sujeira nas dobras, bainha), cabelo mais denso.
+  **RX 580 pelo Vulkan (22/11):** o ComfyUI tirou o DirectML em 11/11/2026 (commit c5751c8, "o último
+  PyTorch com DirectML é o 2.5") e o teste do CI acusou ("unrecognized arguments: --directml"). A RX 580
+  e as outras AMD/Intel sem CUDA nem ROCm agora geram imagem pelo **stable-diffusion.cpp** (MIT) com
+  Vulkan, com os mesmos arquivos GGUF do Z-Image Turbo: Máquina → Motor de imagem → Instalar baixa o
+  executável (versão fixa master-1045-6225bf8, 30 MB, conferida pelo SHA-256) e os modelos; a Fornalha
+  chama o `sd-cli` na hora de gerar (com a placa reservada no Ignis e VAE em blocos em 8 GB). Provado:
+  teste com executável falso (argumentos, recibo `z-image-turbo-gguf-vulkan`, folha larga). Em prova:
+  o CI "ComfyUI no processador" com o executável de verdade no Windows (sem placa ele cai para o
+  processador) e no Linux pelo Vulkan por software (lavapipe). Falta provar: a RX 580 de verdade
+  (TESTE_DO_CRIADOR 0b).
+  Próximo: preparar a máquina Windows com um clique (Blender, Godot), cabelo (entrada e nuca),
+  roupa/armadura (camadas, capuz), olhos e expressões.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

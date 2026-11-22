@@ -52,6 +52,12 @@ License 1.1 (texto em `app/ui/fontes/OFL-Archivo.txt`).
   Fornalha, só quando a pessoa instala pela janela. O nvdiffrast (licença só de
   pesquisa) não é instalado nem carregado.
 - **Ignis**: programa separado, falado só por 127.0.0.1.
+- **Motor de imagem** (instalado só quando a pessoa clica em Máquina → Motor de imagem → Instalar):
+  o **ComfyUI** (GPL-3.0) com o nó ComfyUI-GGUF (Apache 2.0), processo à parte falado só por
+  127.0.0.1; ou o **stable-diffusion.cpp** (MIT, github.com/leejet/stable-diffusion.cpp, versão
+  fixa master-1045-6225bf8 conferida pelo SHA-256, com ggml MIT, libwebp e libwebm BSD), chamado
+  pela linha de comando nas placas sem CUDA nem ROCm. Os modelos (Z-Image Turbo, Qwen3-4B e o VAE
+  ae, Apache 2.0) estão em `manifest/modelos.json`.
 
 ## Visualizador 3D da janela
 

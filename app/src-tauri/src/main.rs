@@ -272,7 +272,7 @@ mod nucleo {
         }
     }
 
-    /// Instalar ou abrir o ComfyUI: só a pessoa, pela janela (downloads de vários GB).
+    /// Instalar ou abrir o motor de imagem (ComfyUI ou Vulkan): só a pessoa, pela janela (downloads de vários GB).
     async fn comfyui(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
         use fornalha_core::comfyui;
         let f = &c.fornalha;

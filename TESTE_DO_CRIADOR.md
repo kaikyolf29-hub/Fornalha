@@ -18,12 +18,18 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
 
 ## 0b. Teste de Fogo na RX 580 (o roteiro curto)
 Depois de instalar (passo 0), com o Blender e a Godot (ou a Erethea) achados em **Máquina**:
-1. **Máquina → ComfyUI → Instalar.** Esperado: o caminho escolhido é "directml" (DirectML, funciona na
-   RX 580) com modelos "gguf" e pouca VRAM; a instalação baixa alguns GB e mostra o progresso. Precisa do
-   Python 3.10+ e do Git instalados. No fim: **Abrir** → "Aberto — RX 580".
+1. **Máquina → Motor de imagem → Instalar.** Esperado: o caminho escolhido é "vulkan" (stable-diffusion.cpp
+   pelo Vulkan, que funciona na RX 580 com o driver da AMD) com modelos "gguf" e pouca VRAM; baixa ~6 GB
+   (o programa tem 30 MB, o resto são os modelos) e mostra o progresso. Precisa do Python 3.10+ instalado
+   (python.org) só para o download; não precisa do Git. No fim aparece "Motor Vulkan pronto — AMD Radeon
+   RX 580 Series". Se aparecer só "CPU", o Vulkan não achou a placa: atualize o driver da AMD e me conte.
+   (O ComfyUI tirou o DirectML em 11/11/2026, por isso a RX 580 vai pelo Vulkan.)
+   Teste rápido: com um projeto aberto, **Forjar → Conceito** com "templário medieval". A imagem sai em
+   1024 px; me mande a imagem e quanto tempo levou (o recibo dela, em **Licenças**, diz
+   "z-image-turbo-gguf-vulkan" e guarda os segundos).
 2. **Máquina → Nível desta máquina → Qualidade** (e depois repita com **Máximo**). Numa placa de 8 GB
-   isso funciona: a Fornalha pede ao Ignis para soltar a placa antes do ComfyUI (um modelo por vez) e o
-   ComfyUI abre com descarga para a RAM.
+   isso funciona: a Fornalha pede ao Ignis para soltar a placa antes do motor de imagem (um modelo por
+   vez) e o motor Vulkan decodifica em blocos e põe na RAM o que não couber.
 3. **Máquina → Teste de Fogo → Rodar o Teste Bruto** (nível Qualidade; depois Máximo). Também dá para
    pedir ao Claude Code: "rode o run_brute_test no nível qualidade".
    Esperado: em alguns minutos, os 3 casos (protagonista completo, inimigo armado, dragão) com

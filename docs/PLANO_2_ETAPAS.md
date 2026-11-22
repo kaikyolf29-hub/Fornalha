@@ -91,7 +91,9 @@ costas, placas no ventre) assadas em 4K (cor e normal). Falta: membrana translú
 patas, quadrúpede (lobo, leão), golem, aranha; mandíbula nos personagens simples da Forja.
 
 **1.9 ComfyUI como motor geral e conexões** — ✅ conector (só 127.0.0.1), instalador pela placa
-(CUDA, ROCm, DirectML para a RX 580, processador), Máquina → ComfyUI, CLI, teste real no CI. Falta:
+(CUDA, ROCm, processador), Máquina → Motor de imagem, CLI, teste real no CI; motor Vulkan
+(stable-diffusion.cpp, MIT) para AMD/Intel sem CUDA nem ROCm — a RX 580 — com os mesmos arquivos de
+modelo, porque o ComfyUI tirou o DirectML em 11/11/2026. Falta:
 fluxos de textura sem emenda e mapas (normal/rugosidade), concept de cenário, 3D (1.6) e movimento
 (quando houver modelo comercial); APIs opcionais (Gemini, Rodin, Meshy, Tripo) desligadas por padrão;
 pedidos do Ignis (imagem guiada pela forma, textura sem emenda, AMD por Vulkan).

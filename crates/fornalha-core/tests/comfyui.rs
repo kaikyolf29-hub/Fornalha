@@ -216,3 +216,82 @@ async fn folha_de_modelo_pelo_comfyui() {
     assert_eq!(fluxo["7"]["inputs"]["width"], 768);
     assert_eq!(fluxo["7"]["inputs"]["height"], 320);
 }
+
+/// Motor Vulkan (stable-diffusion.cpp) na RX 580: sem ComfyUI aberto, a Fornalha chama o sd-cli que o
+/// instalador deixou (aqui um falso que grava os argumentos e devolve o PNG), com o recibo do modelo
+/// "pelo Vulkan" e a folha de modelo larga quando o Vulkan enxerga a placa.
+#[cfg(unix)]
+#[tokio::test]
+async fn motor_vulkan_gera_conceito_e_folha() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = Paths::under(tmp.path());
+    let f = Fornalha::para_testes(paths.clone(), comum::detection("rx580"));
+    let pasta = comfyui::pasta(&paths);
+    let modelos = pasta.join("ComfyUI/models");
+    std::fs::create_dir_all(modelos.join("diffusion_models")).unwrap();
+    std::fs::create_dir_all(modelos.join("text_encoders")).unwrap();
+    std::fs::create_dir_all(modelos.join("vae")).unwrap();
+    for m in ["diffusion_models/z_image_turbo-Q4_K_M.gguf", "text_encoders/Qwen3-4B-Q4_K_M.gguf", "vae/ae.safetensors"] {
+        std::fs::write(modelos.join(m), b"x").unwrap();
+    }
+    let png = tmp.path().join("modelo.png");
+    std::fs::write(&png, PNG).unwrap();
+    let args_log = tmp.path().join("args.txt");
+    let sd = pasta.join("sdcpp/sd-cli");
+    std::fs::create_dir_all(sd.parent().unwrap()).unwrap();
+    std::fs::write(
+        &sd,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--list-devices\" ]; then printf 'Vulkan0\\tAMD Radeon RX 580 Series\\nCPU\\tfalso\\n'; exit 0; fi\n\
+             printf '%s\\n' \"$@\" >> '{log}'\necho '---' >> '{log}'\nsaida=''\nwhile [ $# -gt 0 ]; do [ \"$1\" = \"-o\" ] && saida=\"$2\"; shift; done\n\
+             echo 'using Vulkan0'\ncp '{png}' \"$saida\"\n",
+            log = args_log.display(),
+            png = png.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&sd, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(
+        pasta.join("instalacao.json"),
+        serde_json::to_string(&json!({
+            "backend": "vulkan", "motor": "sdcpp", "sd_cli": sd, "sdcpp_versao": "master-1045-6225bf8", "pouca_vram": true,
+            "difusao": modelos.join("diffusion_models/z_image_turbo-Q4_K_M.gguf"),
+            "texto": modelos.join("text_encoders/Qwen3-4B-Q4_K_M.gguf"),
+            "vae": modelos.join("vae/ae.safetensors"),
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let m = comfyui::motor_vulkan(&paths).expect("motor Vulkan instalado");
+    assert_eq!(comfyui::dispositivos_vulkan(&m).await, vec!["Vulkan0\tAMD Radeon RX 580 Series".to_string(), "CPU\tfalso".to_string()]);
+    // abrir não se aplica ao motor Vulkan (não é servidor)
+    assert_eq!(comfyui::abrir(&paths, 1).await.unwrap_err().codigo, "motor_vulkan");
+
+    f.chamar("create_project", json!({"nome": "Vulkan"}), "claude-code").await.unwrap();
+    let r = f.chamar("generate_concept", json!({"descricao": "templário"}), "claude-code").await.unwrap();
+    assert_eq!(std::fs::read(r["arquivo"].as_str().unwrap()).unwrap(), PNG);
+    let rec = f.chamar("list_receipts", json!({}), "claude-code").await.unwrap();
+    assert_eq!(rec["recibos"][0]["modelo"]["id"], "z-image-turbo-gguf-vulkan", "{rec}");
+    let log = std::fs::read_to_string(&args_log).unwrap();
+    let primeiro: Vec<&str> = log.split("---").next().unwrap().lines().collect();
+    let par = |k: &str| primeiro.iter().position(|x| *x == k).map(|i| primeiro[i + 1]);
+    assert_eq!(par("-W"), Some("1024"), "placa vista pelo Vulkan: 1024 px\n{log}");
+    assert_eq!(par("--cfg-scale"), Some("1.0"));
+    assert!(primeiro.contains(&"--vae-tiling"), "8 GB: VAE em blocos");
+    assert!(par("-p").unwrap().contains("templário"));
+
+    // folha de modelo larga (o Vulkan enxerga a placa: não precisa do Máximo)
+    let p = f.projeto(None).unwrap();
+    let ficha =
+        json!({"nome": "Aren", "tipo": "humano", "descricao": "cavaleiro", "cor_roupa": "#ffffff", "cor_roupa_secundaria": "#aa0000"});
+    let destino = p.raiz.join("Characters/aren/folha_de_modelo.png");
+    let arq = fornalha_core::geracao::gerar_folha_de_modelo(&f, &p, &ficha, &destino, 3, "claude-code").await.unwrap().unwrap();
+    assert_eq!(std::fs::read(&arq).unwrap(), PNG);
+    let log = std::fs::read_to_string(&args_log).unwrap();
+    let segundo: Vec<&str> = log.split("---").nth(1).unwrap().lines().filter(|l| !l.is_empty()).collect();
+    let par2 = |k: &str| segundo.iter().position(|x| *x == k).map(|i| segundo[i + 1]);
+    assert_eq!((par2("-W"), par2("-H")), (Some("1536"), Some("640")), "{log}");
+    let st = f.chamar("get_status", json!({}), "claude-code").await.unwrap();
+    assert_eq!(st["comfyui"]["instalacao"]["instalacao"]["motor"], "sdcpp");
+}

@@ -627,8 +627,8 @@ fn descrever_folha(p: &Projeto, ficha: &Value) -> String {
     )
 }
 
-/// A folha de modelo sai do ComfyUI (larga, três vistas). Só com placa: no processador uma imagem
-/// larga leva tempo demais para o dia a dia (o Teste de Fogo e o nível Máximo pedem mesmo assim).
+/// A folha de modelo sai do motor de imagem local (larga, três vistas). Só com placa: no processador
+/// uma imagem larga leva tempo demais para o dia a dia (o Teste de Fogo e o nível Máximo pedem mesmo assim).
 pub async fn gerar_folha_de_modelo(
     f: &Fornalha,
     p: &Projeto,
@@ -637,27 +637,83 @@ pub async fn gerar_folha_de_modelo(
     seed: u64,
     quem: &str,
 ) -> Resultado<Option<String>> {
-    let comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
-    if !comfy.conectado {
-        return Ok(None);
-    }
-    let so_processador = comfy.dispositivos.iter().all(|d| d["tipo"] == "cpu");
+    let Some(motor) = motor_de_imagem(f, false).await else { return Ok(None) };
     let nivel = f.nivel_em_uso(Some(p)).await;
-    if so_processador && nivel != crate::niveis::Nivel::Maximo {
+    if motor.so_processador() && nivel != crate::niveis::Nivel::Maximo {
         return Ok(None);
     }
-    let Some(m) = crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await else { return Ok(None) };
-    let (largura, altura) = if so_processador { (768, 320) } else { (1536, 640) };
+    let (largura, altura) = if motor.so_processador() { (768, 320) } else { (1536, 640) };
     let prompt = descrever_folha(p, ficha);
-    let mb = if m.difusao_gguf { 7_000 } else { 15_000 };
-    let (png, info) =
-        com_placa(f, mb, 40, crate::comfyui::gerar_imagem(f.porta_comfyui(), &prompt, largura, altura, seed.wrapping_add(17), 8)).await?;
+    let (png, modelo, info) = motor.gerar(f, &prompt, largura, altura, seed.wrapping_add(17), 40).await?;
     if let Some(d) = destino.parent() {
         std::fs::create_dir_all(d).map_err(|e| Erro::io(d, e))?;
     }
     std::fs::write(destino, &png).map_err(|e| Erro::io(destino, e))?;
-    recibo(f, p, destino, m.id, Some(prompt), Some(seed.wrapping_add(17)), json!({"comfyui": info, "folha_de_modelo": true}), quem).await?;
+    let mut info = info;
+    info["folha_de_modelo"] = json!(true);
+    recibo(f, p, destino, modelo, Some(prompt), Some(seed.wrapping_add(17)), info, quem).await?;
     Ok(Some(destino.to_string_lossy().into_owned()))
+}
+
+/// O motor de imagem local pronto agora: o ComfyUI (aberto, ou instalado pela Fornalha e aberto na
+/// hora se `abrir`) ou o motor Vulkan (stable-diffusion.cpp, chamado na hora).
+enum MotorImagem {
+    Comfy(crate::comfyui::ModeloImagem, crate::comfyui::EstadoComfy),
+    Vulkan(crate::comfyui::MotorVulkan, Vec<String>),
+}
+
+impl MotorImagem {
+    fn so_processador(&self) -> bool {
+        match self {
+            MotorImagem::Comfy(_, e) => e.dispositivos.iter().all(|d| d["tipo"] == "cpu"),
+            MotorImagem::Vulkan(_, d) => crate::comfyui::so_processador(d),
+        }
+    }
+
+    /// Gera com a placa reservada no Ignis (um modelo por vez na VRAM). Devolve PNG, id do modelo
+    /// (manifesto) e os parâmetros para o recibo.
+    async fn gerar(
+        &self,
+        f: &Fornalha,
+        prompt: &str,
+        largura: u32,
+        altura: u32,
+        seed: u64,
+        minutos: u32,
+    ) -> Resultado<(Vec<u8>, &'static str, Value)> {
+        match self {
+            MotorImagem::Comfy(m, e) => {
+                let mb = if m.difusao_gguf { 7_000 } else { 15_000 };
+                let (png, info) =
+                    com_placa(f, mb, minutos, crate::comfyui::gerar_imagem(f.porta_comfyui(), prompt, largura, altura, seed, 8)).await?;
+                Ok((png, m.id, json!({"comfyui": info, "dispositivos": e.dispositivos})))
+            }
+            MotorImagem::Vulkan(m, d) => {
+                let (png, info) =
+                    com_placa(f, 7_000, minutos, crate::comfyui::gerar_imagem_vulkan(m, prompt, largura, altura, seed, 8)).await?;
+                Ok((png, m.id(), json!({"vulkan": info, "dispositivos": d})))
+            }
+        }
+    }
+}
+
+async fn motor_de_imagem(f: &Fornalha, abrir: bool) -> Option<MotorImagem> {
+    let mut comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
+    if !comfy.conectado {
+        if let Some(m) = crate::comfyui::motor_vulkan(&f.paths) {
+            let d = crate::comfyui::dispositivos_vulkan(&m).await;
+            return Some(MotorImagem::Vulkan(m, d));
+        }
+        if abrir && crate::comfyui::instalacao(&f.paths).is_some() {
+            // instalado pela Fornalha e fechado: abre sozinho
+            comfy = crate::comfyui::abrir(&f.paths, f.porta_comfyui()).await.ok()?;
+        }
+    }
+    if !comfy.conectado {
+        return None;
+    }
+    let m = crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await?;
+    Some(MotorImagem::Comfy(m, comfy))
 }
 
 /// generate_concept: imagem avulsa com o guia visual junto.
@@ -675,27 +731,18 @@ pub async fn conceito_avulso(f: &Fornalha, p: &Projeto, descricao: &str, destino
 
 async fn gerar_imagem_conceito(f: &Fornalha, p: &Projeto, prompt: &str, destino: &Path, seed: u64, quem: &str) -> Resultado<String> {
     let sem_placa = f.deteccao(false).await.principal().is_none();
-    // 1º o ComfyUI (o motor de fluxos na placa da pessoa: NVIDIA, AMD ou processador), 2º o Ignis
-    let mut comfy = crate::comfyui::consultar(f.porta_comfyui()).await;
-    if !comfy.conectado && crate::comfyui::instalacao(&f.paths).is_some() {
-        // instalado pela Fornalha e fechado: abre sozinho
-        if let Ok(e) = crate::comfyui::abrir(&f.paths, f.porta_comfyui()).await {
-            comfy = e;
-        }
-    }
-    let modelo_comfy = if comfy.conectado { crate::comfyui::modelo_de_imagem(f.porta_comfyui()).await } else { None };
-    let (png, modelo, parametros) = if let Some(m) = modelo_comfy {
-        let lado = if sem_placa { 512 } else { 1024 };
-        let mb = if m.difusao_gguf { 7_000 } else { 15_000 };
-        let (png, info) = com_placa(f, mb, 30, crate::comfyui::gerar_imagem(f.porta_comfyui(), prompt, lado, lado, seed, 8)).await?;
-        (png, m.id, json!({"comfyui": info, "dispositivos": comfy.dispositivos}))
+    // 1º o motor local (ComfyUI na NVIDIA, AMD com ROCm ou processador; Vulkan nas outras placas,
+    // inclusive a RX 580), 2º o Ignis
+    let (png, modelo, parametros) = if let Some(motor) = motor_de_imagem(f, true).await {
+        let lado = if sem_placa || motor.so_processador() { 512 } else { 1024 };
+        motor.gerar(f, prompt, lado, lado, seed, 30).await?
     } else {
         let cap = ignis::capacidades(f.porta_ignis()).await;
         if cap["imagem"].as_array().is_none_or(|v| v.is_empty()) {
             return Err(Erro::novo(
                 "sem_gerador_de_imagem",
-                "nem o ComfyUI (com o Z-Image Turbo) nem o Ignis (com a imagem preparada) estão abertos. \
-                 Abra um dos dois (janela do Ignis → Imagem, ou o ComfyUI com os modelos do Z-Image Turbo).",
+                "nem o motor de imagem local (ComfyUI ou Vulkan, com o Z-Image Turbo) nem o Ignis (com a imagem \
+                 preparada) estão prontos. Instale o motor em Máquina → ComfyUI ou abra o Ignis → Imagem.",
             ));
         }
         let (tamanho, passos) = if sem_placa { ("384x384", 6) } else { ("1024x1024", 8) };

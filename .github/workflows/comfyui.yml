@@ -1,10 +1,13 @@
 name: ComfyUI no processador
 
-# ComfyUI de verdade instalado pelo PRÓPRIO instalador da Fornalha (o mesmo que roda na máquina da
-# pessoa: `fornalha-cli comfyui instalar`), sem placa, no Windows e no Linux: baixa o Z-Image Turbo
+# Motor de imagem de verdade instalado pelo PRÓPRIO instalador da Fornalha (o mesmo que roda na máquina
+# da pessoa: `fornalha-cli comfyui instalar`), sem placa, no Windows e no Linux: baixa o Z-Image Turbo
 # quantizado (Apache 2.0) e a Fornalha gera referências (personagem, criatura, cenário e folha de
-# modelo) pelo conector. As imagens viram artefato. Mais um teste experimental do caminho DirectML
-# (o da RX 580 no Windows), que aqui roda no adaptador de software do Windows.
+# modelo). As imagens viram artefato.
+# - ComfyUI no processador (Windows e Linux).
+# - Motor Vulkan (stable-diffusion.cpp), o caminho da RX 580: no Windows é o mesmo executável que vai
+#   para a placa (aqui, sem placa, ele cai para o processador); no Linux roda o Vulkan por software
+#   (lavapipe do Mesa), experimental porque é lento. O ComfyUI tirou o DirectML em 11/11/2026.
 # Roda quando o conector ou o instalador mudam, e à mão (Actions → ComfyUI no processador → Run workflow).
 
 on:
@@ -18,6 +21,7 @@ on:
       - "crates/fornalha-core/src/comfyui.rs"
       - "crates/fornalha-core/workers/instalar_comfyui.py"
       - "crates/fornalha-core/tests/comfyui_real.rs"
+      - "crates/fornalha-cli/src/main.rs"
       - ".github/workflows/comfyui.yml"
 
 concurrency:
@@ -29,7 +33,7 @@ env:
 
 jobs:
   comfyui:
-    name: ComfyUI ${{ matrix.backend }} (${{ matrix.nome }})
+    name: Motor ${{ matrix.backend }} (${{ matrix.nome }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 200
     continue-on-error: ${{ matrix.experimental }}
@@ -47,7 +51,11 @@ jobs:
             experimental: false
           - nome: Windows
             os: windows-latest
-            backend: directml
+            backend: vulkan
+            experimental: false
+          - nome: Linux
+            os: ubuntu-latest
+            backend: vulkan
             experimental: true
     env:
       FORNALHA_HOME: ${{ github.workspace }}/../fornalha-home
@@ -76,25 +84,34 @@ jobs:
           cargo build -p fornalha-cli
           cargo test -p fornalha-core --test comfyui_real --no-run
 
-      - name: Instalar o ComfyUI pelo instalador da Fornalha
+      - name: Vulkan por software (lavapipe) no Linux
+        if: matrix.backend == 'vulkan' && runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1 vulkan-tools && vulkaninfo --summary || true
+
+      - name: Instalar o motor pelo instalador da Fornalha
         shell: bash
         run: |
           cargo run -q -p fornalha-cli -- comfyui instalar --backend ${{ matrix.backend }} --modelos gguf
           cat "$FORNALHA_HOME/dados/comfyui/instalacao.json"
 
-      - name: Abrir o ComfyUI pela Fornalha e gerar as referências
+      - name: Gerar as referências pelo motor
         shell: bash
         env:
-          FORNALHA_TESTE_COMFYUI: "8188"
           FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/comfyui-saida
-          FORNALHA_TESTE_LADO: ${{ matrix.backend == 'directml' && '256' || github.event.inputs.lado || '512' }}
-          FORNALHA_TESTE_SO_UM: ${{ matrix.backend == 'directml' && '1' || '' }}
+          FORNALHA_TESTE_LADO: ${{ (matrix.backend == 'vulkan' && runner.os == 'Linux') && '256' || github.event.inputs.lado || '512' }}
+          FORNALHA_TESTE_SO_UM: ${{ (matrix.backend == 'vulkan' && runner.os == 'Linux') && '1' || '' }}
           RUST_BACKTRACE: "1"
         run: |
           set -e
           [ -z "$FORNALHA_TESTE_SO_UM" ] && unset FORNALHA_TESTE_SO_UM
           mkdir -p "$FORNALHA_TESTE_SAIDA"
-          cargo run -q -p fornalha-cli -- comfyui abrir
+          if [ "${{ matrix.backend }}" = "vulkan" ]; then
+            cargo run -q -p fornalha-cli -- comfyui estado
+            export FORNALHA_TESTE_VULKAN=1
+          else
+            cargo run -q -p fornalha-cli -- comfyui abrir
+            export FORNALHA_TESTE_COMFYUI=8188
+          fi
           cargo test -p fornalha-core --test comfyui_real -- --nocapture
 
       - name: Imagens e registro

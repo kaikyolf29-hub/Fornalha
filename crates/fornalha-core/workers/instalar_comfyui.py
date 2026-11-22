@@ -1,10 +1,13 @@
-# Fornalha: instala o ComfyUI (processo à parte, licença GPL-3.0, falando com a Fornalha só por
-# 127.0.0.1) numa pasta só dele, com ambiente Python próprio, o nó ComfyUI-GGUF e os modelos de
-# licença comercial que a Fornalha usa.
-#   python instalar_comfyui.py <pasta> <nvidia|rocm|directml|cpu> [--modelos gguf|inteiro|nenhum]
+# Fornalha: instala o motor de imagem local numa pasta só dele, com os modelos de licença comercial
+# que a Fornalha usa.
+#   python instalar_comfyui.py <pasta> <nvidia|rocm|vulkan|cpu> [--modelos gguf|inteiro|nenhum]
 #                              [--hsa 10.3.0] [--porta 8188] [--pouca-vram]
-# nvidia: CUDA · rocm: AMD no Linux (RX 6000/7000/9000) · directml: AMD/Intel no Windows (inclusive
-# RX 580) · cpu: sem placa (lento, mas funciona).
+# nvidia: ComfyUI com CUDA · rocm: ComfyUI na AMD no Linux (RX 6000/7000/9000) · cpu: ComfyUI sem placa
+# (lento, mas funciona) · vulkan: stable-diffusion.cpp (MIT) pelo Vulkan, para AMD e Intel no Windows
+# (inclusive a RX 580) e AMD sem ROCm no Linux — o ComfyUI tirou o DirectML em 11/11/2026 (o último
+# PyTorch com DirectML é o 2.5), então "directml" vira "vulkan". Os dois motores são processos à parte
+# (ComfyUI GPL-3.0 falando só por 127.0.0.1; sd.cpp chamado pela linha de comando) e usam os mesmos
+# arquivos de modelo (models/ do ComfyUI).
 # Escreve o progresso em <pasta>/instalacao.log e, no fim, <pasta>/instalacao.json (como abrir).
 import json
 import os
@@ -13,7 +16,9 @@ import shutil
 import subprocess
 import sys
 import time
+import hashlib
 import urllib.request
+import zipfile
 
 WINDOWS = platform.system() == "Windows"
 COMFYUI = "https://github.com/Comfy-Org/ComfyUI.git"
@@ -22,6 +27,16 @@ INDICE = {
     "nvidia": "https://download.pytorch.org/whl/cu128",
     "rocm": "https://download.pytorch.org/whl/rocm6.4",
     "cpu": "https://download.pytorch.org/whl/cpu",
+}
+# stable-diffusion.cpp (MIT, github.com/leejet/stable-diffusion.cpp): versão fixa publicada em
+# 03/11/2026, conferida pelo SHA-256. O zip do Windows com Vulkan traz também o processador (roda
+# mesmo sem placa); o do Linux foi compilado no Ubuntu 26.04.
+SDCPP_VERSAO = "master-1045-6225bf8"
+SDCPP = {
+    ("Windows", "vulkan"): ("sd-master-6225bf8-bin-win-vulkan-x64.zip",
+                           "3a3f2a2bbcec086d6b4b6a94e6f9717931def27bf203825c47e0e19959576fa3"),
+    ("Linux", "vulkan"): ("sd-master-6225bf8-bin-Linux-Ubuntu-26.04-x86_64-vulkan.zip",
+                         "8e270d5e5ff4dc39523c74644d5686c0522ec917aeda35efbf6a2935ab600067"),
 }
 # (pasta em models/, nome, endereço) — licenças conferidas em manifest/modelos.json
 MODELOS = {
@@ -83,8 +98,8 @@ class Instalador:
             self.rodar(["git", "clone", "--depth", "1", url, destino])
         return subprocess.run(["git", "-C", destino, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
 
-    def baixar(self, pasta, nome, url):
-        destino = os.path.join(self.repo, "models", pasta, nome)
+    def baixar(self, pasta, nome, url, destino=None):
+        destino = destino or os.path.join(self.repo, "models", pasta, nome)
         if os.path.isfile(destino) and os.path.getsize(destino) > 0:
             self.etapa(f"já baixado: {pasta}/{nome}")
             return destino
@@ -114,7 +129,70 @@ class Instalador:
                 time.sleep(10 * (tentativa + 1))
         raise RuntimeError(f"não consegui baixar {nome}")
 
+    def instalar_sdcpp(self, modelos, pouca_vram=False):
+        """Motor Vulkan: só o executável do stable-diffusion.cpp (sem Python, sem PyTorch) e os modelos."""
+        chave = (platform.system(), "vulkan")
+        if chave not in SDCPP:
+            raise RuntimeError(f"o motor Vulkan ainda não tem executável para {platform.system()}")
+        arquivo, sha = SDCPP[chave]
+        self.etapa(f"stable-diffusion.cpp {SDCPP_VERSAO} (Vulkan) em {self.pasta}")
+        destino = os.path.join(self.pasta, "sdcpp")
+        exe = os.path.join(destino, "sd-cli.exe" if WINDOWS else "sd-cli")
+        marca = os.path.join(destino, "versao.txt")
+        atual = open(marca, encoding="utf-8").read().strip() if os.path.isfile(marca) else ""
+        if atual != SDCPP_VERSAO or not os.path.isfile(exe):
+            url = f"https://github.com/leejet/stable-diffusion.cpp/releases/download/{SDCPP_VERSAO}/{arquivo}"
+            zip_local = os.path.join(self.pasta, arquivo)
+            if os.path.isfile(zip_local):
+                os.remove(zip_local)
+            self.baixar("", arquivo, url, destino=zip_local)
+            h = hashlib.sha256()
+            with open(zip_local, "rb") as f:
+                for bloco in iter(lambda: f.read(1 << 20), b""):
+                    h.update(bloco)
+            if h.hexdigest() != sha:
+                os.remove(zip_local)
+                raise RuntimeError(f"o arquivo do stable-diffusion.cpp não confere (SHA-256 {h.hexdigest()})")
+            if os.path.isdir(destino):
+                shutil.rmtree(destino)
+            with zipfile.ZipFile(zip_local) as z:
+                for nome in z.namelist():
+                    alvo = os.path.realpath(os.path.join(destino, nome))
+                    if not alvo.startswith(os.path.realpath(destino) + os.sep):
+                        raise RuntimeError(f"caminho suspeito dentro do zip: {nome}")
+                z.extractall(destino)
+            os.remove(zip_local)
+            if not WINDOWS:
+                for nome in ("sd-cli", "sd-server"):
+                    c = os.path.join(destino, nome)
+                    if os.path.isfile(c):
+                        os.chmod(c, 0o755)
+            with open(marca, "w", encoding="utf-8") as f:
+                f.write(SDCPP_VERSAO)
+        else:
+            self.etapa("stable-diffusion.cpp já instalado")
+        baixados = [self.baixar(*m) for m in MODELOS[modelos]]
+        por_pasta = {m[0]: b for m, b in zip(MODELOS[modelos], baixados)}
+        info = {
+            "backend": "vulkan",
+            "motor": "sdcpp",
+            "sd_cli": exe,
+            "sdcpp_versao": SDCPP_VERSAO,
+            "pasta_modelos": os.path.join(self.repo, "models"),
+            "difusao": por_pasta.get("diffusion_models"),
+            "texto": por_pasta.get("text_encoders"),
+            "vae": por_pasta.get("vae"),
+            "pouca_vram": pouca_vram,
+            "modelos": [os.path.relpath(b, self.repo) for b in baixados],
+            "instalado_em": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        with open(os.path.join(self.pasta, "instalacao.json"), "w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2, ensure_ascii=False)
+        self.etapa("pronto")
+
     def instalar(self, modelos, hsa, porta, pouca_vram=False):
+        if self.backend == "vulkan":
+            return self.instalar_sdcpp(modelos, pouca_vram)
         if shutil.which("git") is None:
             raise RuntimeError("precisa do Git instalado (git-scm.com)")
         self.etapa(f"ComfyUI para {self.backend} em {self.pasta}")
@@ -123,27 +201,12 @@ class Instalador:
         if not os.path.isfile(self.python):
             self.rodar([sys.executable, "-m", "venv", self.venv])
         self.pip("--upgrade", "pip")
-        restricoes = []
-        if self.backend == "directml":
-            # DirectML: qualquer placa DirectX 12 no Windows (AMD GCN como a RX 580, RDNA, Intel). O torch
-            # que ele traz fica preso: sem isso, o requirements do ComfyUI trocaria por outro torch.
-            self.pip("torch-directml")
-            versao = subprocess.run([self.python, "-c", "import torch; print(torch.__version__.split('+')[0])"], capture_output=True,
-                                    text=True).stdout.strip()
-            arq = os.path.join(self.pasta, "restricoes.txt")
-            with open(arq, "w", encoding="utf-8") as f:
-                f.write(f"torch=={versao}\n")
-            restricoes = ["-c", arq]
-            self.etapa(f"torch {versao} preso para o DirectML")
-        else:
-            self.pip("torch", "torchvision", "torchaudio", "--index-url", INDICE[self.backend])
-        self.pip("-r", os.path.join(self.repo, "requirements.txt"), *restricoes)
+        self.pip("torch", "torchvision", "torchaudio", "--index-url", INDICE[self.backend])
+        self.pip("-r", os.path.join(self.repo, "requirements.txt"))
         self.pip("-r", os.path.join(self.repo, "custom_nodes", "ComfyUI-GGUF", "requirements.txt"))
         baixados = [self.baixar(*m) for m in MODELOS[modelos]]
         args = ["main.py", "--listen", "127.0.0.1", "--port", str(porta), "--preview-method", "none"]
-        if self.backend == "directml":
-            args.append("--directml")
-        elif self.backend == "cpu":
+        if self.backend == "cpu":
             args.append("--cpu")
         if pouca_vram and self.backend != "cpu":
             args.append("--lowvram")  # placa de 8 GB (RX 580): o que não couber vai para a RAM
@@ -167,8 +230,10 @@ class Instalador:
 
 def main():
     a = sys.argv[1:]
-    if len(a) < 2 or a[1] not in ("nvidia", "rocm", "directml", "cpu"):
-        print(__doc__ or "uso: instalar_comfyui.py <pasta> <nvidia|rocm|directml|cpu> [--modelos gguf|inteiro|nenhum]")
+    if len(a) >= 2 and a[1] == "directml":
+        a[1] = "vulkan"  # o ComfyUI não tem mais DirectML: AMD/Intel no Windows vão pelo Vulkan
+    if len(a) < 2 or a[1] not in ("nvidia", "rocm", "vulkan", "cpu"):
+        print("uso: instalar_comfyui.py <pasta> <nvidia|rocm|vulkan|cpu> [--modelos gguf|inteiro|nenhum]")
         sys.exit(2)
 
     def opcao(nome, padrao):

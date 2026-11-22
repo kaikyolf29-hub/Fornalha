@@ -288,7 +288,7 @@
       "url_licenca": "https://huggingface.co/Tongyi-MAI/Z-Image-Turbo",
       "uso_comercial": "sim",
       "vram_mb": 14000,
-      "nota": "Arquivos do pacote oficial do ComfyUI (Comfy-Org/z_image_turbo): z_image_turbo_bf16, texto Qwen3-4B (Apache 2.0, huggingface.co/Qwen/Qwen3-4B) e ae (VAE). Roda em NVIDIA, AMD (ROCm/DirectML) e no processador (lento)."
+      "nota": "Arquivos do pacote oficial do ComfyUI (Comfy-Org/z_image_turbo): z_image_turbo_bf16, texto Qwen3-4B (Apache 2.0, huggingface.co/Qwen/Qwen3-4B) e ae (VAE). Roda em NVIDIA, AMD com ROCm (Linux) e no processador (lento)."
     },
     {
       "id": "z-image-turbo-gguf-comfyui",
@@ -299,7 +299,18 @@
       "url_licenca": "https://huggingface.co/jayn7/Z-Image-Turbo-GGUF",
       "uso_comercial": "sim",
       "vram_mb": 6000,
-      "nota": "Quantização GGUF do Z-Image Turbo (Apache 2.0, como o original Tongyi-MAI/Z-Image-Turbo) com o texto Qwen3-4B em GGUF (unsloth/Qwen3-4B-GGUF, Apache 2.0) e o VAE ae do pacote oficial; precisa do nó ComfyUI-GGUF. Cabe numa placa de 8 GB (RX 580) e roda no processador."
+      "nota": "Quantização GGUF do Z-Image Turbo (Apache 2.0, como o original Tongyi-MAI/Z-Image-Turbo) com o texto Qwen3-4B em GGUF (unsloth/Qwen3-4B-GGUF, Apache 2.0) e o VAE ae do pacote oficial; precisa do nó ComfyUI-GGUF. Cabe numa placa de 8 GB e roda no processador."
+    },
+    {
+      "id": "z-image-turbo-gguf-vulkan",
+      "nome": "Z-Image Turbo (pelo Vulkan, GGUF quantizado)",
+      "funcao": "imagem",
+      "onde": "vulkan",
+      "licenca": "Apache 2.0",
+      "url_licenca": "https://huggingface.co/jayn7/Z-Image-Turbo-GGUF",
+      "uso_comercial": "sim",
+      "vram_mb": 6000,
+      "nota": "Os mesmos arquivos GGUF do ComfyUI (Z-Image Turbo, texto Qwen3-4B e VAE ae, todos Apache 2.0) rodando no stable-diffusion.cpp (programa MIT, github.com/leejet/stable-diffusion.cpp, versão master-1045-6225bf8) pelo Vulkan: AMD e Intel no Windows (inclusive a RX 580) e AMD sem ROCm no Linux; sem placa, cai para o processador."
     },
     {
       "id": "z-image",

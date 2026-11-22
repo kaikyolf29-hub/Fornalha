@@ -2,6 +2,8 @@
 //! (Blender), código e cenas na engine (Godot ou Erethea) e o run_test.
 //! Precisa do Blender e da Godot (o CI instala os dois); sem eles, pula.
 
+mod comum;
+
 use std::time::Duration;
 
 use fornalha_core::engine::{self, OpcoesTeste};
@@ -37,6 +39,7 @@ fn preparar_projeto_escreve_scripts_e_respeita_edicoes() {
     assert!(pg.contains("\"4.8\""), "versão da engine nos recursos");
     assert!(pg.contains("TesteFornalha=") && pg.contains("fornalha_ponte/plugin.cfg"));
     assert!(r.escritos.iter().any(|e| e.ends_with("jogador.gd")));
+    assert!(r.escritos.iter().any(|e| e.ends_with("movimento.gd")), "o movimento (árvore, IK e olhar) vai junto");
     assert!(p.raiz.join("blender/.gdignore").is_file());
     // a pessoa edita o jogador: a Fornalha não sobrescreve
     let jog = p.raiz.join("Scripts/fornalha/jogador.gd");
@@ -104,6 +107,7 @@ async fn do_zero_ao_jogo_rodando_na_engine() {
     let total = rel["inimigos"]["total"].as_u64().unwrap();
     assert!(rel["inimigos"]["vivos"].as_u64().unwrap() < total, "o jogador derrotou o inimigo que chegou perto: {}", rel["inimigos"]);
     assert!(rel["assets"].as_array().unwrap().iter().any(|a| a["arquivo"] == "World/blockout.glb"));
+    comum::conferir_movimento(&rel);
     if tem_tela && !rel["modo"].as_str().unwrap_or("").starts_with("sem janela") {
         assert!(!rel["capturas"].as_array().unwrap().is_empty(), "capturas do jogo");
     }
@@ -127,7 +131,7 @@ async fn scripts_do_jogo_compilam_na_engine() {
     let p = projeto::criar(&NovoProjeto { nome: "Compila".into(), ..Default::default() }, tmp.path()).unwrap();
     engine::preparar_projeto(&p, godot.versao.as_deref().unwrap_or("")).unwrap();
     let raiz = p.raiz.to_string_lossy().into_owned();
-    for s in ["jogador", "inimigo", "hud", "sons", "teste_automatico", "principal", "montar"] {
+    for s in ["jogador", "inimigo", "movimento", "hud", "sons", "teste_automatico", "principal", "montar"] {
         let script = format!("res://Scripts/fornalha/{s}.gd");
         let saida = externas::rodar(
             &godot.caminho,

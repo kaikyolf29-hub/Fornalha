@@ -1,6 +1,7 @@
 extends Node
 ## Teste automático da Fornalha (autoload "TesteFornalha"). Só liga com
-## `-- --fornalha-teste <pasta>`: anda, pula, ataca, tira capturas e escreve
+## `-- --fornalha-teste <pasta>`: anda, pula, ataca (também andando), tira capturas,
+## confere o movimento (árvore de animação, pés no chão parado, olhar) e escreve
 ## relatorio.json. No jogo normal não faz nada.
 
 var ativo := false
@@ -15,6 +16,11 @@ var _inicio := Vector3.ZERO
 var _total_inimigos := 0
 var _perseguiram := {}
 var _marcos := {}
+var _pes: Array[float] = []        # pior pé (com IK) em cada quadro parado, em metros
+var _pes_sem_ik: Array[float] = [] # o mesmo pé sem o IK (a pose da animação contra o chão)
+var _atacou_andando := false
+var _olhou := false
+var _parado_ha := 0.0
 const CAPTURAS := [1.2, 3.0, 4.6, 6.4, 8.2]
 
 
@@ -52,6 +58,8 @@ func _process(dt: float) -> void:
 		if _jogador:
 			_inicio = _jogador.global_position
 			_total_inimigos = get_tree().get_nodes_in_group("inimigos").size()
+			if _jogador.get("movimento"):
+				_jogador.movimento.medir = true
 	for inimigo in get_tree().get_nodes_in_group("inimigos"):
 		if inimigo.get("estado") in [1, 2]:
 			_perseguiram[inimigo.name] = true
@@ -65,6 +73,10 @@ func _process(dt: float) -> void:
 			_jogador.entrada_teste = Vector2.ZERO
 		if _uma_vez("pulo", 2.0):
 			_jogador.pular()
+		# golpe andando: a camada de cima ataca e as pernas seguem a locomoção
+		if _uma_vez("ataque_andando", 1.15):
+			_jogador.atacar()
+		_conferir_movimento(dt)
 		for k in [4.6, 5.6, 6.6, 7.6]:
 			if _uma_vez("ataque%s" % k, k):
 				_jogador.atacar()
@@ -73,6 +85,36 @@ func _process(dt: float) -> void:
 			_capturar(k + 1)
 	if _t >= duracao:
 		_terminar()
+
+
+func _conferir_movimento(dt: float) -> void:
+	var mov = _jogador.get("movimento")
+	if mov == null:
+		return
+	var e: Dictionary = mov.estado_atual()
+	if e["cima"] > 0.5 and e["velocidade"] > 0.6 and e["pernas_do_golpe"] < 0.35:
+		_atacou_andando = true
+	if e["olhar"] > 0.5:
+		_olhou = true
+	# pés no chão: só quadros parados de verdade (0,3 s sem andar nem agir, o IK já assentado), no chão
+	# e com o IK inteiro; entram o começo (antes de andar) e o fim (depois dos golpes)
+	var parado: bool = Vector2(_jogador.velocity.x, _jogador.velocity.z).length() < 0.05 and _jogador.is_on_floor()
+	parado = parado and e["acao_cima"] == "" and e["acao_corpo"] == "" and e["peso_ik"] > 0.98
+	_parado_ha = _parado_ha + dt if parado else 0.0
+	if _parado_ha > 0.3 and mov.medida.has("com_ik"):
+		var com: Array = mov.medida["com_ik"]
+		var sem: Array = mov.medida["sem_ik"]
+		_pes.append(maxf(absf(com[0]), absf(com[1])))
+		_pes_sem_ik.append(maxf(absf(sem[0]), absf(sem[1])))
+
+
+static func _cm(lista: Array[float]) -> Dictionary:
+	if lista.is_empty():
+		return {"amostras": 0}
+	var soma := 0.0
+	for v in lista:
+		soma += v
+	return {"amostras": lista.size(), "max": snappedf(lista.max() * 100.0, 0.01), "media": snappedf(soma / lista.size() * 100.0, 0.01)}
 
 
 func _capturar(n: int) -> void:
@@ -111,6 +153,21 @@ func _terminar() -> void:
 		var andou := _jogador.global_position - _inicio
 		andou.y = 0.0
 		rel["jogador"] = {"andou_m": snappedf(andou.length(), 0.01), "no_chao": _jogador.is_on_floor(), "vida": _jogador.vida, "caiu_do_mapa": _jogador.global_position.y < -20.0}
+		var mov = _jogador.get("movimento")
+		var ciclos := {}
+		if mov:
+			for nome in mov.ciclos:
+				ciclos[nome] = snappedf(mov.ciclos[nome]["v"], 0.01)
+		rel["movimento"] = {
+			"arvore": mov != null and mov.arvore != null and mov.arvore is AnimationTree,
+			"ik_pes": mov != null and mov._ik != null and mov._ik.is_class("TwoBoneIK3D"),
+			"olhar": mov != null and not mov._olhar.is_empty(),
+			"olhou": _olhou,
+			"atacou_andando": _atacou_andando,
+			"pes_parado_cm": _cm(_pes),
+			"pes_sem_ik_cm": _cm(_pes_sem_ik),
+			"velocidade_dos_ciclos": ciclos,
+		}
 	var vivos := 0
 	for inimigo in get_tree().get_nodes_in_group("inimigos"):
 		if inimigo.get("estado") != 3:

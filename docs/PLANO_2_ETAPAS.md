@@ -9,10 +9,10 @@
 
 ## Onde estamos (atualizado a cada bloco de trabalho)
 - **Etapa 1 em andamento.** Feito nesta etapa até agora: look-dev/QA, pele 4K, cabelo curto em cards,
-  pano simulado (sobreveste e capa), **ComfyUI** (conector, instalador pela placa, teste real no
+  pano simulado (sobreveste e capa), movimento base, **ComfyUI** (conector, instalador pela placa, teste real no
   processador do GitHub no Windows e no Linux), **pedidos 1–7 da Erethea** (música por situação, fala
   presa ao personagem, mandíbula, acústica, ponte ao vivo por WebSocket, teste de agente).
-- Próximos, nesta ordem: juntar o movimento (agente em paralelo) → criaturas e dragão → suíte de
+- Movimento base juntado (árvore de animação, pés no chão, olhar). Próximos, nesta ordem: criaturas e dragão → suíte de
   Teste Bruto → modo Teste de Fogo (RX 580, Windows) → cabelo sem manchas → roupa/armadura → folha
   de modelo pelo ComfyUI → por partes na janela.
 
@@ -69,9 +69,11 @@ quadril, joelhos); bake de normal da malha alta na baixa; PBR completo (albedo, 
 AO).
 
 **1.7 Rig e movimento** — ✅ esqueleto único humanoide (nomes Unreal), retarget da captura
-(Quaternius CC0, CMU), molas na capa. Falta: juntar o trabalho do agente (AnimationTree por velocidade,
-camada de cima para atacar andando, IK dos pés, olhar), molas no cabelo e nas abas, transições suaves
-(blend in/out), mais bibliotecas comerciais (100STYLE, ACCAD, Mesh2Motion, Mixamo da pessoa).
+(Quaternius CC0, CMU), molas na capa, `movimento.gd` (AnimationTree por velocidade real com passada sem
+patinar, camada de cima para atacar andando, pés no chão com TwoBoneIK3D, olhar com LookAtModifier3D).
+Falta: root motion, BlendSpace2D/strafe com orientation warping, travamento do pé pela curva de contato,
+IK também correndo, inertialization nas trocas, molas no cabelo e nas abas, mais bibliotecas comerciais
+(100STYLE, ACCAD, Mesh2Motion, Mixamo da pessoa).
 
 **1.8 Criaturas e dragões** — o rig não pode travar em humanos. Esqueletos próprios (quadrúpede;
 dragão com coluna longa, pescoço articulado, cauda com vários ossos, asas com membrana e mandíbula;

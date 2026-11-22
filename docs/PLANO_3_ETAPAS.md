@@ -57,9 +57,14 @@ Regras que valem nas 3 etapas:
   ORM empacotado, validador PBR (aço 0.55–0.78, rugosidade 0.22–0.45, ferrugem com metal 0).
 - Escudo, espada e bainha no mesmo nível; ouro/latão envelhecido.
 
-**1.6 Movimento base**
-- Root motion, pés no chão (IK de duas juntas com raio no calcanhar e na ponta, travamento pelo
-  contato), BlendSpace2D com ajuste de passada, camadas (pernas × braços), olhar (LookAtModifier3D).
+**1.6 Movimento base** (primeira passada feita em 22/11, `godot/movimento.gd`)
+- Feito: AnimationTree em código com BlendSpace1D pela velocidade real (parado → andar → correr →
+  pique), velocidade de cada ciclo medida nos pés da animação e ritmo ajustado à velocidade do corpo
+  (passada sem patinar, ciclos na mesma fase); camadas (golpe e defesa da cintura para cima, ações de
+  corpo inteiro por cima); pés no chão (TwoBoneIK3D por perna, raio no calcanhar e na ponta, rampa ×
+  degrau, tornozelo na normal, pelve descendo); olhar (LookAtModifier3D na cabeça, com limite).
+- Falta: root motion, BlendSpace2D/strafe com orientation warping, travamento do pé pela curva de
+  contato (foot locking), IK também correndo, inércia (inertialization) nas trocas.
 - Bibliotecas comerciais: 100STYLE, CMU, ACCAD (artes marciais), Mesh2Motion, Mixamo da pessoa.
 - Física: capa e abas da sobreveste por mola, ragdoll com mistura em golpes.
 

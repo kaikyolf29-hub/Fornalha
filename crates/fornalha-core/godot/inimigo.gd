@@ -1,6 +1,7 @@
 extends CharacterBody3D
 ## Inimigo com IA básica: fica parado, persegue o jogador quando ele chega
-## perto, ataca de perto e morre. Gerado pela Fornalha.
+## perto, ataca de perto e morre. Gerado pela Fornalha. O movimento (AnimationTree,
+## pés no chão e olhar no jogador) fica em movimento.gd.
 
 @export var velocidade := 3.2
 @export var vida_max := 100
@@ -8,12 +9,14 @@ extends CharacterBody3D
 @export var distancia_visao := 14.0
 @export var distancia_ataque := 1.8
 @export var tempo_entre_ataques := 1.4
+@export var aceleracao := 12.0
 
 enum Estado { PARADO, PERSEGUINDO, ATACANDO, MORTO }
 var estado := Estado.PARADO
 var vida := 100
 var gravidade: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var anim: AnimationPlayer
+var movimento: Node     # movimento.gd
 var _espera := 0.0
 var _origem := Vector3.ZERO
 
@@ -27,6 +30,8 @@ func _ready() -> void:
 	_origem = global_position
 	anim = _achar(modelo)
 	_ragdoll = preload("res://Scripts/fornalha/fisica.gd").preparar(modelo, self)
+	if anim:
+		movimento = preload("res://Scripts/fornalha/movimento.gd").criar(self, modelo, anim)
 	_tocar("parado")
 
 
@@ -46,11 +51,11 @@ func _physics_process(dt: float) -> void:
 	_espera = max(_espera - dt, 0.0)
 	var jogador := get_tree().get_first_node_in_group("jogador") as Node3D
 	if estado == Estado.MORTO or jogador == null or jogador.get("morto"):
-		velocity.x = 0.0
-		velocity.z = 0.0
+		_andar(Vector3.ZERO, dt)
 		if estado != Estado.MORTO:
 			_tocar("parado")
 		move_and_slide()
+		_animar(null, dt)
 		return
 	var para := jogador.global_position - global_position
 	para.y = 0.0
@@ -64,25 +69,51 @@ func _physics_process(dt: float) -> void:
 	match estado:
 		Estado.PERSEGUINDO:
 			var d := para.normalized()
-			velocity.x = d.x * velocidade
-			velocity.z = d.z * velocidade
+			_andar(d * velocidade, dt)
 			modelo.rotation.y = lerp_angle(modelo.rotation.y, atan2(d.x, d.z), 8.0 * dt)
 			_tocar("andar")
 		Estado.ATACANDO:
-			velocity.x = 0.0
-			velocity.z = 0.0
+			_andar(Vector3.ZERO, dt)
 			modelo.rotation.y = lerp_angle(modelo.rotation.y, atan2(para.x, para.z), 8.0 * dt)
 			if _espera == 0.0:
 				_espera = tempo_entre_ataques
-				_tocar("atacar", true)
-				await get_tree().create_timer(0.4).timeout
-				if estado == Estado.ATACANDO and is_instance_valid(jogador):
-					jogador.receber_dano(dano)
+				_golpear(jogador)
 		_:
-			velocity.x = 0.0
-			velocity.z = 0.0
+			_andar(Vector3.ZERO, dt)
 			_tocar("parado")
 	move_and_slide()
+	_animar(jogador, dt)
+
+
+## O golpe acerta um pouco depois de começar (sem parar o quadro de física à espera).
+func _golpear(jogador: Node3D) -> void:
+	_tocar("atacar", true)
+	await get_tree().create_timer(0.4).timeout
+	if estado == Estado.ATACANDO and is_instance_valid(jogador):
+		jogador.receber_dano(dano)
+
+
+func _andar(alvo: Vector3, dt: float) -> void:
+	if movimento == null:
+		velocity.x = alvo.x
+		velocity.z = alvo.z
+		return
+	var h := Vector3(velocity.x, 0.0, velocity.z).move_toward(alvo, aceleracao * dt)
+	velocity.x = h.x
+	velocity.z = h.z
+
+
+## Locomoção pela velocidade real e cabeça no jogador quando ele está à vista.
+func _animar(jogador: Node3D, dt: float) -> void:
+	if movimento == null or estado == Estado.MORTO:
+		return
+	movimento.atualizar(Vector2(velocity.x, velocity.z).length(), is_on_floor(), dt)
+	if jogador and estado != Estado.PARADO:
+		var mov_j = jogador.get("movimento")
+		var cabeca: Vector3 = mov_j.posicao_da_cabeca() if mov_j else jogador.global_position + Vector3.UP * 1.6
+		movimento.olhar_para(cabeca, 1.0)
+	else:
+		movimento.olhar_para(global_position + modelo.global_transform.basis.z * 5.0 + Vector3.UP * 1.6, 0.0)
 
 
 func receber_dano(quanto: int) -> void:
@@ -95,7 +126,10 @@ func receber_dano(quanto: int) -> void:
 		var empurrao := Vector3.ZERO
 		if jog:
 			empurrao = (global_position - jog.global_position).normalized() * 40.0 + Vector3.UP * 8.0
-		if not preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, empurrao):
+		var caiu: bool = preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, empurrao)
+		if movimento:
+			movimento.morrer(caiu)
+		elif not caiu:
 			_tocar("morrer", true)
 		var sons := get_node_or_null("/root/Sons")
 		if sons:
@@ -108,6 +142,9 @@ func receber_dano(quanto: int) -> void:
 
 
 func _tocar(nome: String, reiniciar := false) -> void:
+	if movimento:
+		movimento.tocar(nome)  # parado/andar/correr: a locomoção é automática
+		return
 	if anim == null or not anim.has_animation(nome):
 		return
 	if reiniciar or anim.current_animation != nome:

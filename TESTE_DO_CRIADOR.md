@@ -49,6 +49,7 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
 1. **Montar na engine** e depois **Rodar teste**.
 2. **Esperado:** o jogo abre (Godot ou Erethea), o herói anda, pula e ataca sozinho, o inimigo persegue; no fim, "passou", 0 erros, capturas e vídeo.
 3. Abra a pasta do projeto na engine (Godot/Erethea → Importar → `project.godot`) e aperte F5 para jogar você mesmo (WASD, espaço, clique para atacar).
+4. **Movimento (sentir na mão):** ande, solte as teclas e corra com Shift. **Esperado:** sai andando e para com um pouco de inércia, os pés não patinam no chão, a troca entre andar e correr é suave. Ataque andando (**esperado:** golpeia da cintura para cima sem parar as pernas). Pare numa rampa ou num degrau (**esperado:** os dois pés apoiados, um mais alto que o outro, o quadril desce). Gire a câmera com o mouse (**esperado:** a cabeça acompanha até uns 60° e volta para a frente quando a câmera vai para trás). Na Erethea, se ela for mais antiga que a Godot 4.6, o jogo roda sem o IK dos pés e sem o olhar (o resto igual).
 
 ## 7. O Claude Code usa tudo pelo MCP
 Com a Fornalha aberta:

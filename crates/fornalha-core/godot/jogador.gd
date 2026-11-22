@@ -1,7 +1,8 @@
 extends CharacterBody3D
 ## Jogador em terceira pessoa. Gerado pela Fornalha; pode editar à vontade.
 ## WASD anda, Shift corre, Espaço pula, clique esquerdo ataca, direito defende,
-## Ctrl esquiva, Esc solta o mouse.
+## Ctrl esquiva, Esc solta o mouse. O movimento (AnimationTree, pés no chão e olhar)
+## fica em movimento.gd.
 
 signal vida_mudou(vida: int, vida_max: int)
 
@@ -12,10 +13,13 @@ signal vida_mudou(vida: int, vida_max: int)
 @export var vida_max := 100
 @export var dano_ataque := 34
 @export var alcance_ataque := 2.2
+@export var aceleracao := 16.0   # m/s² ao sair andando (inércia de jogo de ação)
+@export var frenagem := 22.0     # m/s² ao soltar as teclas
 
 var vida := 100
 var gravidade: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var anim: AnimationPlayer
+var movimento: Node     # movimento.gd: locomoção misturada, camadas, pés no chão e olhar
 var acao := ""          # animação de ação em andamento (atacar, defender, esquivar, dano)
 var morto := false
 var entrada_teste := Vector2.ZERO   # o teste automático da Fornalha mexe aqui
@@ -30,17 +34,24 @@ var _ragdoll: PhysicalBoneSimulator3D
 @onready var braco: SpringArm3D = $BracoCamera
 var _malhas: Array[GeometryInstance3D] = []
 var _transparencia := 0.0
+var _inclinacao_neutra := 0.0   # inclinação inicial da câmera: olhar reto para a frente
 
 
 func _ready() -> void:
 	add_to_group("jogador")
 	vida = vida_max
+	_inclinacao_neutra = braco.rotation.x
 	_criar_controles()
 	anim = _achar_animacoes(modelo)
 	_ragdoll = preload("res://Scripts/fornalha/fisica.gd").preparar(modelo, self)
 	_juntar_malhas(modelo)
 	if anim:
-		anim.animation_finished.connect(_fim_da_animacao)
+		movimento = preload("res://Scripts/fornalha/movimento.gd").criar(self, modelo, anim)
+		if movimento:
+			movimento.acao_terminou.connect(_fim_da_animacao)
+			movimento.passo.connect(func(_lado: int) -> void: _som("passo", global_position))
+		else:
+			anim.animation_finished.connect(_fim_da_animacao)
 		_tocar("parado")
 	var teste := get_node_or_null("/root/TesteFornalha")
 	if teste == null or not teste.ativo:
@@ -98,8 +109,9 @@ func _physics_process(dt: float) -> void:
 	var v := velocidade_corrida if correndo else velocidade
 	if acao in GOLPES or acao == "defender":
 		v *= 0.25
-	velocity.x = direcao.x * v
-	velocity.z = direcao.z * v
+	var horizontal := Vector3(velocity.x, 0.0, velocity.z).move_toward(direcao * v, (aceleracao if direcao != Vector3.ZERO else frenagem) * dt)
+	velocity.x = horizontal.x
+	velocity.z = horizontal.z
 	if direcao != Vector3.ZERO:
 		modelo.rotation.y = lerp_angle(modelo.rotation.y, atan2(direcao.x, direcao.z), 12.0 * dt)
 	if Input.is_action_just_pressed("pular") and is_on_floor():
@@ -194,26 +206,55 @@ func receber_dano(quanto: int) -> void:
 	vida_mudou.emit(vida, vida_max)
 	if vida == 0:
 		morto = true
-		if not preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, Vector3.UP * 6.0):
+		var caiu: bool = preload("res://Scripts/fornalha/fisica.gd").cair(_ragdoll, anim, Vector3.UP * 6.0)
+		if movimento:
+			movimento.morrer(caiu)
+		elif not caiu:
 			_tocar("morrer")
 	else:
 		_acao("dano")
 
 
 func _acao(nome: String) -> void:
+	if movimento:
+		# só vira ação se a animação existe (senão a ação nunca terminaria)
+		if movimento.tocar(nome) > 0.0:
+			acao = nome
+		return
 	acao = nome
 	_tocar(nome)
 
 
-func _fim_da_animacao(nome: StringName) -> void:
+func _fim_da_animacao(nome: Variant) -> void:
 	if String(nome) == acao:
 		acao = ""
-		if _proximo_golpe and String(nome) in GOLPES:
-			_proximo_golpe = false
+		# a sequência de golpes não continua por cima de dano, esquiva ou pulo
+		var emendar: bool = _proximo_golpe and String(nome) in GOLPES and (movimento == null or movimento.acao_atual("corpo") == "")
+		_proximo_golpe = false
+		if emendar:
 			_golpe((_combo + 1) % GOLPES.size())
 
 
 func _animar(direcao: Vector3, correndo: bool, dt: float) -> void:
+	if movimento == null:
+		_animar_sem_arvore(direcao, correndo, dt)
+		return
+	# a árvore mistura a locomoção pela velocidade real; aqui só entram os eventos
+	movimento.atualizar(Vector2(velocity.x, velocity.z).length(), is_on_floor(), dt)
+	# a cabeça olha para onde a câmera aponta (o LookAtModifier3D limita e suaviza); para cima e
+	# para baixo só a diferença em relação à câmera parada, senão ele olharia o chão o tempo todo
+	var frente := -braco.global_transform.basis.z
+	frente.y = 0.0
+	var incl := clampf(braco.rotation.x - _inclinacao_neutra, -0.6, 0.6) * 0.7
+	movimento.olhar_para(movimento.posicao_da_cabeca() + (frente.normalized() * cos(incl) + Vector3.UP * sin(incl)) * 10.0)
+	var estava_no_ar := _no_ar
+	_no_ar = movimento.no_ar()
+	if estava_no_ar and not _no_ar and direcao == Vector3.ZERO and acao in ["", "pular"]:
+		_acao("aterrissar")
+
+
+## Caminho antigo (modelo sem esqueleto conhecido): toca as animações pelo nome.
+func _animar_sem_arvore(direcao: Vector3, correndo: bool, dt: float) -> void:
 	if not is_on_floor():
 		_no_ar = true
 		if acao == "" or (acao == "pular" and anim and not anim.is_playing()):
@@ -242,6 +283,9 @@ func _animar(direcao: Vector3, correndo: bool, dt: float) -> void:
 
 
 func _tocar(nome: String) -> void:
+	if movimento:
+		movimento.tocar(nome)  # a locomoção (parado, andar, correr) é automática
+		return
 	if anim and anim.has_animation(nome) and anim.current_animation != nome:
 		anim.play(nome, 0.15)
 

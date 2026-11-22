@@ -54,3 +54,18 @@ pub fn detection_with(name: &str, familia: Familia, libs: &[(&str, bool)]) -> De
         fontes_brutas: raw,
     }
 }
+
+/// Movimento (etapa 1.6): AnimationTree, IK dos pés (TwoBoneIK3D), olhar (LookAtModifier3D),
+/// golpe andando e os pés a menos de 3 cm do chão com o personagem parado.
+pub fn conferir_movimento(rel: &serde_json::Value) {
+    let mov = &rel["movimento"];
+    eprintln!("movimento: {mov}");
+    for chave in ["arvore", "ik_pes", "olhar", "atacou_andando"] {
+        assert_eq!(mov[chave], true, "movimento sem {chave}: {mov}");
+    }
+    let pes = &mov["pes_parado_cm"];
+    assert!(pes["amostras"].as_u64().unwrap_or(0) >= 5, "poucos quadros parados para medir os pés: {mov}");
+    assert!(pes["max"].as_f64().unwrap() < 3.0, "os pés têm de ficar a menos de 3 cm do chão parado: {mov}");
+    let ciclos = &mov["velocidade_dos_ciclos"];
+    assert!(ciclos["andar"].as_f64().unwrap_or(0.0) > 0.3, "velocidade do ciclo de andar medida nos pés: {mov}");
+}

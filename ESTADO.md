@@ -66,8 +66,9 @@ Falta para chegar nas referências (próximas rodadas):
    manoplas articuladas, sobreveste com caimento de pano de verdade e capuz.
 3. **Rosto** (etapa 1 do plano por etapas): detalhe de pele (poros, rugas por idade) assado em mapa
    normal 4K, pele com variação de cor, olhos, barba rala; cabelo melhor.
-4. **Mais movimento**: 100STYLE (CC BY 4.0, 100 estilos de andar) e CMU (lutas), importar Mixamo baixado
-   pela pessoa, pés firmes no chão (TwoBoneIK3D), mistura de locomoção por velocidade.
+4. **Mais movimento**: a base saiu na etapa 1.6 (veja "Movimento base" abaixo). Falta: 100STYLE
+   (CC BY 4.0, 100 estilos de andar) e CMU (lutas), importar Mixamo baixado pela pessoa, root motion,
+   strafe (BlendSpace2D), travamento do pé pela curva de contato.
 5. **Máximo com placa NVIDIA**: TRELLIS.2 / Step1X-3D (Apache 2.0) para peças únicas a partir da arte.
 6. Futuro (criador): captura de movimento pelo Kinect ou por webcam.
 
@@ -148,6 +149,56 @@ O caminho até o nível das referências está em [docs/PLANO_3_ETAPAS.md](docs/
 régua técnica em [docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md) (enviada pelo criador).
 **Etapa 1 em andamento:** cabelo AAA em cards (penteado fio a fio como fonte), depois look-dev/QA,
 rosto/olhos, corpo/roupa, armadura, movimento base, ferramenta por partes, ComfyUI/APIs/app do primo.
+
+## Movimento base (etapa 1.6, 22/11/2026)
+Código novo em `crates/fornalha-core/godot/movimento.gd` (entra no projeto pela lista de scripts e é
+usado pelo jogador e pelo inimigo; o caminho antigo por nome fica para modelo sem esqueleto conhecido).
+- **Locomoção por AnimationTree feito em código:** BlendSpace1D pela velocidade real (parado → andar →
+  correr → pique). A velocidade natural de cada ciclo é **medida nos pés** da própria animação (o ponto
+  da sola que está no chão corre para trás na velocidade do corpo): no templário, andar 1,17 m/s,
+  correr 6,35 m/s, pique 9,79 m/s; no low-poly da Forja, andar 1,23 e correr 3,02. Os ciclos ficam na
+  mesma fase (linha do tempo normalizada, começando com o pé esquerdo na frente) e o ritmo é velocidade
+  ÷ distância do ciclo, então a passada não patina. O som de passo sai do ciclo. O corpo ganhou
+  aceleração e frenagem (inércia).
+- **Camadas:** golpes e defesa da cintura para cima (filtro de ossos a partir da coluna), com as pernas
+  seguindo o golpe só quando parado (atacar andando funciona); ações de corpo inteiro (pular, esquivar,
+  dano, aterrissar) por cima, com fade; sem ragdoll, a morte fica no estado "morto".
+- **Pés no chão:** TwoBoneIK3D (classe da Godot 4.6) por perna, entre dois SkeletonModifier3D próprios:
+  raios no calcanhar e na ponta, rampa × degrau (a diferença de altura que a inclinação não explica é
+  degrau), tornozelo girado para a normal, pelve descendo pela diferença; liga parado ou andando devagar
+  e desliga suave no ar, na esquiva e na morte.
+- **Olhar:** LookAtModifier3D na cabeça (o pescoço só entra se o eixo dele for vertical; o do MakeHuman é
+  inclinado e entortava a cabeça), seguindo a câmera no jogador e o jogador no inimigo, limite de ±65°,
+  volta para a frente quando o alvo fica atrás do corpo.
+- **Erethea:** IK e olhar são criados pelo nome (ClassDB); numa engine sem essas classes o jogo roda com a
+  locomoção e as camadas, sem IK nem olhar (não provado: falta a Erethea de verdade).
+- **Provado aqui** (Linux, Godot 4.6.1, renderizador de compatibilidade, sem placa):
+  - banco de testes com o templário realista: chão plano, rampa de 20° subindo e de lado, degrau de 21 cm:
+    pés a ≤ 0,02 cm do chão com IK (sem IK: −9/+8 cm na rampa subindo, −7,6/+7,5 cm de lado, 21 cm no
+    degrau, ~1 cm no plano); pelve desceu 11 cm na rampa e 21 cm no degrau; cabeça virou 57° com a câmera
+    a 70° e 0° com a câmera atrás;
+  - `cargo test --test engine` (herói e orc low-poly da Forja): 5 de 5, 0 erros, andou 7,83 m, 1 de 6
+    inimigos derrotado, árvore + IK + olhar + golpe andando conferidos, pés parados a no máximo 0,07 cm
+    em 17 quadros (sem IK: 0,58 cm);
+  - teste realista (templário e inimigo criados pelo MCP, `personagem_realista`): passou, 0 erros, andou
+    7,78 m, 1 de 4 inimigos derrotado, conferências do movimento todas verdes, pés parados a no máximo
+    1,25 cm (média 0,09 cm) em 208 quadros, contra até 1,24 cm (média 1,06 cm) sem IK; o pior quadro é
+    logo depois de parar, com a mistura ainda assentando. A rodada com janela e vídeo passou do tempo-limite
+    de 228 s (renderização por software a ~1 quadro/s nesta máquina carregada) e o teste refez sem janela,
+    como já previsto no código; só a lógica custa ~0,7 ms a mais por quadro para os 5 personagens;
+  - `cargo test --workspace` (198 testes), clippy, fmt e o teste do MCP (`testes/mcp-e2e`) verdes.
+    Falta o CI no Windows e no Linux (sem push nesta rodada).
+- **Achado (para a frente da física):** os ossos do ragdoll (PhysicalBone3D) ficam na camada do mundo
+  enquanto seguem a animação. O CharacterBody3D do inimigo usava o braço do jogador no meio do golpe como
+  "plataforma", herdava ~120 m/s e voava para longe (por isso os golpes não acertavam). O `movimento.gd`
+  faz os corpos ignorarem os ossos físicos dos outros personagens, e os raios dos pés também (o pé não pisa
+  no corpo caído). O certo é o `fisica.gd` pôr esses ossos numa camada própria enquanto não simulam.
+- **Falta:** a sola é tirada dos ossos (pose de descanso), não da malha: o QA da Forja acusou o ponto mais
+  baixo das peças do templário 2,7 cm abaixo da origem, e isso aparece igual com ou sem IK (correção no
+  gerador); root motion (as capturas são no lugar), BlendSpace2D/strafe com orientation warping,
+  travamento do pé pela curva de contato, IK também correndo, inércia (inertialization) nas trocas,
+  bibliotecas 100STYLE/CMU/ACCAD, ragdoll misturado em golpes; o criador sentir na mão
+  (TESTE_DO_CRIADOR.md, parte 6).
 
 ## Decisões que são do criador
 - **APIs de geração (decidido em 21/11):** o criador autorizou APIs (Gemini imagem, Rodin, Meshy,

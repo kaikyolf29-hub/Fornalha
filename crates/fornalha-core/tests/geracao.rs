@@ -205,6 +205,8 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
     assert_eq!(inimigo["modelo_3d"], "humano-fornalha");
     assert_eq!(teste["passou"], true, "{teste}");
     assert_eq!(teste["erros"], json!([]));
+    // movimento no humano realista (esqueleto de jogo): árvore, pés no chão, olhar e golpe andando
+    comum::conferir_movimento(teste);
     let pend = f.chamar("check_licenses", json!({}), "claude-code").await.unwrap();
     assert_eq!(pend["pode_vender"], true, "{pend}");
     if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {

@@ -113,8 +113,11 @@ pub fn estado(paths: &Paths) -> Value {
 }
 
 async fn comando(paths: &Paths, p: Pacote) -> Resultado<(tokio::process::Command, PathBuf)> {
-    let python = workers::python_do_sistema().await.ok_or_else(|| {
-        Erro::novo("python_ausente", "Precisa do Python 3.10 ou mais novo instalado (python.org) para baixar os pacotes.")
+    let python = workers::python_para(paths).await.ok_or_else(|| {
+        Erro::novo(
+            "python_ausente",
+            "Para baixar os pacotes precisa do Python 3.10+ (python.org) ou do Blender baixado em Máquina → Programas (ele traz um Python).",
+        )
     })?;
     let scripts = workers::preparar_scripts(&paths.data_dir)?;
     let destino = paths.data_dir.join("pacotes").join(p.id());

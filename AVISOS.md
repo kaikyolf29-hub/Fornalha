@@ -46,7 +46,9 @@ License 1.1 (texto em `app/ui/fontes/OFL-Archivo.txt`).
 ## Programas e modelos que a Fornalha usa, mas não leva dentro dela
 
 - **Blender** (GPL) e **Godot** (MIT) / **Erethea Engine**: rodam como programas
-  separados, por linha de comando. Os arquivos que eles geram são do estúdio.
+  separados, por linha de comando. Os arquivos que eles geram são do estúdio. O Blender 5.2.4 e a
+  Godot 4.6.1 podem ser baixados pela janela (Máquina → Programas → Baixar), dos sites oficiais, com a
+  soma publicada conferida; ficam na pasta de dados da Fornalha, sem mudar nada no sistema.
 - **Modelos de placa** (TRELLIS.2 e UniRig, MIT; HY-Motion, licença comunitária
   da Tencent): baixados dos repositórios oficiais para a pasta de dados da
   Fornalha, só quando a pessoa instala pela janela. O nvdiffrast (licença só de

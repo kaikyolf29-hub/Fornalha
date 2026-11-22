@@ -302,6 +302,23 @@ mod nucleo {
         }
     }
 
+    /// Baixar o Blender ou a Godot: só a pessoa, pela janela (fala com o site do programa).
+    async fn baixar_programa(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        use fornalha_core::externas::Programa;
+        let p = match v["id"].as_str() {
+            Some("blender") => Programa::Blender,
+            Some("godot") => Programa::Godot,
+            _ => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "A Fornalha baixa só o Blender e a Godot."}})))
+                    .into_response()
+            }
+        };
+        match fornalha_core::programas::baixar(&c.fornalha.paths, p).await {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
     /// Canal exclusivo da janela: a mesma API (como "pessoa") + rotas que só a pessoa usa.
     async fn servir_canal_janela(app: AppHandle) {
         let st = app.state::<Estado>();
@@ -316,6 +333,7 @@ mod nucleo {
                     .route("/janela/ajustes", post(definir_ajustes))
                     .route("/janela/modelo-de-placa", post(modelo_de_placa))
                     .route("/janela/pacote", post(baixar_pacote))
+                    .route("/janela/programa", post(baixar_programa))
                     .route("/janela/comfyui", post(comfyui))
                     .with_state(canal),
             )

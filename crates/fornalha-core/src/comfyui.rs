@@ -404,8 +404,18 @@ async fn comando_de_instalacao(
     c: &Caminho,
     porta: u16,
 ) -> Resultado<(tokio::process::Command, std::path::PathBuf)> {
-    let python = crate::workers::python_do_sistema().await.ok_or_else(|| {
-        Erro::novo("python_ausente", "Precisa do Python 3.10 ou mais novo instalado (python.org) para instalar o ComfyUI.")
+    // o motor Vulkan só baixa arquivos: serve o Python que vem dentro do Blender; o ComfyUI cria um
+    // ambiente próprio e precisa do Python do sistema
+    let python = if c.backend == "vulkan" { crate::workers::python_para(paths).await } else { crate::workers::python_do_sistema().await };
+    let python = python.ok_or_else(|| {
+        Erro::novo(
+            "python_ausente",
+            if c.backend == "vulkan" {
+                "Para instalar o motor de imagem precisa do Python 3.10+ (python.org) ou do Blender baixado em Máquina → Programas."
+            } else {
+                "Precisa do Python 3.10 ou mais novo instalado (python.org) para instalar o ComfyUI."
+            },
+        )
     })?;
     let scripts = crate::workers::preparar_scripts(&paths.data_dir)?;
     let destino = pasta(paths);

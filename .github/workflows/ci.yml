@@ -90,15 +90,23 @@ jobs:
         timeout-minutes: 20
         run: ./scripts/apt-instalar.sh xvfb xauth libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libegl1 libxkbcommon0 libsm6 libgl1-mesa-dri unzip
 
-      - name: Cache do Blender e da Godot
-        uses: actions/cache@v4
-        with:
-          path: ~/ferramentas
-          key: ferramentas-${{ runner.os }}-blender-5.2.4-godot-4.6.1
-
-      - name: Baixar o Blender e a Godot
+      # Sem cache de propósito: a cada execução prova o botão Máquina → Programas → Baixar (curl e tar
+      # do sistema — no Windows os de System32 —, versão fixa e soma publicada conferida)
+      - name: Baixar o Blender e a Godot pelo botão da Fornalha
         shell: bash
-        run: ./scripts/baixar-ferramentas.sh "$HOME/ferramentas"
+        run: |
+          cargo build -q -p fornalha-cli
+          base="$HOME/ferramentas-fornalha"
+          if [ "$RUNNER_OS" = "Windows" ]; then base="$(cygpath -w "$base")"; fi
+          for p in godot blender; do FORNALHA_HOME="$base" ./target/debug/fornalha-cli baixar-programa $p; done
+          dir="$HOME/ferramentas-fornalha/dados/ferramentas"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "FORNALHA_TESTE_BLENDER=$(cygpath -w "$dir/blender/blender.exe")" >> "$GITHUB_ENV"
+            echo "FORNALHA_TESTE_GODOT=$(cygpath -w "$dir/godot/godot_console.exe")" >> "$GITHUB_ENV"
+          else
+            echo "FORNALHA_TESTE_BLENDER=$dir/blender/blender" >> "$GITHUB_ENV"
+            echo "FORNALHA_TESTE_GODOT=$dir/godot/godot" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-python@v5
         with:

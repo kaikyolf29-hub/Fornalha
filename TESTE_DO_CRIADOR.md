@@ -10,18 +10,20 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
 3. Extraia o zip e rode o `Fornalha_0.1.0_x64-setup.exe`.
    - Se aparecer "O Windows protegeu o computador": **Mais informações → Executar assim mesmo** (ainda sem assinatura digital).
    - **Esperado:** não pede administrador; ao terminar, a Fornalha abre.
-4. Para gerar 3D e testar o jogo, a Fornalha usa programas de fora (grátis):
-   - **Blender 5.2** — https://www.blender.org/download/ (instalação normal);
-   - **Godot 4.6** — https://godotengine.org/download/ — **ou a sua Erethea Engine**.
-   Se ela não achar sozinha, em **Máquina → Programas → Escolher**, aponte o executável (na Godot, o `_console.exe`).
+4. Para gerar 3D e testar o jogo, a Fornalha usa programas de fora (grátis): o **Blender** e a **Godot**
+   (ou a sua **Erethea Engine**). Em **Máquina → Programas**, clique em **Baixar 5.2.4 (≈ 420 MB)** no
+   Blender e **Baixar 4.6.1 (≈ 70 MB)** na Godot. **Esperado:** "Baixando… N MB" e, no fim, o caminho
+   em `…\Fornalha\dados\ferramentas\…` com a versão. A Fornalha confere a soma publicada pelo Blender
+   e pela Godot antes de usar. Se você já tem os dois instalados, ela acha sozinha; se não achar,
+   **Escolher** e aponte o executável (na Godot, o `_console.exe`).
 5. Para ficha, imagem de conceito, voz e pedido livre: o **Ignis 0.4.0** aberto (porta 11470).
 
 ## 0b. Teste de Fogo na RX 580 (o roteiro curto)
 Depois de instalar (passo 0), com o Blender e a Godot (ou a Erethea) achados em **Máquina**:
 1. **Máquina → Motor de imagem → Instalar.** Esperado: o caminho escolhido é "vulkan" (stable-diffusion.cpp
    pelo Vulkan, que funciona na RX 580 com o driver da AMD) com modelos "gguf" e pouca VRAM; baixa ~6 GB
-   (o programa tem 30 MB, o resto são os modelos) e mostra o progresso. Precisa do Python 3.10+ instalado
-   (python.org) só para o download; não precisa do Git. No fim aparece "Motor Vulkan pronto — AMD Radeon
+   (o programa tem 30 MB, o resto são os modelos) e mostra o progresso. Não precisa instalar Python nem
+   Git: com o Blender baixado no passo 0, a Fornalha usa o Python que vem dentro dele. No fim aparece "Motor Vulkan pronto — AMD Radeon
    RX 580 Series". Se aparecer só "CPU", o Vulkan não achou a placa: atualize o driver da AMD e me conte.
    (O ComfyUI tirou o DirectML em 11/11/2026, por isso a RX 580 vai pelo Vulkan.)
    Teste rápido: com um projeto aberto, **Forjar → Conceito** com "templário medieval". A imagem sai em

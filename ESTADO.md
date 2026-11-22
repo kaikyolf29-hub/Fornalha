@@ -162,10 +162,15 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   Vulkan, com os mesmos arquivos GGUF do Z-Image Turbo: Máquina → Motor de imagem → Instalar baixa o
   executável (versão fixa master-1045-6225bf8, 30 MB, conferida pelo SHA-256) e os modelos; a Fornalha
   chama o `sd-cli` na hora de gerar (com a placa reservada no Ignis e VAE em blocos em 8 GB). Provado:
-  teste com executável falso (argumentos, recibo `z-image-turbo-gguf-vulkan`, folha larga). Em prova:
-  o CI "ComfyUI no processador" com o executável de verdade no Windows (sem placa ele cai para o
-  processador) e no Linux pelo Vulkan por software (lavapipe). Falta provar: a RX 580 de verdade
-  (TESTE_DO_CRIADOR 0b).
+  teste com executável falso (argumentos, recibo `z-image-turbo-gguf-vulkan`, folha larga) e o
+  executável de verdade no CI Linux (instalado pelo instalador da Fornalha, gerou o templário em 256 px
+  em 101 s — no processador: o sd.cpp não usa o Vulkan por software do Mesa). Em prova: o mesmo no
+  Windows. Falta provar: o Vulkan numa placa de verdade, a RX 580 (TESTE_DO_CRIADOR 0b).
+  **Preparar a máquina (22/11):** Máquina → Programas → Baixar traz o Blender 5.2.4 e a Godot 4.6.1
+  para `<dados>/ferramentas` (curl e tar do sistema — no Windows os de System32 —, soma publicada
+  conferida: SHA-256 do Blender, SHA-512 da Godot), `fornalha-cli baixar-programa`, e o CI de gerações
+  passou a usar esse botão em vez do script. Sem Python no sistema, os downloads de pacotes e do motor
+  Vulkan usam o Python que vem dentro do Blender. Provado aqui: download real dos dois no Linux.
   Próximo: preparar a máquina Windows com um clique (Blender, Godot), cabelo (entrada e nuca),
   roupa/armadura (camadas, capuz), olhos e expressões.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.

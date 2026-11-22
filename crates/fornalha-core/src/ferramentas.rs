@@ -506,6 +506,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "recursos_ignis": recursos_ignis,
                 "comfyui": comfyui,
                 "programas": programas,
+                "downloads_de_programas": crate::programas::estado(&f.paths),
                 "modelos_de_placa": crate::workers::estado(&f.paths),
                 "pacotes": crate::pacotes::estado(&f.paths),
             }))

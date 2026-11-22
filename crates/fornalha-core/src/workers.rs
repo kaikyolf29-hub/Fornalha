@@ -273,6 +273,55 @@ pub async fn python_do_sistema() -> Option<PathBuf> {
     None
 }
 
+/// Python para os scripts de download (pacotes, motor de imagem): o do sistema (3.10+) ou, sem ele,
+/// o que vem dentro do Blender (o baixado pela Fornalha, o escolhido nos ajustes ou o instalado em
+/// Arquivos de Programas). Assim, no Windows, não precisa instalar o Python à parte.
+pub async fn python_para(paths: &Paths) -> Option<PathBuf> {
+    if let Some(p) = python_do_sistema().await {
+        return Some(p);
+    }
+    let mut pastas: Vec<PathBuf> = vec![crate::programas::pasta(paths).join("blender")];
+    if let Some(b) = crate::config::Config::carregar(paths).blender {
+        pastas.extend(b.parent().map(Path::to_path_buf));
+    }
+    if let Some(pf) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
+        if let Ok(rd) = std::fs::read_dir(pf.join("Blender Foundation")) {
+            let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+            v.sort();
+            v.reverse();
+            pastas.extend(v);
+        }
+    }
+    pastas.iter().find_map(|d| python_do_blender(d))
+}
+
+/// `<blender>/<versão>/python/bin/python(.exe | 3.x)`.
+pub fn python_do_blender(pasta_blender: &Path) -> Option<PathBuf> {
+    let mut versoes: Vec<PathBuf> = std::fs::read_dir(pasta_blender)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && p.file_name().is_some_and(|n| n.to_string_lossy().chars().next().is_some_and(|c| c.is_ascii_digit())))
+        .collect();
+    versoes.sort();
+    versoes.reverse();
+    versoes.iter().find_map(|v| {
+        let bin = v.join("python").join("bin");
+        let mut c: Vec<PathBuf> = std::fs::read_dir(&bin)
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                let n = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+                let biblioteca = [".dll", ".lib", ".pdb", ".so", ".a", "-config"].iter().any(|x| n.ends_with(x));
+                p.is_file() && n.starts_with("python") && !biblioteca && (n == "python.exe" || !n.ends_with(".exe"))
+            })
+            .collect();
+        c.sort();
+        c.into_iter().next()
+    })
+}
+
 async fn comando_de_instalacao(paths: &Paths, w: Worker, pular_pesos: bool) -> Resultado<(tokio::process::Command, PathBuf)> {
     let python = python_do_sistema().await.ok_or_else(|| {
         Erro::novo("python_ausente", "Precisa do Python 3.10 ou mais novo instalado (python.org) para criar o ambiente do modelo.")

@@ -29,6 +29,7 @@ pub mod niveis;
 pub mod pacotes;
 pub mod paths;
 pub mod plano;
+pub mod programas;
 pub mod projeto;
 pub mod recibos;
 pub mod servico;

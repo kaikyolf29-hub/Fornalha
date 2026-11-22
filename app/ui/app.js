@@ -609,6 +609,7 @@ $("exportar-creditos").addEventListener("click", async () => {
 });
 
 // ---------- Máquina ----------
+let vigiaProgramas = null;
 async function pintarMaquina() {
   const [det, niveis] = await Promise.all([ferramenta("detect_gpu"), ferramenta("list_quality_levels")]);
   const s = det.sugestao, a = s.aceleradores;
@@ -620,11 +621,20 @@ async function pintarMaquina() {
     <p class="nota">${esc((g && g.versao_driver) ? "Driver " + g.versao_driver + ". " : "")}${esc(det.sistema.nome)}.</p>
     ${(s.avisos || []).map((x) => `<p class="nota">${esc(x)}</p>`).join("")}`);
   const prog = (estado && estado.programas) || {};
+  const baixando = (estado && estado.downloads_de_programas) || {};
   pinta($("programas"), ["blender", "godot", "erethea"].map((id) => {
-    const p = prog[id] || {};
-    return `<div class="item"><div><strong>${esc(p.nome || id)}${p.achado && p.versao ? " " + esc(p.versao) : ""}</strong><small class="mono">${esc(p.achado ? p.caminho : "Não encontrado")}</small></div>
-      <div class="lado">${p.achado ? "" : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`}<button class="botao" data-programa="${id}">Escolher</button></div></div>`;
+    const p = prog[id] || {}, d = baixando[id];
+    const situacao = d && d.baixando ? `Baixando ${d.versao}… ${d.mb ? d.mb + " MB" : ""}`
+      : p.achado ? p.caminho : d && d.ultima && d.ultima.includes("ERRO") ? d.ultima : "Não encontrado";
+    // Blender e Godot: a Fornalha baixa a versão testada (soma conferida); a Erethea é do criador
+    const baixar = p.achado || (d && d.baixando) ? ""
+      : d ? `<button class="botao" data-baixar-programa="${id}">Baixar ${esc(d.versao)} (${esc(d.tamanho)})</button>`
+      : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`;
+    return `<div class="item"><div><strong>${esc(p.nome || id)}${p.achado && p.versao ? " " + esc(p.versao) : ""}</strong><small class="mono">${esc(situacao)}</small></div>
+      <div class="lado">${baixar}<button class="botao" data-programa="${id}">Escolher</button></div></div>`;
   }).join(""));
+  clearTimeout(vigiaProgramas);
+  if (Object.values(baixando).some((d) => d.baixando)) vigiaProgramas = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 3000);
   pintarModelosDePlaca(a.cuda);
   pintarComfyUI();
   pintarPacotes();
@@ -754,6 +764,16 @@ $("modelos-placa").addEventListener("click", async (e) => {
   carregar("maquina");
 });
 $("programas").addEventListener("click", async (e) => {
+  const bx = e.target.closest("[data-baixar-programa]");
+  if (bx) {
+    bx.disabled = true;
+    try {
+      await api("POST", "/janela/programa", { id: bx.dataset.baixarPrograma });
+      mensagem("Download começou. Dá para continuar usando a Fornalha.");
+    } catch (err) { mensagem(err.message, "erro"); }
+    carregar("maquina");
+    return;
+  }
   const b = e.target.closest("[data-programa]");
   if (!b) return;
   const caminho = await escolherArquivo(`Executável do ${b.dataset.programa}`);

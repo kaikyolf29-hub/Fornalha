@@ -6,8 +6,9 @@ name: ComfyUI no processador
 # modelo). As imagens viram artefato.
 # - ComfyUI no processador (Windows e Linux).
 # - Motor Vulkan (stable-diffusion.cpp), o caminho da RX 580: no Windows é o mesmo executável que vai
-#   para a placa (aqui, sem placa, ele cai para o processador); no Linux roda o Vulkan por software
-#   (lavapipe do Mesa), experimental porque é lento. O ComfyUI tirou o DirectML em 11/11/2026.
+#   para a placa (aqui, sem placa, ele cai para o processador); no Linux o executável do Linux (o sd.cpp
+#   não usa o Vulkan por software do Mesa, então também cai para o processador). O ComfyUI tirou o
+#   DirectML em 11/11/2026. O Vulkan numa placa de verdade só a máquina da pessoa prova.
 # Roda quando o conector ou o instalador mudam, e à mão (Actions → ComfyUI no processador → Run workflow).
 
 on:
@@ -56,9 +57,10 @@ jobs:
           - nome: Linux
             os: ubuntu-latest
             backend: vulkan
-            experimental: true
+            experimental: false
     env:
-      FORNALHA_HOME: ${{ github.workspace }}/../fornalha-home
+      # sem ".." no caminho: o actions/cache recusa caminho relativo e os modelos não ficavam guardados
+      FORNALHA_HOME: ${{ github.workspace }}-home
     steps:
       - uses: actions/checkout@v4
 
@@ -74,19 +76,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/diffusion_models
-            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/text_encoders
-            ${{ github.workspace }}/../fornalha-home/dados/comfyui/ComfyUI/models/vae
+            ${{ github.workspace }}-home/dados/comfyui/ComfyUI/models/diffusion_models
+            ${{ github.workspace }}-home/dados/comfyui/ComfyUI/models/text_encoders
+            ${{ github.workspace }}-home/dados/comfyui/ComfyUI/models/vae
           key: comfyui-modelos-z-image-turbo-q4km-v2
 
       - name: Compilar a Fornalha (linha de comando) e o teste
         run: |
           cargo build -p fornalha-cli
           cargo test -p fornalha-core --test comfyui_real --no-run
-
-      - name: Vulkan por software (lavapipe) no Linux
-        if: matrix.backend == 'vulkan' && runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1 vulkan-tools && vulkaninfo --summary || true
 
       - name: Instalar o motor pelo instalador da Fornalha
         shell: bash

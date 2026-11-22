@@ -114,7 +114,9 @@ game.project.json, recibos de licença comercial de tudo e o jogo rodando na eng
 Ignis para soltar a placa (POST /motor/reservar) antes do ComfyUI e dos workers e devolve depois, e o
 ComfyUI instala com --lowvram em placa de até 10 GB. Falta: forçar Qualidade ou Máximo numa placa de 8 GB
 (pouca VRAM, descarregar para a RAM, fila sequencial, um modelo por vez), Leve rápido para o dia a
-dia; instalador do Windows com tudo; roteiro no TESTE_DO_CRIADOR.md; teste no computador do criador.
+dia; roteiro no TESTE_DO_CRIADOR.md; teste no computador do criador. Feito para a instalação: Máquina →
+Programas → Baixar traz o Blender 5.2.4 e a Godot 4.6.1 (soma publicada conferida, curl e tar do
+Windows) e, sem Python no sistema, os downloads usam o Python que vem dentro do Blender.
 
 **1.13 Por partes na janela** — Forjar → Personagem por etapas (rosto → corpo → cabelo → roupa →
 armadura → arma), cada parte com prévia de look-dev e "aceitar" ou "refazer com ajuste"; o MCP com

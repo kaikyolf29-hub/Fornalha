@@ -19,6 +19,7 @@ Uso:
   fornalha-cli modelos                     modelos de placa (TRELLIS.2, UniRig, HY-Motion)
   fornalha-cli pacotes                     pacotes de conteúdo (MakeHuman, animações, materiais)
   fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
+  fornalha-cli baixar-programa <id>        baixa o Blender ou a Godot (versão fixa, soma conferida) para a pasta da Fornalha
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
   fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,dragao] [--sem-engine]
                                            suíte de ponta a ponta (protagonista, inimigo armado, dragão, jogo na engine)
@@ -101,6 +102,19 @@ async fn main() {
                 std::process::exit(2);
             };
             imprimir(pacotes::baixar_e_esperar(&paths, p).await)
+        }
+        Some("baixar-programa") => {
+            use fornalha_core::externas::Programa;
+            let p = match args.get(1).map(String::as_str) {
+                Some("blender") => Programa::Blender,
+                Some("godot") => Programa::Godot,
+                _ => {
+                    eprintln!("Diga qual: blender ou godot.");
+                    std::process::exit(2);
+                }
+            };
+            eprintln!("Baixando o {} para {}…", p.nome(), fornalha_core::programas::pasta(&paths).display());
+            imprimir(fornalha_core::programas::baixar_e_esperar(&paths, p).await.map(|exe| serde_json::json!({"executavel": exe})))
         }
         Some("instalar-modelo") => {
             use fornalha_core::workers::{self, Worker};

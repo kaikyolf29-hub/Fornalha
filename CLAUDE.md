@@ -1,7 +1,7 @@
 # Regras do criador para a Fornalha (vale para toda sessão de IA)
 
 - **Sempre em português do Brasil**, com o criador e nos textos do app.
-- Toda retomada começa pelo **ESTADO.md**. O plano completo é o "Plano 1 · Fornalha" (resumo no README); o caminho de qualidade está em `docs/PLANO_3_ETAPAS.md` e a régua técnica em `docs/BIBLIA_TECNICA_AAA.md`.
+- Toda retomada começa pelo **ESTADO.md**. O plano completo é o "Plano 1 · Fornalha" (resumo no README); o caminho de qualidade está em `docs/PLANO_2_ETAPAS.md` e a régua técnica em `docs/BIBLIA_TECNICA_AAA.md`.
 - Siga o **padrão dos apps do criador** (`docs/` do Ignis: barra de título integrada, leve em repouso, instalação por sistema, sem telemetria). A casca do app veio do Ignis.
 - **Licença é regra do app:** nenhum modelo sem licença comercial entra num projeto comercial. Todo modelo novo entra em `crates/fornalha-core/manifest/modelos.json` com licença, link e uso comercial conferidos na página dele.
 - **Agente não aceita licença no lugar da pessoa:** aceite de licença e receita do estúdio só pela janela.

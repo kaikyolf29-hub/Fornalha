@@ -143,16 +143,27 @@ Feita por um agente lendo as páginas de licença (nada baixado nem executado). 
 - **Nuvem:** Meshy 7.1 (API a partir de US$ 20/mês; no pago o modelo é do cliente), Rodin Gen-2.5
   (até 10M de faces; texto da licença tem um campo vazio). Depende da decisão abaixo.
 
-## Plano em 3 etapas (21/11/2026, atualizado 22/11)
-O caminho até o nível das referências está em [docs/PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md) (a seção
-"Onde estamos" diz o que está feito, o que está em andamento e a ordem), e a régua técnica em
-[docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md) (enviada pelo criador).
-**Etapa 1 em andamento.** Feito: look-dev/QA, pele 4K, cabelo curto em cards, pano simulado
-(sobreveste e capa do templário). Agora: resto do 1.4 (roupa) e o **ComfyUI** (adiantado pelo criador);
-depois armadura, juntar o movimento (agente em paralelo), por partes na janela, bateria do preset
-máximo (personagem, dragão, monstro, zumbi) e teste no computador do criador (RX 580, Windows).
-Decisões do criador em 22/11: teto RE4 Remake / Final Fantasy (pode levar horas); foco no Windows
-(instalador e testes); o trabalho segue sozinho entre um limite de uso e outro.
+## Plano em 2 etapas (22/11/2026)
+Tudo o que falta (Plano 1, as 3 etapas antigas, a bíblia técnica, o complemento técnico de corpo/
+rosto/cabelo/criaturas/teste bruto e os pedidos da Erethea) está em
+[docs/PLANO_2_ETAPAS.md](docs/PLANO_2_ETAPAS.md) — a seção "Onde estamos" diz o que está feito, o que
+está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs/BIBLIA_TECNICA_AAA.md).
+- **Etapa 1** — Fornalha 3D completa e pronta para o Teste de Fogo na RX 580 (Windows). Em andamento.
+  Feito: look-dev/QA, pele 4K, cabelo curto em cards, pano simulado, ComfyUI (conector, instalador
+  pela placa, teste real no processador do CI), pedidos 1–7 da Erethea. Próximo: movimento do agente,
+  criaturas e dragão, suíte de Teste Bruto, modo Teste de Fogo, cabelo sem manchas, roupa/armadura.
+- **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
+Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
+foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.
+
+## Pedidos da Erethea para a Fornalha (22/11/2026)
+1–7 feitos (commit "Pedidos da Erethea"): `<situacao>.musica.json`; `Sons.tocar_musica(situacao)` com o
+grupo `erethea_musica`; `boca.json` com `personagem` e `texto` e `Sons.falar(personagem, arquivo)`;
+mandíbula `jaw` e `"boca": {"osso": "jaw", "eixo_modelo": [1,0,0], "graus_aberta": 20}` no
+`<id>.forja.json`; campo opcional `acustica` na área; WebSocket `/fornalha/ponte/ws` (e `websocket` no
+GET da ponte; com `monta_cenas` a Fornalha não roda o montar.gd); `--agent-test` no run_test (saída 2
+cai no teste da Fornalha). Falta o 8 (prévia LibGodot na Galeria), quando a Erethea tiver.
+Personagens da Forja simples (não MakeHuman) ainda saem sem mandíbula.
 
 ## Decisões que são do criador
 - **APIs de geração (decidido em 21/11):** o criador autorizou APIs (Gemini imagem, Rodin, Meshy,

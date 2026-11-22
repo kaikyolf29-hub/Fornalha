@@ -88,6 +88,10 @@ const NOMES_JANELA = { minimize: "Minimizar", maximize: "Maximizar", close: "Fec
 })();
 
 // ---------- utilidades ----------
+// as pastas do projeto seguem o padrão da engine (em inglês); na janela aparecem em português
+const NOME_PASTA = { Characters: "Personagens", Enemies: "Inimigos", World: "Mundo", Audio: "Áudio", Music: "Música", Weapons: "Armas",
+  Props: "Objetos", Items: "Itens", Concept: "Conceito", Concepts: "Conceitos", Scripts: "Código", UI: "Interface", Textures: "Texturas",
+  Animations: "Animações", Cutscenes: "Cenas", GameDesign: "Design do jogo", VFX: "Efeitos visuais" };
 const BASE_DEV = "http://127.0.0.1:" + (new URLSearchParams(location.search).get("porta") || "11480");
 async function api(method, path, body) {
   let status, corpo;
@@ -95,7 +99,15 @@ async function api(method, path, body) {
     const r = await tauri.invoke("api", { method, path, body: body ?? null });
     status = r.status; corpo = r.corpo;
   } else {
-    const r = await fetch(BASE_DEV + path, { method, headers: { "content-type": "application/json", "x-fornalha-cliente": "pessoa" }, body: body ? JSON.stringify(body) : undefined });
+    let r;
+    try {
+      r = await fetch(BASE_DEV + path, { method, headers: { "content-type": "application/json", "x-fornalha-cliente": "pessoa" }, body: body ? JSON.stringify(body) : undefined });
+    } catch (_) {
+      // o navegador só diz "Failed to fetch" (em inglês): explica em português o que houve
+      const e = new Error("Não consegui falar com a Fornalha neste computador. Ela está aberta? (perto do relógio)");
+      e.codigo = "sem_conexao";
+      throw e;
+    }
     status = r.status; corpo = await r.json().catch(() => ({}));
   }
   if (status >= 400) {
@@ -470,7 +482,7 @@ async function pintarGaleria() {
   for (const r of recibos) atuais.set(r.arquivo, r);
   const todos = [...atuais.values()].filter((r) => !/\.(previa|folha|mapa)\.png$/.test(r.arquivo));
   const pastas = [...new Set(todos.map((r) => r.arquivo.split("/")[0]))].sort();
-  pinta($("filtros-galeria"), [["", "Tudo"], ...pastas.map((p) => [p, p])].map(([v, n]) => `<button data-filtro="${esc(v)}" class="${v === filtroGaleria ? "ativo" : ""}">${esc(n)}</button>`).join(""));
+  pinta($("filtros-galeria"), [["", "Tudo"], ...pastas.map((p) => [p, NOME_PASTA[p] || p])].map(([v, n]) => `<button data-filtro="${esc(v)}" class="${v === filtroGaleria ? "ativo" : ""}">${esc(n)}</button>`).join(""));
   const lista = todos.filter((r) => !filtroGaleria || r.arquivo.startsWith(filtroGaleria + "/"));
   if (!lista.length) { pinta($("galeria"), `<p class="vazio">Nada forjado ainda. Vá até Forjar.</p>`); return; }
   $("galeria")._html = null;

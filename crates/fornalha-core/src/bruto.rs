@@ -23,7 +23,7 @@ use crate::servico::Fornalha;
 pub struct ArgsBruto {
     /// leve, equilibrado, qualidade (padrão) ou maximo
     pub nivel: Option<String>,
-    /// quais casos: "protagonista", "inimigo", "dragao" (padrão: os três)
+    /// quais casos: "protagonista", "inimigo", "zumbi", "dragao" (padrão: os quatro)
     pub casos: Option<Vec<String>>,
     /// montar o jogo e rodar o teste na engine no fim (padrão: sim)
     pub testar_na_engine: Option<bool>,
@@ -140,6 +140,15 @@ fn casos() -> Vec<Caso> {
             cabelo: false,
         },
         Caso {
+            id: "zumbi",
+            titulo: "Zumbi (pele de morto-vivo, olhos leitosos, roupa encardida, andar e ataque de zumbi)",
+            pedido: json!({"nome": "Zumbi Bruto", "papel": "inimigo", "tipo": "zumbi", "arma": "nenhuma", "armadura": "nenhuma", "porte": "magro",
+                           "cor_cabelo": "#2f2a24", "descricao": "zumbi de aldeia medieval, camponês morto-vivo"}),
+            animacoes: &["parado", "andar", "atacar", "dano", "morrer"],
+            arma_na_mao: false,
+            cabelo: false,
+        },
+        Caso {
             id: "dragao",
             titulo: "Dragão (malha grande, asas, cauda, esqueleto não humanoide, voo e ataque)",
             pedido: json!({"nome": "Dragao Bruto", "papel": "inimigo", "tipo": "dragao", "descricao": "dragão vermelho de asas grandes"}),
@@ -148,6 +157,18 @@ fn casos() -> Vec<Caso> {
             cabelo: false,
         },
     ]
+}
+
+/// Desvio padrão do brilho (0–255) de uma captura: uma tela lisa (só o fundo e o HUD) fica perto
+/// de zero; uma cena com mundo e personagens passa de 30.
+fn variacao_da_captura(arq: &Path) -> Option<f64> {
+    let px = crate::estilo::pixels_png(&std::fs::read(arq).ok()?)?;
+    if px.is_empty() {
+        return None;
+    }
+    let lum: Vec<f64> = px.iter().map(|p| 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64).collect();
+    let media = lum.iter().sum::<f64>() / lum.len() as f64;
+    Some((lum.iter().map(|l| (l - media).powi(2)).sum::<f64>() / lum.len() as f64).sqrt())
 }
 
 fn conferir_personagem(c: &Caso, r: &Value, raiz: &Path) -> Vec<Value> {
@@ -169,6 +190,11 @@ fn conferir_personagem(c: &Caso, r: &Value, raiz: &Path) -> Vec<Value> {
         let nao_humano =
             g.nomes_das_juntas.iter().any(|n| n.starts_with("asa_")) && g.nomes_das_juntas.iter().any(|n| n.starts_with("cauda_"));
         v.push(conf("esqueleto não humanoide (asas e cauda)", nao_humano, format!("{} ossos", g.juntas)));
+    }
+    if c.id == "zumbi" {
+        // o pedido virou o tipo zumbi (não o esqueleto da Forja) e, no humano realista, a pele de morto
+        let tipo_ok = r["ficha"]["tipo"] == "zumbi";
+        v.push(conf("tipo zumbi (humano morto-vivo)", tipo_ok, format!("tipo {} · modelo {}", r["ficha"]["tipo"], r["modelo_3d"])));
     }
     if c.arma_na_mao {
         v.push(conf("arma presa na mão", !g.na_mao.is_empty(), format!("{:?}", g.na_mao)));
@@ -209,7 +235,8 @@ pub async fn rodar(f: &Fornalha, a: ArgsBruto, quem: &str) -> Resultado<Value> {
     if crate::niveis::Nivel::from_id(&nivel).is_none() {
         return Err(Erro::argumento(format!("Nível \"{nivel}\" não existe. Use leve, equilibrado, qualidade ou maximo.")));
     }
-    let escolhidos: Vec<String> = a.casos.clone().unwrap_or_else(|| vec!["protagonista".into(), "inimigo".into(), "dragao".into()]);
+    let escolhidos: Vec<String> =
+        a.casos.clone().unwrap_or_else(|| vec!["protagonista".into(), "inimigo".into(), "zumbi".into(), "dragao".into()]);
     let nome = format!("Teste Bruto {}", crate::util::agora_iso().replace([':', 'T'], "-").chars().take(16).collect::<String>());
     let mut pedido_projeto = json!({"nome": nome, "genero": "ação e aventura", "camera": "terceira pessoa"});
     if let Some(p) = &a.pasta {
@@ -262,6 +289,19 @@ pub async fn rodar(f: &Fornalha, a: ArgsBruto, quem: &str) -> Resultado<Value> {
                             format!("{}", rt["erros"]),
                         ));
                         verificacoes.push(conf("teste do jogo passou", rt["passou"] == true, format!("modo {}", rt["modo"])));
+                        // a tela do jogo mostra a cena (não só o HUD num fundo liso): precisa do jogador,
+                        // que vem do caso protagonista
+                        let capturas: Vec<PathBuf> = rt["relatorio"]["capturas"]
+                            .as_array()
+                            .or_else(|| rt["capturas"].as_array())
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|c| c.as_str().map(PathBuf::from))
+                            .collect();
+                        if !capturas.is_empty() && escolhidos.iter().any(|c| c == "protagonista") {
+                            let var = capturas.iter().filter_map(|c| variacao_da_captura(c)).fold(0.0f64, f64::max);
+                            verificacoes.push(conf("a tela do jogo mostra a cena", var > 12.0, format!("variação de brilho {var:.1}")));
+                        }
                         teste = rt;
                     }
                     Err(e) => verificacoes.push(conf("teste do jogo", false, e.mensagem)),

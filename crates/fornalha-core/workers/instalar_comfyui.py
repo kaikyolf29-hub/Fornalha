@@ -1,7 +1,7 @@
 # Fornalha: instala o motor de imagem local numa pasta só dele, com os modelos de licença comercial
 # que a Fornalha usa.
 #   python instalar_comfyui.py <pasta> <nvidia|rocm|vulkan|cpu> [--modelos gguf|inteiro|nenhum]
-#                              [--hsa 10.3.0] [--porta 8188] [--pouca-vram]
+#                              [--hsa 10.3.0] [--porta 8188] [--pouca-vram] [--3d]
 # nvidia: ComfyUI com CUDA · rocm: ComfyUI na AMD no Linux (RX 6000/7000/9000) · cpu: ComfyUI sem placa
 # (lento, mas funciona) · vulkan: stable-diffusion.cpp (MIT) pelo Vulkan, para AMD e Intel no Windows
 # (inclusive a RX 580) e AMD sem ROCm no Linux — o ComfyUI tirou o DirectML em 11/11/2026 (o último
@@ -54,6 +54,21 @@ MODELOS = {
     ],
     "nenhum": [],
 }
+# 3D pela IA (imagem → malha texturizada): TRELLIS.2 (MIT, nós nativos do ComfyUI), o codificador
+# DINOv3 (licença da Meta: uso comercial permitido, com aceite da pessoa pela janela) e o BiRefNet
+# para tirar o fundo (MIT). Só com --3d, que a janela manda depois do aceite.
+MODELOS_3D = [
+    ("diffusion_models", "trellis_2_int8_convrot.safetensors",
+     "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/diffusion_models/trellis_2_int8_convrot.safetensors"),
+    ("vae", "trellis_2_shape_vae_bf16.safetensors",
+     "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/vae/trellis_2_shape_vae_bf16.safetensors"),
+    ("vae", "trellis_2_texture_vae_bf16.safetensors",
+     "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/vae/trellis_2_texture_vae_bf16.safetensors"),
+    ("clip_vision", "dino_v3_vit_l.safetensors",
+     "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/clip_vision/dino_v3_vit_l.safetensors"),
+    ("background_removal", "birefnet.safetensors",
+     "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors"),
+]
 
 
 class Instalador:
@@ -65,6 +80,7 @@ class Instalador:
         self.repo = os.path.join(self.pasta, "ComfyUI")
         self.venv = os.path.join(self.pasta, "venv")
         self.python = os.path.join(self.venv, "Scripts" if WINDOWS else "bin", "python.exe" if WINDOWS else "python")
+        self.com_3d = False
 
     def etapa(self, texto):
         linha = f"[{time.strftime('%H:%M:%S')}] {texto}"
@@ -205,6 +221,8 @@ class Instalador:
         self.pip("-r", os.path.join(self.repo, "requirements.txt"))
         self.pip("-r", os.path.join(self.repo, "custom_nodes", "ComfyUI-GGUF", "requirements.txt"))
         baixados = [self.baixar(*m) for m in MODELOS[modelos]]
+        if self.com_3d:
+            baixados += [self.baixar(*m) for m in MODELOS_3D]
         args = ["main.py", "--listen", "127.0.0.1", "--port", str(porta), "--preview-method", "none"]
         if self.backend == "cpu":
             args.append("--cpu")
@@ -244,6 +262,7 @@ def main():
         print(f"--modelos deve ser gguf, inteiro ou nenhum (veio {modelos})")
         sys.exit(2)
     inst = Instalador(a[0], a[1])
+    inst.com_3d = "--3d" in a
     try:
         inst.instalar(modelos, opcao("--hsa", ""), int(opcao("--porta", "8188")), "--pouca-vram" in a)
     except Exception as e:

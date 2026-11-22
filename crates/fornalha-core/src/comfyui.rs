@@ -311,6 +311,10 @@ pub struct Caminho {
     #[serde(default)]
     pub pouca_vram: bool,
     pub motivo: String,
+    /// também os modelos do 3D pela IA (TRELLIS.2 + DINOv3 + BiRefNet): só depois do aceite da
+    /// licença do DINOv3 pela pessoa
+    #[serde(default)]
+    pub tres_d: bool,
 }
 
 /// Escolhe o caminho do ComfyUI para a placa principal da máquina.
@@ -324,19 +328,23 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             modelos: "gguf",
             pouca_vram: false,
             motivo: "sem placa de vídeo: no processador (lento, mas funciona)".into(),
+            tres_d: false,
         };
     };
     let vram = g.vram_total_mb.unwrap_or(0);
     let modelos = if vram >= 16_000 { "inteiro" } else { "gguf" };
     let pouca_vram = vram > 0 && vram <= 10_240;
     match g.fabricante {
-        Vendor::Nvidia => Caminho { pouca_vram, backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome) },
+        Vendor::Nvidia => {
+            Caminho { pouca_vram, backend: "nvidia", hsa: None, modelos, motivo: format!("{} com CUDA", g.nome), tres_d: false }
+        }
         Vendor::Amd if windows => Caminho {
             pouca_vram,
             backend: "vulkan",
             hsa: None,
             modelos: "gguf",
             motivo: format!("{} no Windows pelo Vulkan (stable-diffusion.cpp; funciona em qualquer AMD, inclusive a RX 580)", g.nome),
+            tres_d: false,
         },
         Vendor::Amd => {
             let gfx = g.alvo_gfx.as_deref().unwrap_or("");
@@ -344,7 +352,7 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             let rocm =
                 gfx == "gfx1030" || hsa.is_some() || gfx.starts_with("gfx110") || gfx.starts_with("gfx115") || gfx.starts_with("gfx120");
             if rocm {
-                Caminho { pouca_vram, backend: "rocm", hsa, modelos, motivo: format!("{} ({gfx}) pelo ROCm", g.nome) }
+                Caminho { pouca_vram, backend: "rocm", hsa, modelos, motivo: format!("{} ({gfx}) pelo ROCm", g.nome), tres_d: false }
             } else {
                 Caminho {
                     pouca_vram,
@@ -356,6 +364,7 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
                         g.nome,
                         if gfx.is_empty() { "alvo desconhecido" } else { gfx }
                     ),
+                    tres_d: false,
                 }
             }
         }
@@ -365,8 +374,11 @@ pub fn caminho_para(det: &crate::gpu::Detection) -> Caminho {
             hsa: None,
             modelos: "gguf",
             motivo: format!("{} pelo Vulkan (stable-diffusion.cpp)", g.nome),
+            tres_d: false,
         },
-        _ => Caminho { pouca_vram, backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome) },
+        _ => {
+            Caminho { pouca_vram, backend: "cpu", hsa: None, modelos: "gguf", motivo: format!("{}: no processador", g.nome), tres_d: false }
+        }
     }
 }
 
@@ -427,6 +439,9 @@ async fn comando_de_instalacao(
     }
     if c.pouca_vram && c.backend != "cpu" {
         cmd.arg("--pouca-vram");
+    }
+    if c.tres_d && c.backend != "vulkan" {
+        cmd.arg("--3d");
     }
     Ok((cmd, destino))
 }

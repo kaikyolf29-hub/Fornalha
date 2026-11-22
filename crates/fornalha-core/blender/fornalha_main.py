@@ -100,7 +100,13 @@ def tarefa_humano(t):
     if t.get("animacoes_de"):
         import fc_retarget
 
-        acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"))
+        clipes = None
+        if ficha.get("zumbi"):
+            # zumbi: os mesmos nomes do jogo (a engine troca por velocidade), com o andar arrastado, o
+            # balanço parado e o ataque de agarrar/arranhar da biblioteca (Quaternius, CC0)
+            clipes = {"parado": ("ual2", "Zombie_Idle_Loop", True), "andar": ("ual2", "Zombie_Walk_Fwd_Loop", True),
+                      "atacar": ("ual2", "Zombie_Scratch", False)}
+        acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes)
     saida = t["saida"]
     # QA automático (bíblia técnica 9.3): o resultado vai junto, para a janela e o agente verem
     import fc_lookdev

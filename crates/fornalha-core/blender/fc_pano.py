@@ -379,10 +379,12 @@ def _atributo_borda(obj):
     at.data.foreach_set("value", [kd.find(v.co)[2] for v in obj.data.vertices])
 
 
-def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0.07)):
+def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0.07), forte=False):
     """Textura única da peça: o tecido original com lama subindo da barra (com manchas), sujeira nas
     dobras (oclusão), faixa de bainha mais escura junto às bordas e rugosidade de acordo. Cor, normal e
-    rugosidade assadas num atlas próprio; a peça sai com um material só de imagens (o glb leva isso)."""
+    rugosidade assadas num atlas próprio; a peça sai com um material só de imagens (o glb leva isso).
+    forte (morto-vivo, mendigo): lama subindo o dobro, tecido todo encardido e manchas de sangue
+    seco na parte de cima."""
     m = obj.data
     if not m.polygons or not m.uv_layers:
         return None
@@ -391,6 +393,7 @@ def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0
     # que os respingos e a sujeira se juntam)
     zs = [(obj.matrix_world @ v.co).z for v in m.vertices]
     z_chao = max(z_chao, min(zs) - 0.06)
+    z_topo = max(zs)
     uv_orig = m.uv_layers.active.name
     atlas = m.uv_layers.new(name="atlas")
     m.uv_layers.active = atlas
@@ -472,7 +475,7 @@ def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0
             return n.outputs[0]
 
         z_torto = op("ADD", sep.outputs["Z"], ruido(7.0, 5.0, 0.3, 0.7, 0.045, -0.045), clamp=False)
-        mancha = faixa(z_torto, z_chao + 0.05, z_chao + 0.3, 1.3)
+        mancha = faixa(z_torto, z_chao + 0.05, z_chao + (0.6 if forte else 0.3), 1.3)
         lama_barra = op("MULTIPLY", mancha, ruido(2.5, 4.0, 0.3, 0.7, 1.0, 0.6))
         pingos = op("MULTIPLY", faixa(sep.outputs["Z"], z_chao + 0.06, z_chao + 0.42, 1.5), ruido(220.0, 2.0, 0.62, 0.68))
         f_lama_no = nt.nodes.new("ShaderNodeMath")
@@ -521,6 +524,30 @@ def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0
         for canal in ("Red", "Green", "Blue"):
             nt.links.new(k.outputs[0], cinza.inputs[canal])
         nt.links.new(cinza.outputs["Color"], escuro.inputs[7])
+        base_suja = escuro.outputs[2]
+        sangue_f = None
+        if forte:
+            # encardido: o tecido inteiro mais escuro e amarronzado, em manchas grandes
+            # (multiplica: escurece o pano claro e não clareia o escuro)
+            grime = nt.nodes.new("ShaderNodeMix")
+            grime.data_type = "RGBA"
+            grime.blend_type = "MULTIPLY"
+            nt.links.new(ruido(3.0, 6.0, 0.25, 0.75, 1.0, 0.45), grime.inputs["Factor"])
+            nt.links.new(base_suja, grime.inputs[6])
+            grime.inputs[7].default_value = (0.5, 0.42, 0.32, 1.0)
+            # sangue seco: manchas irregulares na parte de cima da peça (peito, gola, ombros)
+            alto = nt.nodes.new("ShaderNodeMapRange")
+            alto.interpolation_type = "SMOOTHSTEP"
+            alto.inputs["From Min"].default_value = z_topo - 0.5
+            alto.inputs["From Max"].default_value = z_topo - 0.15
+            nt.links.new(sep.outputs["Z"], alto.inputs["Value"])
+            sangue_f = op("MULTIPLY", alto.outputs["Result"], ruido(7.0, 8.0, 0.6, 0.68))
+            com_sangue = nt.nodes.new("ShaderNodeMix")
+            com_sangue.data_type = "RGBA"
+            nt.links.new(op("MULTIPLY", sangue_f, 0.9), com_sangue.inputs["Factor"])
+            nt.links.new(grime.outputs[2], com_sangue.inputs[6])
+            com_sangue.inputs[7].default_value = (0.11, 0.012, 0.01, 1.0)
+            base_suja = com_sangue.outputs[2]
         com_lama = nt.nodes.new("ShaderNodeMix")
         com_lama.data_type = "RGBA"
         f75 = nt.nodes.new("ShaderNodeMath")
@@ -528,19 +555,28 @@ def assar_desgaste_pano(obj, nome, z_chao=0.0, res=2048, cor_lama=(0.24, 0.15, 0
         f75.inputs[1].default_value = 0.88
         nt.links.new(f_lama.outputs[0], f75.inputs[0])
         nt.links.new(f75.outputs[0], com_lama.inputs["Factor"])
-        nt.links.new(escuro.outputs[2], com_lama.inputs[6])
+        nt.links.new(base_suja, com_lama.inputs[6])
         com_lama.inputs[7].default_value = (*cor_lama, 1.0)
         rug = nt.nodes.new("ShaderNodeMix")
         rug.data_type = "FLOAT"
         nt.links.new(f_lama.outputs[0], rug.inputs["Factor"])
         nt.links.new(rug0, rug.inputs[2])
         rug.inputs[3].default_value = 0.95
+        rug_final = rug.outputs[0]
+        if sangue_f is not None:
+            # sangue seco ainda brilha um pouco mais que o pano
+            rs = nt.nodes.new("ShaderNodeMix")
+            rs.data_type = "FLOAT"
+            nt.links.new(sangue_f, rs.inputs["Factor"])
+            nt.links.new(rug_final, rs.inputs[2])
+            rs.inputs[3].default_value = 0.45
+            rug_final = rs.outputs[0]
         emi = nt.nodes.new("ShaderNodeEmission")
         alvo = nt.nodes.new("ShaderNodeTexImage")
         uva = nt.nodes.new("ShaderNodeUVMap")
         uva.uv_map = "atlas"
         nt.links.new(uva.outputs["UV"], alvo.inputs["Vector"])
-        preps.append({"nt": nt, "saida": saida, "bsdf": bsdf, "emi": emi, "alvo": alvo, "cor": com_lama.outputs[2], "rug": rug.outputs[0]})
+        preps.append({"nt": nt, "saida": saida, "bsdf": bsdf, "emi": emi, "alvo": alvo, "cor": com_lama.outputs[2], "rug": rug_final})
     if not preps:
         return None
     cena = bpy.context.scene

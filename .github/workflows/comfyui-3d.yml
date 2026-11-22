@@ -1,0 +1,52 @@
+name: ComfyUI 3D (imagem para malha)
+
+# 3D pela IA no ComfyUI de verdade, sem placa: o TRELLIS.2 (MIT, nós nativos do ComfyUI) transforma a
+# imagem de conceito gerada pela Fornalha numa malha texturizada (.glb). O criador aceitou a licença do
+# codificador DINOv3 (Meta) para estes testes em 22/11/2026; na máquina da pessoa o aceite é pela janela.
+# 1) "nos": lista oficial dos nós (/object_info), para a Fornalha converter os fluxos oficiais.
+# 2) "malha": imagem → malha com o TRELLIS.2 no processador (lento: pode levar horas).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "crates/fornalha-core/src/comfyui.rs"
+      - "crates/fornalha-core/workers/instalar_comfyui.py"
+      - "crates/fornalha-core/tests/comfyui_3d_real.rs"
+      - ".github/workflows/comfyui-3d.yml"
+
+concurrency:
+  group: comfyui-3d-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  nos:
+    name: Lista de nós do ComfyUI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      FORNALHA_HOME: ${{ github.workspace }}-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar o ComfyUI (sem modelos) e abrir
+        run: |
+          cargo build -q -p fornalha-cli
+          ./target/debug/fornalha-cli comfyui instalar --backend cpu --modelos nenhum
+          ./target/debug/fornalha-cli comfyui abrir
+          mkdir -p saida
+          curl -s http://127.0.0.1:8188/object_info > saida/object_info.json
+          curl -s http://127.0.0.1:8188/system_stats > saida/system_stats.json
+          python -c "import json; d=json.load(open('saida/object_info.json')); print(len(d), 'nós'); print([k for k in d if 'rellis' in k or 'Mesh' in k])"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: comfyui-object-info
+          path: saida

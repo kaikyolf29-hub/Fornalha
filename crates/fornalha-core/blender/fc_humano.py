@@ -552,6 +552,31 @@ def pele_para(assets, ficha):
     return None
 
 
+def _olho_leitoso(mat):
+    """Olho de morto-vivo: íris e pupila cobertas por um véu leitoso, esclera amarelada com vasinhos."""
+    nt = mat.node_tree
+    no = next((n for n in nt.nodes if n.type == "TEX_IMAGE" and n.image is not None), None)
+    if no is None:
+        return
+    img = no.image
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    lin = np.clip(px[..., :3], 0, 1) ** 2.2
+    lum = (lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))[..., None]
+    branco = np.clip((lum - 0.45) / 0.3, 0, 1)
+    veu = np.array([0.62, 0.64, 0.6], dtype=np.float32)
+    # onde não é esclera (íris e pupila): véu leitoso por cima, deixando só um vestígio da íris
+    lin = lin * branco + (veu * 0.6 + lin * 0.4 + lum * 0.1) * (1 - branco)
+    lin = lin * (1 - 0.25 * branco) + np.array([0.55, 0.45, 0.3], dtype=np.float32) * 0.25 * branco
+    px[..., :3] = np.clip(lin, 0, 1) ** (1 / 2.2)
+    nova = bpy.data.images.new(img.name + "_leitoso", w, h, alpha=True)
+    nova.pixels.foreach_set(px.ravel())
+    nova.pack()
+    no.image = nova
+
+
 def criar_humano(dados, assets, ficha):
     """Humano completo: corpo, pele, olhos, sobrancelhas, cílios, dentes, cabelo e roupas do pacote."""
     nome = ficha.get("id", "humano")
@@ -590,6 +615,8 @@ def criar_humano(dados, assets, ficha):
             arq = os.path.join(assets, "eyes", "materials", cor_olho + ".mhmat")
             mat = material_de_mhmat(nome + "_olhos", ler_mhmat(arq) if os.path.isfile(arq) else None, alfa=True, rugosidade=0.05)
             _olho_natural(mat)
+            if ficha.get("zumbi"):
+                _olho_leitoso(mat)
         o = h.encaixar(mhclo, f"{nome}_{tipo}", material=mat, alfa=alfa, cor=cor, rugosidade=0.45 if tipo == "hair" else 0.6)
         if o is not None:
             pecas.append(o)
@@ -601,7 +628,7 @@ def criar_humano(dados, assets, ficha):
 
         r = ficha["roupa"]
         pecas.extend(fc_roupa.vestir(h, nome, r.get("estilo", "campones"), r.get("cores", {}), capa=r.get("capa", True),
-                                    pano=r.get("pano", False)))
+                                    pano=r.get("pano", False), sujo=r.get("sujo", bool(ficha.get("zumbi")))))
     if res_pele and corpo.data.polygons:
         # pele em alta: poros, rugas pela idade, barba rala e vermelhidão assados em cor/rugosidade/normal
         import fc_pele

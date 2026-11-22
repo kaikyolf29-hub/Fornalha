@@ -67,6 +67,7 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         "elfo" => 0.8,
         _ => 0.55,
     };
+    let zumbi = tipo == "zumbi";
     let pele = match tipo {
         "orc" => Some("#6f8f4e"),
         "goblin" => Some("#8fae5a"),
@@ -83,6 +84,9 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         "templario"
     } else if armadura == "placas" || tem(&["armadura de placas", "armadura completa", "placas de aço", "full plate"]) {
         "cavaleiro_placas"
+    } else if zumbi {
+        // morto-vivo: a roupa de camponês de quando era vivo, encardida
+        "campones"
     } else {
         match armadura {
             "pesada" => "cavaleiro",
@@ -105,7 +109,7 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         crate::niveis::Nivel::Maximo => 4096,
     };
     let arma = ficha["arma"].as_str().unwrap_or("nenhuma");
-    json!({
+    let mut h = json!({
         "id": ficha["id"],
         "macro": {"genero": if feminino { 0.0 } else { 1.0 }, "idade": if velho { 0.88 } else { 0.55 }, "musculo": musculo, "peso": peso,
                   "altura": altura, "proporcoes": 0.75},
@@ -120,7 +124,20 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         "arma": arma,
         "escudo": matches!(estilo, "cavaleiro" | "cavaleiro_placas") && arma == "espada",
         "textura_pele": textura_pele,
-    })
+    });
+    if zumbi {
+        // pele de morto, olhos leitosos (sobre a íris cinza), barba por fazer e animações de zumbi
+        h["zumbi"] = json!(true);
+        h["cor_olhos"] = json!("grey");
+        h["barba"] = json!("rala");
+        h["tom_de_pele"] = json!("#c9b8a6");
+        // linho encardido e calça escura (o pano escurece mais com o encardido e o sangue seco)
+        if ficha["cor_roupa"].is_null() {
+            h["roupa"]["cores"]["principal"] = json!("#a39a86");
+            h["roupa"]["cores"]["secundaria"] = json!("#4a443a");
+        }
+    }
+    h
 }
 
 /// Altura de cada tipo de personagem (a mesma da Forja), para pôr a malha de fora em escala.
@@ -312,8 +329,9 @@ fn tipo_por_texto(t: &str) -> Option<&'static str> {
         ("orc", "orc"),
         ("goblin", "goblin"),
         ("esquelet", "esqueleto"),
-        ("morto-vivo", "esqueleto"),
-        ("zumbi", "esqueleto"),
+        ("morto-vivo", "zumbi"),
+        ("zumbi", "zumbi"),
+        ("zombie", "zumbi"),
         ("elf", "elfo"),
         ("anão", "anao"),
         ("anao", "anao"),

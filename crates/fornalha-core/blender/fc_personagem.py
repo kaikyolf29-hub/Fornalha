@@ -16,6 +16,7 @@ TIPOS = {
     "orc": dict(altura=1.95, porte=1.30, pele="#6f8f4e", cabelo=False, presas=True),
     "goblin": dict(altura=1.15, porte=0.90, pele="#8fae5a", cabelo=False, orelhas=True),
     "esqueleto": dict(altura=1.80, porte=0.80, pele="#e6dfc8", cabelo=False, olhos_grandes=True),
+    "zumbi": dict(altura=1.78, porte=0.85, pele="#9aa38f", cabelo=True),
     "demonio": dict(altura=2.00, porte=1.15, pele="#8e3b32", cabelo=False, chifres=True),
 }
 

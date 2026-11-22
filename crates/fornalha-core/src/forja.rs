@@ -33,7 +33,7 @@ const SCRIPTS: [(&str, &str); 18] = [
 ];
 
 /// Tipos que a Forja sabe fazer.
-pub const TIPOS_DE_PERSONAGEM: [&str; 8] = ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio", "dragao"];
+pub const TIPOS_DE_PERSONAGEM: [&str; 9] = ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "zumbi", "demonio", "dragao"];
 pub const ARMAS: [&str; 7] = ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo"];
 pub const OBJETOS: [&str; 9] = ["barril", "caixa", "bau", "arvore", "pedra", "casa", "tocha", "cerca", "pocao"];
 pub const ANIMACOES: [&str; 9] = ["parado", "andar", "correr", "pular", "atacar", "defender", "esquivar", "dano", "morrer"];

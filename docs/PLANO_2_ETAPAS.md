@@ -87,8 +87,10 @@ pescoço em S, cabeça, mandíbula "jaw", cauda com 10 ossos, asas com membrana,
 malha por metaballs remalhada (~50 mil triângulos), asas recolhidas apontando os ossos para alvos,
 9 animações (parado, andar, correr, voar, rugir, atacar, chicotada, dano, morrer); entra pelo
 create_character com tipo "dragao" e roda na engine como inimigo; escamas procedurais (Voronoi nas
-costas, placas no ventre) assadas em 4K (cor e normal). Falta: membrana translúcida, IK em quatro
-patas, quadrúpede (lobo, leão), golem, aranha; mandíbula nos personagens simples da Forja.
+costas, placas no ventre) assadas em 4K (cor e normal); zumbi realista (tipo "zumbi" no humano
+MakeHuman: pele de morto, olhos leitosos, roupa encardida com sangue, animações de zumbi). Falta:
+membrana translúcida, IK em quatro patas, quadrúpede (lobo, leão), golem, aranha; mandíbula nos
+personagens simples da Forja; roupa rasgada de verdade (furos com transparência) no zumbi.
 
 **1.9 ComfyUI como motor geral e conexões** — ✅ conector (só 127.0.0.1), instalador pela placa
 (CUDA, ROCm, processador), Máquina → Motor de imagem, CLI, teste real no CI; motor Vulkan
@@ -106,8 +108,10 @@ Erethea tiver.
 **1.11 Suíte de Teste Bruto** — ✅ `run_brute_test` (MCP/API), `fornalha-cli teste-bruto`, botão
 Máquina → Teste de Fogo e teste no CI (gerações de verdade):
 caso 1 protagonista completo (corpo, rosto, cabelo em camadas, roupa, rig + andar e combate);
-caso 2 inimigo humanoide armado (encaixe da arma na mão, retarget); caso 3 dragão (malha grande,
-asas, cauda, rig não humanoide, voo e ataque). Valida Blender sem janela, glTF, esquema do
+caso 2 inimigo humanoide armado (encaixe da arma na mão, retarget); caso 3 zumbi (humano realista
+morto-vivo: pele pálida com veias, hematomas, olheiras fundas, mordidas e sangue escorrendo, olhos
+leitosos, roupa encardida com sangue seco, andar/parado/ataque de zumbi da biblioteca CC0); caso 4
+dragão (malha grande, asas, cauda, rig não humanoide, voo e ataque). Valida Blender sem janela, glTF, esquema do
 game.project.json, recibos de licença comercial de tudo e o jogo rodando na engine.
 
 **1.12 Modo Teste de Fogo (RX 580 8 GB, Windows)** — ✅ em parte: botão na janela, a Fornalha pede ao

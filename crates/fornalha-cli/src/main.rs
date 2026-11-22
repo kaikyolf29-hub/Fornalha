@@ -21,7 +21,7 @@ Uso:
   fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
   fornalha-cli baixar-programa <id>        baixa o Blender ou a Godot (versão fixa, soma conferida) para a pasta da Fornalha
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
-  fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,dragao] [--sem-engine]
+  fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,zumbi,dragao] [--sem-engine]
                                            suíte de ponta a ponta (protagonista, inimigo armado, dragão, jogo na engine)
   fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|vulkan|cpu]
                                            motor de imagem local (ComfyUI ou Vulkan) na placa desta máquina
@@ -173,6 +173,8 @@ async fn main() {
                     _ => "cpu",
                 };
             }
+            // 3D pela IA: o criador aceitou a licença do DINOv3 para os testes; na janela, pelo aceite
+            c.tres_d = args.iter().any(|a| a == "--3d");
             match args.get(1).map(String::as_str) {
                 Some("instalar") => {
                     eprintln!("Instalando o ComfyUI: {} ({}), modelos {}", c.backend, c.motivo, c.modelos);

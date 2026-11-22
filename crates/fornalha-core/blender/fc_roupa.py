@@ -508,7 +508,7 @@ def _mat(nome, tipo, tom=None, escala=None):
     return fc_pbr.material(nome, tipo, tom, escala)
 
 
-def vestir(h, prefixo, estilo, cores, capa=True, pano=False):
+def vestir(h, prefixo, estilo, cores, capa=True, pano=False, sujo=False):
     """estilo: cavaleiro, soldado, campones, nobre, mercenario. cores: principal, secundaria, detalhe.
     pano: caimento simulado (sobreveste franzida no cinto, capa caindo pelas costas)."""
     a = Alfaiate(h, prefixo)
@@ -653,10 +653,18 @@ def vestir(h, prefixo, estilo, cores, capa=True, pano=False):
         if capa:
             a.capa(_mat(f"{prefixo}_capa", "tecido", sec))
     else:  # camponês / mercenário
-        a.casca("tunica", TRONCO + BRACOS, 0.008, 0.005, _mat(f"{prefixo}_tunica", "tecido", p),
-                filtro=lambda co: True, grupos_extra=["helper-skirt"] if estilo == "campones" else ())
+        # camponês: túnica longa (saia até a canela); morto-vivo (sujo): a saia cortada no meio da coxa,
+        # que não vira "vestido" quando ele anda curvado
+        saia = estilo == "campones"
+        corte = cintura - 0.3 if sujo else -1.0
+        # sujo (morto-vivo): mais folga e alisada, como pano largo (sem marcar o peito)
+        a.casca("tunica", TRONCO + BRACOS, 0.016 if sujo else 0.008, 0.005, _mat(f"{prefixo}_tunica", "tecido", p),
+                filtro=lambda co: co[2] > corte, grupos_extra=["helper-skirt"] if saia else (),
+                filtro_extra=lambda co: co[2] > corte, suavizar=10 if sujo else 0)
         a.casca("calcas", PERNAS, 0.005, 0.003, _mat(f"{prefixo}_calcas", "tecido", sec))
-        a.casca("botas", PES + ["calf_l", "calf_r"], 0.008, 0.005, _mat(f"{prefixo}_botas", "couro", det), filtro=lambda co: co[2] < chao_joelho - 0.12)
+        # alisada: sem isso a casca copia os dedos e a bota parece pé descalço
+        a.casca("botas", PES + ["calf_l", "calf_r"], 0.012, 0.005, _mat(f"{prefixo}_botas", "couro", det), filtro=lambda co: co[2] < chao_joelho - 0.12,
+                suavizar=12)
         a.casca("cinto", TRONCO, 0.02, 0.008, _mat(f"{prefixo}_cinto", "couro_escuro"), filtro=lambda co: abs(co[2] - (cintura - 0.02)) < 0.03, cobrir=0)
         if estilo == "mercenario":
             a.casca("couraca", ["spine_02", "spine_03"], 0.016, 0.006, _mat(f"{prefixo}_couraca", "couro", "#5a3a22"), limiar=0.6)
@@ -665,9 +673,12 @@ def vestir(h, prefixo, estilo, cores, capa=True, pano=False):
         import fc_pano
 
         for o in list(a.pecas):
-            if o.type == "MESH" and o.name.endswith(PECAS_DE_PANO):
+            # calças de tecido também (as de cota de malha dos cavaleiros não: perderiam a transparência)
+            calcas_de_tecido = o.name.endswith("_calcas") and estilo in ("campones", "mercenario", "nobre")
+            if o.type == "MESH" and (o.name.endswith(PECAS_DE_PANO) or (sujo and calcas_de_tecido)):
                 try:
-                    fc_pano.assar_desgaste_pano(o, o.name, z_chao=0.0, res=2048 if o.name.endswith(("_sobreveste", "_capa")) else 1024)
+                    fc_pano.assar_desgaste_pano(o, o.name, z_chao=0.0, res=2048 if o.name.endswith(("_sobreveste", "_capa")) else 1024,
+                                                forte=sujo)
                 except Exception as e:  # sem o desgaste, a peça fica com o tecido limpo
                     print(f"[roupa] desgaste de {o.name} não assou: {e}")
     a.esconder_corpo()

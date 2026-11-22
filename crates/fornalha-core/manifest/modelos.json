@@ -313,6 +313,17 @@
       "nota": "Os mesmos arquivos GGUF do ComfyUI (Z-Image Turbo, texto Qwen3-4B e VAE ae, todos Apache 2.0) rodando no stable-diffusion.cpp (programa MIT, github.com/leejet/stable-diffusion.cpp, versão master-1045-6225bf8) pelo Vulkan: AMD e Intel no Windows (inclusive a RX 580) e AMD sem ROCm no Linux; sem placa, cai para o processador."
     },
     {
+      "id": "trellis2-comfyui",
+      "nome": "TRELLIS.2 no ComfyUI (imagem → malha texturizada)",
+      "funcao": "3d",
+      "onde": "comfyui",
+      "licenca": "MIT (TRELLIS.2) + DINOv3 License (codificador)",
+      "url_licenca": "https://huggingface.co/Comfy-Org/TRELLIS.2",
+      "uso_comercial": "sim",
+      "vram_mb": 12000,
+      "nota": "Nós nativos do ComfyUI (PyTorch puro: roda em NVIDIA, ROCm e no processador, devagar). Arquivos de Comfy-Org/TRELLIS.2 (MIT, base microsoft/TRELLIS.2-4B); o codificador DINOv3 da Meta tem licença própria que permite uso comercial (restrições: sanções comerciais e uso militar/armas reais), com aceite da pessoa pela janela; BiRefNet (MIT) tira o fundo. Fluxo oficial do ComfyUI (workflow_templates, MIT)."
+    },
+    {
       "id": "z-image",
       "nome": "Z-Image (completo)",
       "funcao": "imagem",

@@ -174,8 +174,26 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   conferida: SHA-256 do Blender, SHA-512 da Godot), `fornalha-cli baixar-programa`, e o CI de gerações
   passou a usar esse botão em vez do script. Sem Python no sistema, os downloads de pacotes e do motor
   Vulkan usam o Python que vem dentro do Blender. Provado aqui: download real dos dois no Linux.
-  Próximo: preparar a máquina Windows com um clique (Blender, Godot), cabelo (entrada e nuca),
-  roupa/armadura (camadas, capuz), olhos e expressões.
+  **Zumbi realista (22/11):** tipo próprio "zumbi" (antes virava o esqueleto da Forja) no caminho do
+  humano MakeHuman: pele de morto assada (pálida e acinzentada puxando para o verde, veias só em
+  algumas regiões, manchas de decomposição e hematomas, olheiras fundas, lábios roxos, sangue
+  escorrendo do canto da boca em fios verticais e mordidas abertas com relevo), olhos leitosos com
+  vestígio de íris, túnica de linho encardida até a coxa (mais folgada, sem marcar o peito) e calça
+  escura com lama subindo, encardido e sangue seco, botas alisadas (antes copiavam os dedos), e as
+  animações de zumbi da biblioteca CC0 no lugar de parado/andar/atacar. Entrou como 3º caso do Teste
+  Bruto (agora 4 casos), que também passou a conferir que a tela do jogo mostra a cena (variação de
+  brilho das capturas). Provado aqui: caso zumbi de ponta a ponta com o jogo na Godot.
+  **Mudança de rumo (22/11, pedido do criador):** o 3D feito só no Blender (dragão, personagens)
+  ficou abaixo das referências; as imagens do motor de IA estão no nível certo. O 3D passa a sair da
+  IA: TRELLIS.2 nos nós nativos do ComfyUI (PyTorch puro, roda até no processador), a partir da
+  imagem do conceito e da folha de modelo, por partes (cabeça em close, depois o corpo), e o Blender
+  fica com rig, animação e malha de jogo. **O criador aceitou a licença do DINOv3 (Meta) para os
+  testes no CI em 22/11/2026** (pela pergunta no chat); no PC dele o aceite é pela janela. A
+  Fornalha converte os fluxos oficiais do ComfyUI (formato da interface) para o formato da API com a
+  lista de nós do próprio ComfyUI (`comfyui_ui.rs`). Página ao vivo do que falta:
+  https://claude.ai/artifact/MGUnTUeKzEvVzYp5TJDLFY.
+  Próximo: 3D pela IA no CI (TRELLIS.2 no processador), vídeo de movimento com a pegada certa nas
+  armas, depois cabelo, olhos/expressões e criaturas pela IA.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

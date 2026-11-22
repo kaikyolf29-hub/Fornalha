@@ -34,7 +34,7 @@ Depois de instalar (passo 0), com o Blender e a Godot (ou a Erethea) achados em 
    vez) e o motor Vulkan decodifica em blocos e põe na RAM o que não couber.
 3. **Máquina → Teste de Fogo → Rodar o Teste Bruto** (nível Qualidade; depois Máximo). Também dá para
    pedir ao Claude Code: "rode o run_brute_test no nível qualidade".
-   Esperado: em alguns minutos, os 3 casos (protagonista completo, inimigo armado, dragão) com
+   Esperado: em alguns minutos, os 4 casos (protagonista completo, inimigo armado, zumbi, dragão) com
    `"passou": true`, o jogo rodando na engine e "pode vender". O relatório fica em
    `Documentos\Fornalha\Teste Bruto …\testes\teste_bruto.json` — me mande esse arquivo.
 4. Abra o projeto "Teste Bruto …" na Godot/Erethea e jogue: o dragão aparece como inimigo.

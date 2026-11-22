@@ -200,7 +200,7 @@ pub fn lista() -> Vec<Ferramenta> {
                     "nome": {"type": "string"},
                     "papel": {"type": "string", "description": "protagonista, aliado, inimigo, chefe..."},
                     "descricao": {"type": "string"},
-                    "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio", "dragao"],
+                    "tipo": {"type": "string", "enum": ["humano", "elfo", "anao", "orc", "goblin", "esqueleto", "zumbi", "demonio", "dragao"],
                              "description": "dragao: criatura com esqueleto próprio (asas, cauda, pescoço, mandíbula) e animações de voo e ataque."},
                     "arma": {"type": "string", "enum": ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo", "nenhuma"]},
                     "armadura": {"type": "string", "enum": ["nenhuma", "leve", "pesada", "placas"]},
@@ -324,7 +324,7 @@ pub fn lista() -> Vec<Ferramenta> {
             descricao: "Num projeto só do teste, gera o protagonista completo (corpo, rosto, cabelo em camadas, roupa, andar e combate), um inimigo humanoide armado (arma presa na mão) e um dragão (esqueleto não humanoide, voo e ataque); monta o mundo, roda o jogo na engine e confere glTF (malha, esqueleto, animações), mandíbula para a fala, QA, bíblia válida e a licença comercial de tudo. Devolve o relatório (também em testes/teste_bruto.json). Leva vários minutos.",
             esquema: json!({"type": "object", "properties": {
                 "nivel": {"type": "string", "enum": ["leve", "equilibrado", "qualidade", "maximo"], "description": "padrão: qualidade"},
-                "casos": {"type": "array", "items": {"type": "string", "enum": ["protagonista", "inimigo", "dragao"]}},
+                "casos": {"type": "array", "items": {"type": "string", "enum": ["protagonista", "inimigo", "zumbi", "dragao"]}},
                 "testar_na_engine": {"type": "boolean"}}}),
             so_leitura: false,
         },

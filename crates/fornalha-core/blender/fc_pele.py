@@ -316,11 +316,15 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
         manchas = np.clip(_normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(10 * px))) - 1.6, 0, None)
         manchas = np.clip(manchas * 2, 0, 1)[..., None] * (a - 0.4) * 1.4 * cabeca[..., None]
         lin = lin * (1 - 0.35 * manchas) + lin * np.array([0.8, 0.62, 0.48], dtype=np.float32) * 0.35 * manchas
+    sangue = np.zeros((res, res), dtype=np.float32)
+    if ficha.get("zumbi"):
+        lin, H, sangue = _pele_de_zumbi(lin, H, rng, pos, mask, P, rosto, cabeca, labios, ro, px, ruido)
     cor = np.clip(lin, 0, 1) ** (1 / 2.2)
 
     # ---------- rugosidade
     rug = 0.5 - 0.14 * zona_t - 0.16 * labios + 0.1 * poros * dens + 0.12 * np.clip(rugas / 0.0006, 0, 1) + 0.06 * (1 - cabeca)
     rug = rug + 0.3 * cc  # couro embaixo do cabelo fosco (não brilha entre os fios)
+    rug = rug * (1 - sangue) + 0.22 * sangue  # sangue fresco brilha
     rug = np.clip(rug, 0.2, 0.9).astype(np.float32)
 
     # ---------- normal a partir do relevo (texel em metros)
@@ -338,6 +342,86 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     nome = corpo.name
     return (_imagem(f"{nome}_pele_cor", cor, False), _imagem(f"{nome}_pele_rugosidade", rug, True),
             _imagem(f"{nome}_pele_normal", nor, True))
+
+
+def _pele_de_zumbi(lin, H, rng, pos, mask, P, rosto, cabeca, labios, ro, px, ruido):
+    """Pele de morto-vivo sobre a pele humana: pálida e acinzentada puxando para o verde, veias
+    escuras aparecendo, manchas de decomposição e hematomas, olheiras fundas, lábios roxos, sangue
+    escorrendo da boca e mordidas abertas no corpo (com relevo afundado). Devolve (cor linear,
+    relevo, máscara de sangue para a rugosidade)."""
+    res = lin.shape[0]
+    s = P["s"]
+    x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
+    ax = np.abs(x)
+    oz = P["olho_z"]
+    bz, mb = P["boca"][2], P["meia_boca"]
+    lum = (lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))[..., None]
+    # sem sangue circulando: quase sem saturação, mais clara e fria (cinza esverdeado)
+    lin = lum * 1.05 + (lin - lum) * 0.25
+    lin = lin * np.array([0.9, 0.97, 0.86], dtype=np.float32)
+    # veias: cristas finas de um ruído (onde ele cruza o zero), mais visíveis no pescoço, nas têmporas
+    # e nos braços
+    v = np.abs(_normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), max(1, round(6 * px)))))
+    veias = sstep(0.07, 0.015, v) * mask
+    # só em algumas regiões (não a pele toda "trincada"): manchas grandes, mais no pescoço e nas
+    # têmporas, pouco no meio do rosto
+    onde = np.clip(sstep(0.3, 1.1, _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(60 * px)))), 0, 1)
+    tempora = sstep(0.035 * s, 0.055 * s, ax) * rosto
+    onde = np.maximum(onde * (1 - 0.7 * rosto), 0.8 * tempora * sstep(oz - 0.01 * s, oz + 0.01 * s, z))
+    veias = veias * onde * (1 - labios)
+    lin = lin * (1 - 0.4 * veias[..., None]) + np.array([0.06, 0.07, 0.11], dtype=np.float32) * 0.4 * veias[..., None]
+    # manchas grandes: decomposição (verde-oliva amarronzado) e hematomas (roxo)
+    g1 = _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(28 * px)))
+    g2 = _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(22 * px)))
+    decomp = np.clip(sstep(0.6, 1.6, g1), 0, 1)[..., None] * mask[..., None]
+    hemat = np.clip(sstep(0.9, 1.9, g2), 0, 1)[..., None] * mask[..., None]
+    lin = lin * (1 - 0.55 * decomp) + np.array([0.12, 0.13, 0.05], dtype=np.float32) * 0.55 * decomp
+    lin = lin * (1 - 0.5 * hemat) + np.array([0.1, 0.04, 0.08], dtype=np.float32) * 0.5 * hemat
+    # olheiras fundas quase pretas e arroxeadas, e o relevo afundado em volta do olho
+    funda = (sstep(0.034 * s, 0.012 * s, ro) * rosto)[..., None]
+    lin = lin * (1 - 0.6 * funda) + np.array([0.05, 0.03, 0.045], dtype=np.float32) * 0.6 * funda
+    H -= 0.0012 * funda[..., 0] * sstep(0.03 * s, 0.016 * s, ro)
+    # lábios roxo-acinzentados
+    lab = labios[..., None]
+    lin = lin * (1 - 0.6 * lab) + np.array([0.09, 0.05, 0.08], dtype=np.float32) * 0.6 * lab
+    # sangue: escorrendo do canto da boca pelo queixo em fios verticais (no espaço do corpo, não no da
+    # textura: o UV do rosto do MakeHuman é girado), cada fio com comprimento próprio
+    larg = 0.0032 * s
+    col = np.floor(x / larg)
+    h1 = np.modf(np.abs(np.sin(col * 12.9898) * 43758.5453))[0]
+    h2 = np.modf(np.abs(np.sin(col * 78.233) * 24634.6345))[0]
+    meio = 1.0 - np.abs(np.modf(np.abs(x / larg))[0] - 0.5) * 2.0
+    fio = sstep(0.35, 0.8, meio) * (h2 > 0.35)
+    fim = bz - (0.012 + 0.07 * h1) * s
+    fio = fio * sstep(fim - 0.002 * s, fim + 0.004 * s, z) * sstep(bz + 0.002 * s, bz - 0.004 * s, z)
+    boca_reg = rosto * sstep(mb * 1.7, mb * 0.5, ax)
+    mancha_boca = sstep(mb * 1.25, mb * 0.85, ax) * sstep(bz - 0.016 * s, bz - 0.006 * s, z) * sstep(bz + 0.004 * s, bz - 0.002 * s, z)
+    escorre = boca_reg * np.maximum(fio, mancha_boca)
+    # o lábio fica roxo (só um pouco de sangue nos cantos)
+    sangue = np.clip(escorre * (1 - 0.8 * labios), 0, 1)
+    # mordidas abertas: 3 a 5 discos irregulares no pescoço, ombro, braços e tronco
+    pts = pos[mask]
+    alvo = pts[(pts[:, 2] > 0.95) & (pts[:, 2] < float(P["queixo"][2]) - 0.01 * s)]
+    feridas = np.zeros((res, res), dtype=np.float32)
+    borda_r = np.zeros((res, res), dtype=np.float32)
+    if len(alvo):
+        quebra = _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(3 * px)))
+        for c in alvo[rng.choice(len(alvo), size=min(5, len(alvo)), replace=False)]:
+            r = 0.018 + 0.016 * rng.random()
+            d = np.sqrt(((pos - c) ** 2).sum(-1)) / r + 0.18 * quebra
+            feridas = np.maximum(feridas, sstep(1.0, 0.75, d) * mask)
+            borda_r = np.maximum(borda_r, sstep(1.6, 1.0, d) * (1 - sstep(1.0, 0.75, d)) * mask)
+    # carne viva (vermelho escuro com fundo quase preto), borda arroxeada inchada, sangue em volta
+    car = feridas[..., None]
+    fundo = (feridas * np.clip(0.5 + 0.5 * ruido(max(1, round(2 * px))), 0, 1))[..., None]
+    lin = lin * (1 - car) + (np.array([0.16, 0.012, 0.012], dtype=np.float32) * (1 - 0.7 * fundo)) * car
+    lin = lin * (1 - 0.5 * borda_r[..., None]) + np.array([0.11, 0.03, 0.05], dtype=np.float32) * 0.5 * borda_r[..., None]
+    H -= 0.003 * feridas
+    H += 0.0007 * borda_r
+    sangue = np.clip(np.maximum(sangue, feridas), 0, 1)
+    sg = sangue[..., None]
+    lin = lin * (1 - 0.85 * sg) + np.array([0.12, 0.006, 0.006], dtype=np.float32) * 0.85 * sg
+    return lin, H, sangue
 
 
 def _imagem(nome, arr, dados, alfa=False):

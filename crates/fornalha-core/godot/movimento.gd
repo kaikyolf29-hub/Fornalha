@@ -226,6 +226,7 @@ func preparar(corpo_: CharacterBody3D, modelo_: Node3D, anim_: AnimationPlayer) 
 	_criar_pes()
 	_criar_olhar()
 	_criar_rosto()
+	_criar_molas()
 	esqueleto.skeleton_updated.connect(_esqueleto_atualizado)
 	ativo = true
 	add_to_group("movimento_fornalha")
@@ -965,6 +966,39 @@ func _criar_rosto() -> void:
 			rosto.baixo.append(esqueleto.find_bone(n))
 	rosto.jaw = esqueleto.find_bone("jaw")
 	esqueleto.add_child(rosto)
+
+
+var molas: SpringBoneSimulator3D
+
+
+## Capa com os ossos capa_1..capa_3 (malha da IA): vira mola (SpringBoneSimulator3D) que balança com o
+## movimento e não atravessa as pernas (esferas no quadril, no joelho e no tornozelo).
+func _criar_molas() -> void:
+	if esqueleto.find_bone("capa_1") < 0 or esqueleto.find_bone("capa_3") < 0:
+		return
+	molas = SpringBoneSimulator3D.new()
+	molas.name = "Molas"
+	molas.setting_count = 1
+	molas.set_root_bone_name(0, "capa_1")
+	molas.set_end_bone_name(0, "capa_3")
+	molas.set_extend_end_bone(0, true)
+	molas.set_end_bone_length(0, 0.12)
+	molas.set_stiffness(0, 0.7)
+	molas.set_drag(0, 0.45)
+	molas.set_gravity(0, 0.8)
+	molas.set_radius(0, 0.05)
+	molas.set_enable_all_child_collisions(0, true)
+	esqueleto.add_child(molas)
+	for lado in ["l", "r"]:
+		for par in [["thigh_", 0.13], ["calf_", 0.10], ["foot_", 0.08]]:
+			var osso: String = par[0] + lado
+			if esqueleto.find_bone(osso) < 0:
+				continue
+			var esfera := SpringBoneCollisionSphere3D.new()
+			esfera.name = "Colisao_" + osso
+			esfera.bone_name = osso
+			esfera.radius = par[1]
+			molas.add_child(esfera)
 
 
 ## Para onde olhar (ponto no mundo) e com quanta vontade (0 a 1). Chame a cada quadro.

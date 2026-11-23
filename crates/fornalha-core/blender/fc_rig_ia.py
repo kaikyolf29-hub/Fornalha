@@ -174,14 +174,15 @@ def _saia(co, H, arm, mw):
     return m, p_quadril, lado_l, canela, barra
 
 
-def pesos_por_regioes(obj, arm, H):
+def pesos_por_regioes(obj, arm, H, capa=False):
     """Pesos pela distância aos ossos, mas cada região só nos ossos que fazem sentido: a mão e o
     antebraço só pegam o que está perto do braço (a mão da malha não fica para trás do osso, e a arma
     acompanha); as pernas só o que está perto da perna; a capa e a saia (longe das pernas, abaixo da
     cintura) ficam no quadril, para não dobrarem junto com as pernas."""
     co = _vertices(obj)
     mw = arm.matrix_world
-    ossos = [b for b in arm.data.bones]
+    # os ossos da capa ficam de fora da regra geral (a capa é pesada à parte, depois)
+    ossos = [b for b in arm.data.bones if b.name not in CAPA]
     nomes = [b.name for b in ossos]
     seg = {b.name: (np.array(mw @ b.head_local), np.array(mw @ b.tail_local)) for b in ossos}
     D = np.stack([_seg(co, *seg[n]) for n in nomes], axis=1)
@@ -258,6 +259,8 @@ def pesos_por_regioes(obj, arm, H):
             if peso > 0.01:
                 grupos[nomes[kk]].add([vi], peso, "REPLACE")
     # alisa as fronteiras (poucas passadas: não espalha a mão para a coxa) e renormaliza
+    if capa:
+        pesar_capa(obj, arm, H)
     for o in bpy.context.scene.objects:
         o.select_set(o == obj)
     bpy.context.view_layer.objects.active = obj
@@ -300,13 +303,79 @@ def vestir(obj, arm):
     return metodo
 
 
+CAPA = ["capa_1", "capa_2", "capa_3"]
+
+
+def cadeia_da_capa(obj, arm, H):
+    """Capa (pano atrás das pernas, abaixo do quadril): três ossos no meio dela, do quadril para baixo,
+    filhos da pelve (sem captura, seguem o quadril como antes; na engine viram molas e balançam).
+    Devolve os nomes, ou [] sem capa."""
+    co = _vertices(obj)
+    mw = arm.matrix_world
+    perna_y = float(np.mean([(mw @ arm.data.bones[f"thigh_{lado}"].head_local).y for lado in "lr"]))
+    atras = (co[:, 1] > perna_y + 0.07 * H) & (co[:, 2] < 0.45 * H) & (co[:, 2] > 0.05 * H) & (np.abs(co[:, 0]) < 0.2 * H)
+    if atras.sum() < 200:
+        return []
+    pontos = []
+    for z in (0.56, 0.40, 0.24, 0.08):
+        f = co[(np.abs(co[:, 2] - z * H) < 0.03 * H) & (co[:, 1] > perna_y + 0.02 * H) & (np.abs(co[:, 0]) < 0.12 * H)]
+        y = float(np.percentile(f[:, 1], 70)) if len(f) else perna_y + 0.08 * H
+        pontos.append(Vector((0.0, y - 0.01 * H, z * H)))
+    for o in bpy.context.scene.objects:
+        o.select_set(o == arm)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb_pai = arm.data.edit_bones["pelvis"]
+    for i, nome in enumerate(CAPA):
+        eb = arm.data.edit_bones.new(nome)
+        eb.head, eb.tail = pontos[i], pontos[i + 1]
+        eb.align_roll(Vector((0, 1, 0)))
+        eb.parent = eb_pai
+        eb.use_connect = i > 0
+        eb_pai = eb
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return list(CAPA)
+
+
+def pesar_capa(obj, arm, H):
+    """Os vértices da capa passam para a cadeia (o topo mistura com a pelve; perto das pernas, a regra
+    de antes continua: a passagem é gradual)."""
+    co = _vertices(obj)
+    mw = arm.matrix_world
+    perna_y = float(np.mean([(mw @ arm.data.bones[f"thigh_{lado}"].head_local).y for lado in "lr"]))
+    dy = co[:, 1] - perna_y
+    c = np.clip((dy - 0.06 * H) / (0.05 * H), 0.0, 1.0) * (co[:, 2] < 0.56 * H)
+    c = c * c * (3 - 2 * c)
+    segs = [(np.array(mw @ arm.data.bones[n].head_local), np.array(mw @ arm.data.bones[n].tail_local)) for n in CAPA]
+    d = np.stack([_seg(co, a, b) for a, b in segs], axis=1)
+    topo = np.clip((co[:, 2] - 0.50 * H) / (0.06 * H), 0.0, 1.0)
+    grupos = {g.name: g for g in obj.vertex_groups}
+    for n in CAPA:
+        if n not in grupos:
+            grupos[n] = obj.vertex_groups.new(name=n)
+    nomes_idx = {g.index: g.name for g in obj.vertex_groups}
+    for vi in np.where(c > 0.01)[0]:
+        v = obj.data.vertices[int(vi)]
+        antes = {nomes_idx[g.group]: g.weight for g in v.groups}
+        w = 1.0 / (d[vi] + 0.01 * H) ** 4
+        w /= w.sum()
+        cadeia = {n: float(w[k]) * (1 - topo[vi]) for k, n in enumerate(CAPA)}
+        cadeia["pelvis"] = cadeia.get("pelvis", 0.0) + float(topo[vi])
+        novos = {n: p * (1 - c[vi]) for n, p in antes.items()}
+        for n, p in cadeia.items():
+            novos[n] = novos.get(n, 0.0) + p * float(c[vi])
+        for n, p in novos.items():
+            grupos[n].add([int(vi)], p, "REPLACE")
+
+
 def rigar(obj, nome, altura=1.8):
     """Normaliza, mede, cria o esqueleto e pesa. Devolve (armadura, info)."""
     normalizar(obj, altura)
     pontos, H = medir(obj)
     arm = criar_esqueleto(nome, pontos)
+    capa = cadeia_da_capa(obj, arm, H)
     # a malha da IA vem fundida (mão encostada na coxa, capa por cima das pernas): o calor do Blender
     # espalha os pesos entre o que se toca. Pesos por regiões resolvem isso.
-    pesos_por_regioes(obj, arm, H)
+    pesos_por_regioes(obj, arm, H, capa=bool(capa))
     metodo = "regioes"
-    return arm, {"altura_m": round(H, 3), "pesos": metodo, "ossos": len(HIERARQUIA)}
+    return arm, {"altura_m": round(H, 3), "pesos": metodo, "ossos": len(arm.data.bones), "molas": capa}

@@ -148,6 +148,32 @@ def _seg(co, a, b):
     return np.linalg.norm(co - (a + t[:, None] * ab), axis=1)
 
 
+def _saia(co, H, arm, mw):
+    """(máscara, peso do quadril, lado esquerdo 0–1) dos vértices da saia; None se não há saia."""
+    joelho = max((mw @ arm.data.bones[f"calf_{l}"].head_local).z for l in "lr")
+    quadril = (mw @ arm.data.bones["pelvis"].head_local).z
+    perna_y = float(np.mean([(mw @ arm.data.bones[f"thigh_{l}"].head_local).y for l in "lr"]))
+    barra = None
+    for z in np.arange(0.12 * H, quadril - 0.04 * H, 0.01 * H):
+        meio = (np.abs(co[:, 2] - z) < 0.006 * H) & (np.abs(co[:, 0]) < 0.02 * H) & (co[:, 1] < perna_y)
+        if meio.sum() >= 3:
+            barra = float(z)
+            break
+    if barra is None or barra > quadril - 0.06 * H:
+        return None
+    m = (co[:, 2] > barra - 0.015 * H) & (co[:, 2] < quadril) & (np.abs(co[:, 1] - perna_y) < 0.12 * H)
+    t = np.clip((co[:, 2] - barra) / max(quadril - 0.04 * H - barra, 1e-6), 0.0, 1.0)
+    t = t * t * (3 - 2 * t)
+    # longe das pernas em profundidade (a capa atrás) vai sumindo a parte das pernas, sem degrau
+    f = np.clip((0.12 * H - np.abs(co[:, 1] - perna_y)) / (0.06 * H), 0.0, 1.0)
+    f = f * f * (3 - 2 * f)
+    p_quadril = 1.0 - (0.5 - 0.5 * t) * f
+    lado_l = 1.0 / (1.0 + np.exp(-co[:, 0] / (0.025 * H)))
+    # abaixo do joelho a barra segue a canela; acima, a coxa
+    canela = co[:, 2] < joelho
+    return m, p_quadril, lado_l, canela, barra
+
+
 def pesos_por_regioes(obj, arm, H):
     """Pesos pela distância aos ossos, mas cada região só nos ossos que fazem sentido: a mão e o
     antebraço só pegam o que está perto do braço (a mão da malha não fica para trás do osso, e a arma
@@ -199,7 +225,23 @@ def pesos_por_regioes(obj, arm, H):
     ordem = np.argsort(Dm, axis=1)[:, :3]
     suave = 0.012 * H
     i_pelvis = idx["pelvis"]
+    # saia (sobreveste, túnica): a barra é a altura mais baixa em que o pano liga as duas pernas na
+    # frente (há malha no meio, entre as pernas). Entre a barra e o quadril o pano fica no quadril, com
+    # a parte de baixo seguindo as coxas aos poucos (o meio, entre as pernas, segue a média das duas):
+    # a frente da saia não sai junto com uma perna só nem deixa o joelho furar o pano.
+    saia = _saia(co, H, arm, mw)
+    if saia is not None:
+        print(f"[rig_ia] saia: barra a {saia[4]:.2f} m")
     for vi in range(len(co)):
+        if saia is not None and saia[0][vi]:
+            _, p_quadril, lado_l, canela, _ = saia
+            p = float(p_quadril[vi])
+            wl = float(lado_l[vi])
+            osso = "calf" if canela[vi] else "thigh"
+            for kk, peso in ((i_pelvis, p), (idx[f"{osso}_l"], (1 - p) * wl), (idx[f"{osso}_r"], (1 - p) * (1 - wl))):
+                if peso > 0.01:
+                    grupos[nomes[kk]].add([vi], peso, "REPLACE")
+            continue
         k = ordem[vi]
         d = Dm[vi, k]
         ok = np.isfinite(d)
@@ -220,10 +262,15 @@ def pesos_por_regioes(obj, arm, H):
         o.select_set(o == obj)
     bpy.context.view_layer.objects.active = obj
     try:
+        # o alisar só roda no modo de pintura de pesos
+        bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
         bpy.ops.object.vertex_group_smooth(group_select_mode="ALL", factor=0.5, repeat=3)
         bpy.ops.object.vertex_group_normalize_all(lock_active=False)
     except Exception as e:
         print(f"[rig_ia] sem alisar os pesos: {e}")
+    finally:
+        if obj.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
     if not any(m.type == "ARMATURE" for m in obj.modifiers):
         mod = obj.modifiers.new("esqueleto", "ARMATURE")
         mod.object = arm

@@ -338,7 +338,24 @@ def tarefa_rig(t):
 
     objs = _importar(t["entrada"])
     m = _juntar_malhas(objs, t.get("nome", "personagem"))
+    # malha de jogo: a alta guarda o relevo para o mapa de normais da leve (só quando decima de verdade)
+    alta = None
+    alvo = int(t.get("triangulos_max") or 0)
+    if t.get("esqueleto") in ("jogo", "dragao") and t.get("normal_da_alta", True) and alvo and c.triangulos([m]) > 1.25 * alvo:
+        alta = m.copy()
+        alta.data = m.data.copy()
+        bpy.context.scene.collection.objects.link(alta)
     info = limpar_malha(m, t)
+    if alta is not None:
+        import fc_placa
+
+        try:
+            img = fc_placa.assar_normal(alta, m, int(t.get("normal_px") or 2048), f"{t.get('nome', 'personagem')}_normal")
+            info["normal_da_alta"] = bool(img)
+        except Exception as e:  # sem o mapa, segue com a malha leve como está
+            print(f"[rig] mapa de normais não assou: {e}")
+            info["normal_da_alta"] = False
+        bpy.data.objects.remove(alta, do_unlink=True)
     if t.get("esqueleto") == "jogo":
         return _rig_de_jogo(t, m, info)
     if t.get("esqueleto") == "dragao":

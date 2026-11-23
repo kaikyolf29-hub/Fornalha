@@ -31,10 +31,8 @@ async fn ignis_ligado() {
 
 #[tokio::test]
 async fn ignis_desligado_nao_trava() {
-    let porta = {
-        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        l.local_addr().unwrap().port()
-    }; // porta fechada
+    // porta 1: ninguém escuta (uma porta livre "emprestada" podia ser pega por outro teste)
+    let porta = 1;
     let inicio = std::time::Instant::now();
     let e = ignis::consultar(porta).await;
     assert!(!e.conectado);

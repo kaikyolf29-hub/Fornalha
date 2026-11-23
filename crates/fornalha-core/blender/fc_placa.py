@@ -295,3 +295,55 @@ def guardar_acoes(arm):
 
 def caixa(objs):
     return c.caixa_envolvente(objs)
+
+
+def assar_normal(alta, baixa, tamanho, nome):
+    """Relevo da malha alta assado num mapa de normais na UV da malha leve (Cycles na CPU), ligado no
+    material dela: a malha de jogo fica leve com o detalhe da alta. Devolve a imagem ou None."""
+    if not baixa.data.uv_layers or not baixa.data.materials:
+        return None
+    img = bpy.data.images.new(nome, tamanho, tamanho, alpha=False, float_buffer=False)
+    img.colorspace_settings.name = "Non-Color"
+    alvos = []
+    for mat in baixa.data.materials:
+        if mat is None or not mat.use_nodes:
+            continue
+        nt = mat.node_tree
+        tex = nt.nodes.new("ShaderNodeTexImage")
+        tex.image = img
+        tex.interpolation = "Linear"
+        nt.nodes.active = tex
+        alvos.append((mat, tex))
+    if not alvos:
+        return None
+    cena = bpy.context.scene
+    motor = cena.render.engine
+    cena.render.engine = "CYCLES"
+    cena.cycles.device = "CPU"
+    cena.cycles.samples = 1
+    for o in cena.objects:
+        o.select_set(False)
+    alta.hide_render = False
+    alta.hide_set(False)
+    alta.select_set(True)
+    baixa.select_set(True)
+    bpy.context.view_layer.objects.active = baixa
+    tam = max(baixa.dimensions) or 1.0
+    bpy.ops.object.bake(
+        type="NORMAL",
+        normal_space="TANGENT",
+        use_selected_to_active=True,
+        cage_extrusion=0.006 * tam,
+        max_ray_distance=0.02 * tam,
+        margin=8,
+    )
+    cena.render.engine = motor
+    img.pack()
+    for mat, tex in alvos:
+        nt = mat.node_tree
+        bsdf = _principled(nt)
+        mapa = nt.nodes.new("ShaderNodeNormalMap")
+        mapa.inputs["Strength"].default_value = 1.0
+        nt.links.new(tex.outputs["Color"], mapa.inputs["Color"])
+        nt.links.new(mapa.outputs["Normal"], bsdf.inputs["Normal"])
+    return img

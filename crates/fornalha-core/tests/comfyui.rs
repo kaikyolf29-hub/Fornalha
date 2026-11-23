@@ -97,10 +97,9 @@ async fn comfyui_ligado_mostra_a_placa() {
 
 #[tokio::test]
 async fn comfyui_desligado_nao_trava() {
-    let porta = {
-        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        l.local_addr().unwrap().port()
-    };
+    // porta 1: ninguém escuta (uma porta livre "emprestada" podia ser pega pelo servidor falso de outro
+    // teste rodando ao mesmo tempo)
+    let porta = 1;
     let t = std::time::Instant::now();
     let e = comfyui::consultar(porta).await;
     assert!(!e.conectado);

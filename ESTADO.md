@@ -220,7 +220,20 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   no CI "ComfyUI 3D (cabeça por partes)" com o conceito do templário da referência. create_character
   usa nos níveis Qualidade e Máximo. A arma na malha da IA gira em volta do eixo da mão para a lâmina
   apontar para a frente no parado e no andar.
-  Próximo: capuz por cima do elmo no pedido, saia ao andar, pegada de duas mãos, mais criaturas, mapa.
+  **Mais (23/11):** saia pela malha (a barra é achada onde o pano liga as pernas na frente; entre a
+  barra e o quadril o pano fica no quadril e a parte de baixo segue as coxas/canelas aos poucos); o
+  alisamento dos pesos agora roda (antes falhava calado: o operador pede o modo de pintura de pesos);
+  mapa de normais da malha alta assado na leve (malha de jogo); capa com três ossos e mola na Godot
+  (SpringBoneSimulator3D com colisão nas pernas, testado sem tela: parada mexe 8 mm, andando fica até
+  43 cm para trás e volta); janela com o conceito de corpo inteiro para aceitar ou refazer antes do 3D
+  (create_character parar_no_conceito / refazer_conceito); escudo erguido no parado de quem tem escudo.
+  Duas mãos no cabo ficou de fora: a captura CC0 só tem golpes de uma mão (precisa de captura própria).
+  **Mapa (23/11):** a grama do chão saía branca no jogo (a 1ª cor da paleta do projeto, o creme das
+  paredes, tingia a grama): agora a grama e as folhas só pegam da paleta uma cor que seja verde, e
+  chão/rocha/casca guardam a cor da foto (tom leve). Chão com cor por vértice (terra batida nos
+  caminhos e no largo, grama seca em manchas, baixadas mais escuras) e tufos de grama com vento ao abrir
+  o jogo (MultiMesh por blocos de 18 m, some a 48 m). Testado na Godot 4.6.1 (capturas).
+  Próximo: resultado do CI da cabeça por partes, templário com capuz por cima do elmo (CI), mais mapa.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

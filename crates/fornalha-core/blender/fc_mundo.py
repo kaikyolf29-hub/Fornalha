@@ -59,6 +59,24 @@ def terreno(extensao, posicoes, rnd, material, segmentos=150):
         borda = max(0.0, (max(abs(x), abs(y)) - extensao * 0.7) / (extensao * 0.3))
         return f * (h * 3.2 + 2.2) + borda * borda * 9.0
 
+    def cor(x, y, z):
+        """Variação do chão em grande escala (multiplica a foto da grama): terra batida perto das áreas
+        e dos caminhos, manchas de grama seca, baixadas mais escuras e encosta mais pedregosa."""
+        p = Vector((x, y, 0))
+        # terra batida nos caminhos entre as áreas e no largo do meio de cada área; grama no resto
+        perto = min([(p - c_).length - RAIO_AREA * 0.35 for c_ in posicoes] +
+                    [_dist_segmento(p, Vector((0, 0, 0)), c_) - 2.2 for c_ in posicoes[1:]] + [1e9])
+        terra = max(0.0, min(1.0, 1.0 - perto / 3.0)) ** 1.5
+        seca = 0.5 + 0.5 * math.sin(x * 0.045 + fases[1] * 2) * math.cos(y * 0.052 + fases[5] * 2)
+        seca = max(0.0, seca - 0.45) / 0.55
+        mancha = 0.5 + 0.5 * math.sin(x * 0.31 + fases[2]) * math.sin(y * 0.27 + fases[3])
+        r, g, b = 1.0, 1.0, 1.0
+        r, g, b = r * (1 - 0.1 * seca) + 1.0 * 0.1 * seca, g * (1 - 0.18 * seca), b * (1 - 0.45 * seca)
+        k = terra * (0.55 + 0.25 * mancha)
+        r, g, b = r * (1 - k) + 0.78 * k, g * (1 - k) + 0.62 * k, b * (1 - k) + 0.45 * k
+        escuro = 0.82 + 0.18 * max(0.0, min(1.0, (z + 1.0) / 4.0))
+        return (r * escuro, g * escuro, b * escuro, 1.0)
+
     bm = bmesh.new()
     bmesh.ops.create_grid(bm, x_segments=segmentos, y_segments=segmentos, size=extensao)
     for v in bm.verts:
@@ -66,12 +84,40 @@ def terreno(extensao, posicoes, rnd, material, segmentos=150):
     malha = bpy.data.meshes.new("chao-col")
     bm.to_mesh(malha)
     bm.free()
+    attr = malha.color_attributes.new("Cor", "BYTE_COLOR", "POINT")
+    for i, v in enumerate(malha.vertices):
+        attr.data[i].color = cor(v.co.x, v.co.y, v.co.z)
+    malha.color_attributes.active_color = attr
     obj = bpy.data.objects.new("chao-col", malha)
     bpy.context.scene.collection.objects.link(obj)
     obj.data.materials.append(material)
+    _multiplicar_cor_do_vertice(material)
     for poly in malha.polygons:
         poly.use_smooth = True
     return obj, altura
+
+
+def _multiplicar_cor_do_vertice(mat):
+    """Cor do material × cor do vértice (o glTF leva como COLOR_0 e a engine multiplica igual)."""
+    nt = getattr(mat, "node_tree", None)
+    if nt is None:
+        return
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None:
+        return
+    entrada = bsdf.inputs["Base Color"]
+    cor = nt.nodes.new("ShaderNodeVertexColor")
+    cor.layer_name = "Cor"
+    mist = nt.nodes.new("ShaderNodeMix")
+    mist.data_type = "RGBA"
+    mist.blend_type = "MULTIPLY"
+    mist.inputs["Factor"].default_value = 1.0
+    if entrada.links:
+        nt.links.new(entrada.links[0].from_socket, mist.inputs[6])
+    else:
+        mist.inputs[6].default_value = entrada.default_value
+    nt.links.new(cor.outputs["Color"], mist.inputs[7])
+    nt.links.new(mist.outputs[2], entrada)
 
 
 def area_vila(id_, centro, rnd, mats, objs, inimigos):
@@ -169,13 +215,30 @@ GERADORES = {
 }
 
 
+def _verde(paleta, padrao):
+    """A primeira cor verde da paleta (matiz entre 70° e 170°, com cor de verdade), ou o padrão."""
+    import colorsys
+
+    for h in paleta:
+        try:
+            r, g, b = (int(str(h).lstrip("#")[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+        except ValueError:
+            continue
+        matiz, luz, sat = colorsys.rgb_to_hls(r, g, b)
+        if 70 <= matiz * 360 <= 170 and sat > 0.18 and 0.12 < luz < 0.6:
+            return h
+    return padrao
+
+
 def criar_mundo(p):
     rnd = random.Random(int(p.get("seed", 7)))
     paleta = p.get("paleta") or []
-    pal = lambda i, padrao: paleta[i] if len(paleta) > i else padrao
+    pal = lambda i, padrao: paleta[i] if len(paleta) > i else padrao  # noqa: E731
+    # grama e folhas só pegam da paleta do jogo uma cor que seja verde (a 1ª cor da paleta pode ser o
+    # creme das paredes: a grama ficava branca na engine)
     mats = {
-        "grama": pal(0, "#4d7a3a"), "caminho": "#8b7355", "parede": "#c8b79a", "telhado": pal(1, "#8a3b2a"),
-        "folha": pal(2, "#3f6b35"), "rocha": "#7d7a73", "masmorra": "#5a5550", "arena": "#9b8f7a",
+        "grama": _verde(paleta, "#4d7a3a"), "caminho": "#8b7355", "parede": "#c8b79a", "telhado": pal(1, "#8a3b2a"),
+        "folha": _verde(paleta[1:], "#3f6b35"), "rocha": "#7d7a73", "masmorra": "#5a5550", "arena": "#9b8f7a",
     }
     areas = p.get("areas") or [{"id": "vila", "tipo": "vila"}, {"id": "floresta", "tipo": "floresta"}]
     objs, inimigos = [], []

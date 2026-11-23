@@ -55,11 +55,15 @@ def disponivel(nome):
 _CACHE_FINAL = {}
 
 
-def _cor_final(img, tom, fator, modo, caminho_ao):
+# chão, rocha e casca: a cor da natureza vem da própria foto; o tom do jogo só puxa um pouco
+NATURAIS = ("grama", "terra", "rocha", "casca")
+
+
+def _cor_final(img, tom, fator, modo, caminho_ao, forte=True):
     """Imagem nova = textura tingida (como o nó Mix) × oclusão. Fica empacotada no glb."""
     if img is None or (not tom and not caminho_ao):
         return None
-    chave = (img.name, tom, round(fator, 3), modo, caminho_ao)
+    chave = (img.name, tom, round(fator, 3), modo, caminho_ao, forte)
     if chave in _CACHE_FINAL:
         return _CACHE_FINAL[chave]
     import numpy as np
@@ -72,8 +76,10 @@ def _cor_final(img, tom, fator, modo, caminho_ao):
     px = px.reshape(-1, 4)
     rgb = px[:, :3]
     if tom:
-        if modo != "MIX":
+        if modo != "MIX" and forte:
             fator = max(fator, 0.92)  # pano pintado: quase toda a cor vem do tom pedido
+        elif not forte:
+            fator = min(fator, 0.35)
         t = np.array([int(tom.lstrip("#")[i:i + 2], 16) / 255.0 for i in (0, 2, 4)], dtype=np.float32)
         if modo == "MIX":
             alvo = np.broadcast_to(t, rgb.shape)
@@ -138,7 +144,7 @@ def material(nome, tipo, tom=None, escala=None, rugosidade_extra=0.0, mistura_to
     oclusao = _mapa(pasta, ident, ("AmbientOcclusion",))
     cor = textura(caminho_cor)
     # o tingido e a oclusão vão direto nos pixels: o glTF (e a engine) recebe a cor final
-    final = _cor_final(cor.image, tom, mistura_tom, "MIX" if metal else "COLOR", oclusao)
+    final = _cor_final(cor.image, tom, mistura_tom, "MIX" if metal else "COLOR", oclusao, forte=tipo not in NATURAIS)
     if final is not None:
         cor.image = final
     nt.links.new(cor.outputs["Color"], bsdf.inputs["Base Color"])

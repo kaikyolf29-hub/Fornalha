@@ -347,13 +347,13 @@ const I = {
 };
 const ARMAS = ["espada", "machado", "lanca", "martelo", "adaga", "cajado", "escudo"];
 const OBJETOS = ["barril", "caixa", "bau", "arvore", "pedra", "casa", "tocha", "cerca", "pocao"];
-const TIPOS = ["", "humano", "elfo", "anao", "orc", "goblin", "esqueleto", "demonio"];
+const TIPOS = ["", "humano", "elfo", "anao", "orc", "goblin", "esqueleto", "zumbi", "demonio", "dragao"];
 const sel = (nome, opcoes, rotulo, padrao) => `<label class="campo"><span>${rotulo}</span><select name="${nome}">${opcoes.map((o) => `<option value="${o}" ${o === padrao ? "selected" : ""}>${o || "o cérebro escolhe"}</option>`).join("")}</select></label>`;
 const txt = (nome, rotulo, ph = "") => `<label class="campo"><span>${rotulo}</span><input type="text" name="${nome}" placeholder="${esc(ph)}"></label>`;
 const MOLDES = {
   personagem: { titulo: "Personagem", desc: "Ficha, conceito, 3D com esqueleto, 9 animações e fala", ferramenta: "create_character",
-    campos: () => txt("nome", "Nome", "Aren") + txt("descricao", "Como ele é", "ferreiro que luta com machado") + `<div class="lado-a-lado">${sel("tipo", TIPOS, "Tipo", "")}${sel("arma", ["", ...ARMAS, "nenhuma"], "Arma", "")}${sel("armadura", ["", "nenhuma", "leve", "pesada"], "Armadura", "")}</div>` + txt("fala", "Fala para dublar", "Ninguém passa por esta ponte.") + `<label class="chave"><input type="checkbox" name="video"><span>Vídeo das animações</span></label>`,
-    args: (f) => ({ papel: "protagonista", nome: f.nome.value || undefined, descricao: f.descricao.value || undefined, tipo: f.tipo.value || undefined, arma: f.arma.value || undefined, armadura: f.armadura.value || undefined, fala: f.fala.value || undefined, video: f.video.checked }) },
+    campos: () => txt("nome", "Nome", "Aren") + txt("descricao", "Como ele é", "ferreiro que luta com machado") + `<div class="lado-a-lado">${sel("tipo", TIPOS, "Tipo", "")}${sel("arma", ["", ...ARMAS, "nenhuma"], "Arma", "")}${sel("armadura", ["", "nenhuma", "leve", "pesada"], "Armadura", "")}</div>` + txt("fala", "Fala para dublar", "Ninguém passa por esta ponte.") + `<label class="chave"><input type="checkbox" name="video"><span>Vídeo das animações</span></label><label class="chave"><input type="checkbox" name="por_partes" checked><span>Ver o conceito antes do 3D (aceitar ou refazer)</span></label>`,
+    args: (f) => ({ papel: "protagonista", nome: f.nome.value || undefined, descricao: f.descricao.value || undefined, tipo: f.tipo.value || undefined, arma: f.arma.value || undefined, armadura: f.armadura.value || undefined, fala: f.fala.value || undefined, video: f.video.checked, parar_no_conceito: f.por_partes.checked || undefined }) },
   inimigo: { titulo: "Inimigo", desc: "Igual ao personagem, com IA na engine; pode já testar no jogo", ferramenta: "create_character",
     campos: () => txt("descricao", "Como ele é", "orc grandalhão com martelo") + `<div class="lado-a-lado">${sel("tipo", TIPOS, "Tipo", "")}${sel("arma", ["", ...ARMAS], "Arma", "")}</div>` + txt("fala", "Grito de guerra", "") + `<label class="chave"><input type="checkbox" name="testar" checked><span>Montar na engine e testar no fim</span></label>`,
     args: (f) => ({ papel: "inimigo", descricao: f.descricao.value || undefined, tipo: f.tipo.value || undefined, arma: f.arma.value || undefined, fala: f.fala.value || undefined, testar_na_engine: f.testar.checked }) },
@@ -436,13 +436,47 @@ $("form-molde").addEventListener("submit", async (e) => {
   botao.disabled = true; botao.textContent = "Forjando…"; calor(true);
   const inicio = Date.now();
   try {
-    const r = await ferramenta(m.ferramenta, m.args(e.target));
-    await mostrarSaida(m, r, (Date.now() - inicio) / 1000);
-    mensagem(`${m.titulo} forjado.`);
-    carregarBase();
+    const args = m.args(e.target);
+    const r = await ferramenta(m.ferramenta, args);
+    if (r.situacao === "conceito_pronto") {
+      await mostrarConceito(m, args, r);
+      mensagem("Conceito pronto: aceite para fazer o 3D, ou refaça.");
+    } else {
+      await mostrarSaida(m, r, (Date.now() - inicio) / 1000);
+      mensagem(`${m.titulo} forjado.`);
+      carregarBase();
+    }
   } catch (err) { mensagem(err.message, "erro"); }
   finally { botao.disabled = false; botao.textContent = "Forjar"; calor(false); }
 });
+// por partes: o conceito de corpo inteiro aparece antes do 3D, para aceitar (faz o 3D dele) ou refazer
+async function mostrarConceito(m, args, r) {
+  const url = r.arquivos && r.arquivos.conceito_3d ? await dataUrl(r.arquivos.conceito_3d) : null;
+  const div = document.createElement("div");
+  div.className = "peca";
+  const base = { ...args, nome: (r.ficha && r.ficha.nome) || args.nome, parar_no_conceito: undefined, refazer_conceito: undefined };
+  div.innerHTML = `<div class="miniatura">${url ? `<img src="${url}" alt="">` : m.titulo}</div>
+    <div><strong>${esc((r.ficha && r.ficha.nome) || "Conceito")}</strong><small>Conceito de corpo inteiro: é ele que vira o 3D.</small>${(r.avisos || []).map((a) => `<small class="avisos">${esc(a)}</small>`).join("")}</div>
+    <div class="lado"><button class="botao" data-refazer>Refazer</button><button class="botao quente" data-aceitar>Aceitar e fazer o 3D</button></div>`;
+  div.querySelector("[data-aceitar]").addEventListener("click", () => forjarCom(m, base, div));
+  div.querySelector("[data-refazer]").addEventListener("click", () =>
+    forjarCom(m, { ...base, parar_no_conceito: true, refazer_conceito: true, seed: Math.floor(Math.random() * 1e6) }, div));
+  const saida = $("saida");
+  if (saida.querySelector(".vazio")) saida.innerHTML = "";
+  saida.prepend(div);
+}
+async function forjarCom(m, args, cartao) {
+  cartao.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  calor(true);
+  const inicio = Date.now();
+  try {
+    const r = await ferramenta(m.ferramenta, args);
+    cartao.remove();
+    if (r.situacao === "conceito_pronto") await mostrarConceito(m, args, r);
+    else { await mostrarSaida(m, r, (Date.now() - inicio) / 1000); mensagem(`${m.titulo} forjado.`); carregarBase(); }
+  } catch (err) { mensagem(err.message, "erro"); cartao.querySelectorAll("button").forEach((b) => (b.disabled = false)); }
+  finally { calor(false); }
+}
 async function mostrarSaida(m, r, segundos) {
   const arquivos = r.arquivos || (r.arquivo ? { arquivo: r.arquivo } : {});
   const lista = Array.isArray(arquivos) ? arquivos : Object.values(arquivos);

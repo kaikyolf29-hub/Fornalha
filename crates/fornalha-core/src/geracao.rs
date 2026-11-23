@@ -316,6 +316,11 @@ pub struct ArgsPersonagem {
     /// Montar na engine e rodar o teste depois (o pronto da Fase 4).
     pub testar_na_engine: Option<bool>,
     pub seed: Option<u64>,
+    /// Por partes, com aceitar ou refazer: para depois do conceito de corpo inteiro (o que vira 3D) e
+    /// devolve a imagem; a chamada seguinte com o mesmo nome usa esse conceito.
+    pub parar_no_conceito: Option<bool>,
+    /// Apaga o conceito de corpo inteiro guardado e faz outro (com outra semente).
+    pub refazer_conceito: Option<bool>,
 }
 
 fn eh_inimigo(papel: &str) -> bool {
@@ -470,6 +475,20 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let seed = a.seed.unwrap_or(7);
     let mut arquivos = serde_json::Map::new();
 
+    // por partes na janela: primeiro o conceito de corpo inteiro (o que vira 3D), para aceitar ou refazer
+    let img_3d = pasta.join("conceito_3d.png");
+    if a.refazer_conceito.unwrap_or(false) {
+        let _ = std::fs::remove_file(&img_3d);
+    }
+    if a.parar_no_conceito.unwrap_or(false) {
+        if !img_3d.is_file() {
+            gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img_3d, seed.wrapping_add(3), quem).await?;
+        }
+        arquivos.insert("conceito_3d".into(), json!(img_3d));
+        return Ok(json!({"situacao": "conceito_pronto", "ficha": ficha, "arquivos": arquivos, "avisos": avisos,
+                         "proximo": "chame de novo com o mesmo nome (sem parar_no_conceito) para fazer o 3D deste conceito, ou com refazer_conceito para outro"}));
+    }
+
     // conceito (imagem pelo Ignis)
     if a.conceito.unwrap_or(true) {
         match gerar_imagem_conceito(f, &p, &descrever_para_imagem(&p, &ficha), &pasta.join("conceito.png"), seed, quem).await {
@@ -504,7 +523,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
             || crate::comfyui::instalacao(&f.paths).is_some();
         if disponivel {
-            let img = pasta.join("conceito_3d.png");
+            let img = img_3d.clone();
             let pronto = img.is_file()
                 || gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img, seed.wrapping_add(3), quem).await.is_ok();
             let alta = pasta.join(format!("{id}_ia_alta.glb"));

@@ -211,7 +211,9 @@ pub fn lista() -> Vec<Ferramenta> {
                     "conceito": {"type": "boolean", "description": "Gerar a imagem de conceito (padrão: sim, se o Ignis tiver imagem)."},
                     "video": {"type": "boolean", "description": "Vídeo curto das animações."},
                     "testar_na_engine": {"type": "boolean", "description": "Montar na engine e rodar o teste no fim."},
-                    "seed": {"type": "integer", "minimum": 0}
+                    "seed": {"type": "integer", "minimum": 0},
+                    "parar_no_conceito": {"type": "boolean", "description": "Por partes: para no conceito de corpo inteiro (o que vira 3D) e devolve a imagem para aceitar ou refazer; a chamada seguinte com o mesmo nome usa esse conceito."},
+                    "refazer_conceito": {"type": "boolean", "description": "Apaga o conceito de corpo inteiro guardado e faz outro (mande outra seed)."}
                 }
             }),
             so_leitura: false,

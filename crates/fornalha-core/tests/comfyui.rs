@@ -146,6 +146,33 @@ async fn conceito_usa_o_comfyui_e_registra_a_licenca() {
     assert_eq!(st["comfyui"]["modelo_de_imagem"]["id"], "z-image-turbo-comfyui");
 }
 
+/// Por partes na janela: o Personagem para no conceito de corpo inteiro (aceitar ou refazer); refazer
+/// apaga o guardado e gera outro.
+#[tokio::test]
+async fn personagem_para_no_conceito_para_aceitar_ou_refazer() {
+    let (porta, visto) = comfy_falso(true).await;
+    let tmp = tempfile::tempdir().unwrap();
+    let f = Fornalha::para_testes(Paths::under(tmp.path()), comum::detection("rx580"));
+    f.definir_porta_comfyui(porta).unwrap();
+    f.chamar("create_project", json!({"nome": "Ordem"}), "claude-code").await.unwrap();
+    let pedido = json!({"nome": "Aldric", "tipo": "humano", "descricao": "templário", "parar_no_conceito": true});
+    let r = f.chamar("create_character", pedido.clone(), "claude-code").await.unwrap();
+    assert_eq!(r["situacao"], "conceito_pronto", "{r}");
+    let img = std::path::PathBuf::from(r["arquivos"]["conceito_3d"].as_str().unwrap());
+    assert_eq!(std::fs::read(&img).unwrap(), PNG);
+    assert!(img.ends_with("Characters/aldric/conceito_3d.png") || img.ends_with("Characters\\aldric\\conceito_3d.png"), "{img:?}");
+    // de novo, sem refazer: usa o guardado (nenhuma imagem nova)
+    let antes = visto.lock().unwrap().fluxos.len();
+    f.chamar("create_character", pedido.clone(), "claude-code").await.unwrap();
+    assert_eq!(visto.lock().unwrap().fluxos.len(), antes);
+    // refazer: gera outro
+    let mut refazer = pedido.clone();
+    refazer["refazer_conceito"] = json!(true);
+    refazer["seed"] = json!(99);
+    f.chamar("create_character", refazer, "claude-code").await.unwrap();
+    assert_eq!(visto.lock().unwrap().fluxos.len(), antes + 1);
+}
+
 /// Numa placa de 8 GB, um modelo por vez: antes de gerar no ComfyUI a Fornalha pede ao Ignis para
 /// soltar a memória de vídeo (POST /motor/reservar) e devolve no fim (/motor/reservar/liberar).
 #[tokio::test]

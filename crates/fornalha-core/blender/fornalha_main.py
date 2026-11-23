@@ -339,6 +339,8 @@ def tarefa_rig(t):
     objs = _importar(t["entrada"])
     m = _juntar_malhas(objs, t.get("nome", "personagem"))
     info = limpar_malha(m, t)
+    if t.get("esqueleto") == "jogo":
+        return _rig_de_jogo(t, m, info)
     mn, mx = c.caixa_envolvente([m])
     H = mx.z - mn.z
     porte = max(0.7, min(1.4, ((mx.x - mn.x) / H) / 0.9)) if H > 0 else 1.0
@@ -363,6 +365,39 @@ def tarefa_rig(t):
     st = estatisticas([m], arm, acoes)
     st.update(info)
     st["pesos"] = metodo
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
+def _rig_de_jogo(t, m, info):
+    """Malha humanoide da IA com o esqueleto de jogo (nomes Unreal) e a captura de movimento CC0 — o
+    mesmo movimento do humano da Fornalha."""
+    import fc_retarget
+    import fc_rig_ia
+
+    nome = t.get("nome", "personagem")
+    arm, info_rig = fc_rig_ia.rigar(m, nome, float(t.get("altura_m") or 1.8))
+    acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes")) if t.get("animacoes_de") else []
+    objs = [m]
+    arma = t.get("arma")
+    if arma and arma != "nenhuma":
+        import fc_armas_pbr
+
+        if arma == "espada":
+            o = fc_armas_pbr.espada_longa(nome, t.get("cores_arma"))
+        else:
+            import fc_armas
+
+            o = fc_armas.criar_arma({"tipo": arma, "id": f"{nome}_{arma}", "escala": 1.0})
+        fc_armas_pbr.prender_na_mao(o, arm, "r")
+        objs.append(o)
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, [arm] + objs, animacoes=bool(acoes))
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, objs, saida, arm if acoes else None, acoes))
+    st = estatisticas(objs, arm, acoes)
+    st.update(info)
+    st.update(info_rig)
+    st["pecas"] = [o.name for o in objs]
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 

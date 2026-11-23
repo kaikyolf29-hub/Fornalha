@@ -508,6 +508,40 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
         }
         r = forjar(f, &base).await?;
         modelo_3d = "forja-criatura".into();
+    }
+    // 3D pela IA no ComfyUI (TRELLIS.2): conceito próprio de corpo inteiro → malha → esqueleto de jogo,
+    // captura de movimento e a arma na mão
+    if r.is_null() && !criatura && ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
+        let disponivel = crate::comfyui::consultar(f.porta_comfyui()).await.conectado || crate::comfyui::instalacao(&f.paths).is_some();
+        if disponivel {
+            let img = pasta.join("conceito_3d.png");
+            let pronto = img.is_file()
+                || gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img, seed.wrapping_add(3), quem).await.is_ok();
+            let alta = pasta.join(format!("{id}_ia_alta.glb"));
+            if pronto {
+                if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
+                    let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
+                    let tarefa = json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
+                                        "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
+                                        "esqueleto": "jogo", "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
+                                        "ceu": base["ceu"], "arma": ficha["arma"], "folha": true, "video": a.video.unwrap_or(false),
+                                        "amostras": 20});
+                    match forjar(f, &tarefa).await {
+                        Ok(mut rr) => {
+                            rr["ia"] = info;
+                            modelo_3d = "trellis2-comfyui".into();
+                            arquivos.insert("conceito_3d".into(), json!(img));
+                            r = rr;
+                        }
+                        Err(e) => avisos.push(format!("O esqueleto na malha da IA falhou ({}): segui pelo caminho seguinte.", e.mensagem)),
+                    }
+                }
+            }
+        }
+    }
+    // TRELLIS.2 como worker próprio (NVIDIA), a partir da imagem de conceito
+    if !r.is_null() || criatura {
+        // já saiu (criatura ou 3D pela IA)
     } else if let Some(img) = conceito.filter(|c| c.is_file()) {
         if let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, &p, "3d", &mut avisos).await {
             let altura = altura_do_tipo(ficha["tipo"].as_str().unwrap_or(""));
@@ -617,6 +651,55 @@ fn descrever_para_imagem(p: &Projeto, ficha: &Value) -> String {
         ficha["armadura"].as_str().unwrap_or(""),
         if evitar.is_empty() { String::new() } else { format!(" Sem: {evitar}.") }
     )
+}
+
+/// Conceito para o 3D pela IA: corpo inteiro de frente, fundo liso, braços um pouco afastados e mãos
+/// livres (a arma sai como peça própria e vai para a mão no esqueleto).
+fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
+    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
+        "realista, muito detalhado, personagem de jogo AAA".to_string()
+    } else {
+        p.biblia.guia_visual.texto_de_estilo.clone()
+    };
+    format!(
+        "{estilo}. Foto de corpo inteiro de frente, em pé e reto, braços relaxados um pouco afastados do corpo, mãos \
+         abertas e vazias, fundo cinza claro liso, luz suave e uniforme. {} ({}): {}. Roupa nas cores {} e {}. Armadura {}.",
+        ficha["nome"].as_str().unwrap_or(""),
+        ficha["tipo"].as_str().unwrap_or(""),
+        ficha["descricao"].as_str().unwrap_or(""),
+        ficha["cor_roupa"].as_str().unwrap_or(""),
+        ficha["cor_roupa_secundaria"].as_str().unwrap_or(""),
+        ficha["armadura"].as_str().unwrap_or(""),
+    )
+}
+
+/// 3D pela IA: com o TRELLIS.2 instalado no ComfyUI (e o aceite do DINOv3), a imagem vira malha
+/// texturizada. Devolve o .glb da malha alta, ou None se o caminho não está disponível.
+async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, seed: u64, avisos: &mut Vec<String>) -> Option<Value> {
+    let porta = f.porta_comfyui();
+    let mut e = crate::comfyui::consultar(porta).await;
+    if !e.conectado && crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none() {
+        e = crate::comfyui::abrir(&f.paths, porta).await.ok()?;
+    }
+    if !e.conectado {
+        return None;
+    }
+    let difusao = crate::comfyui::modelos(porta, "diffusion_models").await;
+    if !difusao.iter().any(|m| m.contains("trellis_2")) {
+        return None;
+    }
+    let png = std::fs::read(imagem).ok()?;
+    // no processador leva horas (2,5 h no CI de 4 núcleos); numa NVIDIA, minutos
+    match com_placa(f, 12_000, 360, crate::comfyui::gerar_3d(porta, png, &format!("{nome}_conceito_3d.png"), seed, 8 * 3600)).await {
+        Ok((glb, info)) => {
+            std::fs::write(destino, &glb).ok()?;
+            Some(info)
+        }
+        Err(e) => {
+            avisos.push(format!("O 3D pela IA não saiu ({}): usei o caminho seguinte.", e.mensagem));
+            None
+        }
+    }
 }
 
 /// Folha de modelo (frente, perfil e costas) para guiar a malha: pose A com os braços afastados do

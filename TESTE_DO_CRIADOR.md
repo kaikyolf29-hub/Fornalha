@@ -95,6 +95,27 @@ Precisa do Git, do Python 3.10+ e, para o TRELLIS.2, do CUDA Toolkit 12.4.
 5. Com o aceite da Tencent, instale o HY-Motion e peça *"uma animação dele acenando"*.
 Isso ainda **não foi provado** numa placa de verdade: se der erro, me mande o `instalacao.log` da pasta do modelo.
 
+## 9b. 3D pela IA, por partes (novo em 23/11)
+Provado no CI (no processador, horas) e com vídeos aqui; falta provar no seu PC.
+1. **Licenças:** aceite a licença do DINOv3 (Meta). **Máquina → Motor de imagem → Instalar o 3D pela IA.**
+   Na RX 580 (sem CUDA nem ROCm) ele instala no processador e avisa que cada malha leva horas.
+2. **Forjar → Personagem**, deixe ligado "Ver o conceito antes do 3D". **Esperado:** aparece a imagem de
+   corpo inteiro com **Aceitar e fazer o 3D** e **Refazer**. Refazer gera outra; Aceitar faz a malha dessa.
+3. No fim: o personagem com esqueleto de jogo, a mesma captura de movimento do vídeo que você aprovou,
+   a espada no punho (lâmina para a frente no andar) e, se tiver escudo, o parado de escudo erguido.
+   No nível **Máximo** (ou **Qualidade** numa placa com CUDA/ROCm) a cabeça sai por partes: recortada do
+   conceito, refinada em close e encaixada no corpo.
+4. **Dragão:** Personagem com tipo **dragao**. Com o 3D pela IA instalado, ele sai pela IA com o esqueleto
+   medido na malha (anda, voa, ruge, dá o bote); sem, sai da Forja de criaturas como antes.
+5. **APIs pagas (opcional):** Máquina → APIs de 3D: Meshy, Tripo ou Rodin, com a sua chave e o liga/desliga.
+   Só plano pago tem uso comercial. Ligada, o Personagem sai por ela em minutos.
+
+## 9c. No jogo (novo em 23/11)
+1. **Grama:** o chão do mundo é verde (antes saía branco), com terra batida nos caminhos e tufos de grama
+   balançando ao vento. Me diga se os tufos pesam na RX 580 (FPS antes e depois de ir para o campo).
+2. **Capa com mola:** no templário feito pela IA, ande e pare: a capa fica para trás e volta, sem
+   atravessar as pernas.
+
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.
 Meta de referência (a do Ignis): perto de 60 MB e processador perto de 0%. Me diga o número.

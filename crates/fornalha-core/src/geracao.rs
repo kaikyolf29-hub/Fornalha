@@ -532,9 +532,11 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                     let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
                     // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
                     // feita malha própria, entra no lugar da cabeça do corpo
+                    // no processador a cabeça em close leva mais de 5 h (a grade fica cheia): só no Máximo
+                    let no_processador = info["processador"].as_bool().unwrap_or(false);
                     let cabeca = if !criatura
                         && info["modelo"] == "trellis2-comfyui"
-                        && matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo)
+                        && (nivel == crate::niveis::Nivel::Maximo || (nivel == crate::niveis::Nivel::Qualidade && !no_processador))
                     {
                         let descricao =
                             format!("{} ({})", ficha["descricao"].as_str().unwrap_or(""), ficha["armadura"].as_str().unwrap_or(""));

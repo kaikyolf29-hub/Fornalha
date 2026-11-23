@@ -1,6 +1,6 @@
 name: ComfyUI 3D (criatura)
 
-# Criatura pela IA no ComfyUI de verdade, sem placa: o motor de imagem faz o conceito do dragão e o
+# Criaturas pela IA no ComfyUI de verdade, sem placa: o motor de imagem faz o conceito do monstro e o
 # TRELLIS.2 (MIT) transforma em malha texturizada. Mesmo instalador e mesmo teste do "ComfyUI 3D";
 # fluxo à parte para rodar junto (o criador aceitou a licença do DINOv3 para os testes em 22/11/2026).
 
@@ -23,9 +23,20 @@ env:
 
 jobs:
   criatura:
-    name: Dragão pela IA (TRELLIS.2 no processador)
+    name: ${{ matrix.nome }} pela IA (TRELLIS.2 no processador)
     runs-on: ubuntu-24.04
     timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # monstros de corpos diferentes para o esqueleto genérico (quatro patas e oito patas)
+          - nome: Fera de quatro patas
+            id: fera
+            pedido: "full body of a huge monstrous wolf beast with six glowing amber eyes and bony spikes along the spine, standing on four legs, long tail, side three-quarter view, thick dark matted fur, plain light gray studio background, even soft lighting, realistic AAA game creature, highly detailed"
+          - nome: Aranha gigante
+            id: aranha
+            pedido: "full body of a giant armored spider monster with eight long jointed legs standing on the ground, big abdomen, fangs, three-quarter front view, dark chitin with red markings, plain light gray studio background, even soft lighting, realistic AAA game creature, highly detailed"
     env:
       FORNALHA_HOME: ${{ github.workspace }}-home
     steps:
@@ -53,7 +64,7 @@ jobs:
           FORNALHA_TESTE_COMFYUI_3D: "8188"
           FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/comfyui-3d-saida
           FORNALHA_TESTE_HORAS: "5"
-          FORNALHA_TESTE_PEDIDO: ${{ github.event.inputs.pedido || 'full body of a fierce ancient dark red dragon standing on four legs, wings folded tight against the body, long thick tail resting on the ground, horned head with jaws closed, detailed overlapping scales, three-quarter front view, plain light gray studio background, even soft lighting, realistic AAA game creature, highly detailed' }}
+          FORNALHA_TESTE_PEDIDO: ${{ github.event.inputs.pedido || matrix.pedido }}
           FORNALHA_TESTE_LARGURA: "896"
           FORNALHA_TESTE_ALTURA: "640"
           RUST_BACKTRACE: "1"
@@ -69,5 +80,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: comfyui-3d-dragao
+          name: comfyui-3d-${{ matrix.id }}
           path: ${{ runner.temp }}/comfyui-3d-saida

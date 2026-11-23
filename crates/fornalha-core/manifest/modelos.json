@@ -319,9 +319,10 @@
       "onde": "comfyui",
       "licenca": "MIT (TRELLIS.2) + DINOv3 License (codificador)",
       "url_licenca": "https://huggingface.co/Comfy-Org/TRELLIS.2",
-      "uso_comercial": "sim",
+      "uso_comercial": "condicional",
       "vram_mb": 12000,
-      "nota": "Nós nativos do ComfyUI (PyTorch puro: roda em NVIDIA, ROCm e no processador, devagar). Arquivos de Comfy-Org/TRELLIS.2 (MIT, base microsoft/TRELLIS.2-4B); o codificador DINOv3 da Meta tem licença própria que permite uso comercial (restrições: sanções comerciais e uso militar/armas reais), com aceite da pessoa pela janela; BiRefNet (MIT) tira o fundo. Fluxo oficial do ComfyUI (workflow_templates, MIT)."
+      "nota": "Nós nativos do ComfyUI (PyTorch puro: roda em NVIDIA, ROCm e no processador, devagar). Arquivos de Comfy-Org/TRELLIS.2 (MIT, base microsoft/TRELLIS.2-4B); o codificador DINOv3 da Meta tem licença própria que permite uso comercial (restrições: sanções comerciais e uso militar/armas reais), com aceite da pessoa pela janela; BiRefNet (MIT) tira o fundo. Fluxo oficial do ComfyUI (workflow_templates, MIT).",
+      "aceite": "meta-dinov3"
     },
     {
       "id": "z-image",
@@ -785,6 +786,10 @@
     "tencent-hunyuan": {
       "nome": "Licença comunitária da Tencent (Hunyuan)",
       "texto": "Uso comercial permitido, com regras de território (a licença não vale na União Europeia, no Reino Unido e na Coreia do Sul) e de número de usuários. Leia a licença antes de aceitar. Sem aceite, a Fornalha usa as alternativas: a biblioteca de animações e, no 3D, o TRELLIS.2 (quando a textura sem o nvdiffrast ficar pronta, na Fase 1)."
+    },
+    "meta-dinov3": {
+      "nome": "Licença do DINOv3 (Meta) — 3D pela IA",
+      "texto": "O 3D pela IA (TRELLIS.2, MIT) usa o codificador de imagem DINOv3 da Meta. A licença permite usar, copiar, distribuir e vender o que for feito, inclusive em jogo comercial; proíbe uso militar, de armas reais e espionagem, e o uso por quem está sob sanções comerciais (EUA, ONU, UE, Reino Unido). Leia em ai.meta.com/resources/models-and-libraries/dinov3-license antes de aceitar. Sem aceite, o personagem sai pelo humano da Fornalha (Blender)."
     }
   }
 }

@@ -676,6 +676,9 @@ fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
 /// 3D pela IA: com o TRELLIS.2 instalado no ComfyUI (e o aceite do DINOv3), a imagem vira malha
 /// texturizada. Devolve o .glb da malha alta, ou None se o caminho não está disponível.
 async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, seed: u64, avisos: &mut Vec<String>) -> Option<Value> {
+    if !f.estudio().licencas_aceitas.iter().any(|a| a == "meta-dinov3") {
+        return None; // o 3D pela IA usa o DINOv3: só com o aceite da pessoa (Licenças)
+    }
     let porta = f.porta_comfyui();
     let mut e = crate::comfyui::consultar(porta).await;
     if !e.conectado && crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none() {

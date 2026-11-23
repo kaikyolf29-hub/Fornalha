@@ -713,9 +713,11 @@ function pintarComfyUI() {
     : vk ? `Imagem: ${vk.id_do_modelo} (roda na hora de gerar, não fica aberto)`
     : e.conectado ? "Sem modelo de imagem de licença comercial instalado" : "";
   const ultima = inst.log && inst.log.length ? inst.log[inst.log.length - 1] : "";
-  const botoes = inst.instalando ? "" : !inst.instalado
+  const tem3d = !!(inst.instalacao && (inst.instalacao.modelos || []).some((m) => m.includes("trellis_2")));
+  const botoes = inst.instalando ? "" : (!inst.instalado
     ? `<button class="botao" data-comfy="instalar">Instalar</button>`
-    : e.conectado || vk ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`;
+    : e.conectado || vk ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`)
+    + (tem3d ? "" : ` <button class="botao" data-comfy="instalar_3d" title="TRELLIS.2 + DINOv3, ~8,5 GB; precisa do aceite da licença do DINOv3 em Licenças">Instalar o 3D pela IA</button>`);
   pinta($("comfyui"), `<div class="item"><div><strong>${esc(situacao)}</strong>`
     + `<small>${esc(cam.backend ? "Caminho nesta máquina: " + cam.backend + " — " + (cam.motivo || "") : "")}</small>`
     + (modelo ? `<small>${esc(modelo)}</small>` : "")
@@ -732,6 +734,9 @@ $("comfyui").addEventListener("click", async (e) => {
     if (b.dataset.comfy === "instalar") {
       await api("POST", "/janela/comfyui", { acao: "instalar" });
       mensagem("Instalação do motor de imagem começou (alguns GB). Dá para continuar usando a Fornalha.");
+    } else if (b.dataset.comfy === "instalar_3d") {
+      await api("POST", "/janela/comfyui", { acao: "instalar_3d" });
+      mensagem("Instalação do 3D pela IA começou (~8,5 GB). Depois, o Personagem sai da IA: imagem → malha → esqueleto.");
     } else {
       mensagem("Abrindo o ComfyUI…");
       await api("POST", "/janela/comfyui", { acao: "abrir" });

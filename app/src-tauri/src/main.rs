@@ -281,6 +281,22 @@ mod nucleo {
                 let det = f.deteccao(false).await;
                 comfyui::instalar(&f.paths, &comfyui::caminho_para(&det), f.porta_comfyui()).await
             }
+            Some("instalar_3d") => {
+                // 3D pela IA (TRELLIS.2 + DINOv3): só depois do aceite da pessoa em Licenças
+                if !f.estudio().licencas_aceitas.iter().any(|a| a == "meta-dinov3") {
+                    let m = "Aceite a licença do DINOv3 em Licenças antes de instalar o 3D pela IA.";
+                    return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": m}}))).into_response();
+                }
+                let det = f.deteccao(false).await;
+                let mut c = comfyui::caminho_para(&det);
+                if c.backend == "vulkan" {
+                    // o TRELLIS.2 roda no ComfyUI (PyTorch): sem CUDA nem ROCm, no processador (lento)
+                    c.backend = "cpu";
+                    c.motivo = format!("{} — o 3D pela IA roda no processador (pode levar horas)", c.motivo);
+                }
+                c.tres_d = true;
+                comfyui::instalar(&f.paths, &c, f.porta_comfyui()).await
+            }
             Some("abrir") => comfyui::abrir(&f.paths, f.porta_comfyui()).await.map(|e| json!(e)),
             _ => return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Ação desconhecida."}}))).into_response(),
         };

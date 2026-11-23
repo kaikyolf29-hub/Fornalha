@@ -203,7 +203,7 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   servidor falso). **Provado (23/11, CI no processador):** o templário da referência do criador
   (conceito pelo motor de imagem → TRELLIS.2 em 3,4 h: elmo, cota, cruz preta na frente e na barra,
   cintos vermelhos, ombreiras, capa longa, espada na bainha) e o dragão (1,4 h: serpe vermelha de asas
-  abertas, chifres, cauda enrolada). Os dois ganham esqueleto aqui (vídeos em render): o templário com o
+  abertas, chifres, cauda enrolada). Os dois ganharam esqueleto e vídeo aqui (enviados ao criador): o templário com o
   esqueleto de jogo e a captura do humano; o dragão com `fc_rig_criatura` (pés pela fatia do chão,
   raiz da asa onde a membrana encosta no corpo, pulso no topo da asa, dedos nos picos mais longe do
   pulso, focinho, topo do crânio, cauda pelas fatias de baixo; serpe ou quadrúpede detectado pelos

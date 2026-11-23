@@ -397,34 +397,40 @@ class Humano:
             if d.get("parent"):
                 ebs[osso].parent = ebs[d["parent"]]
                 ebs[osso].use_connect = bool(d.get("use_connect", False))
-        # mandíbula (do rig padrão do MakeHuman): a engine abre a boca pela curva da fala
-        jaw = None
-        if "jaw" not in defs and "head" in ebs:
+        # mandíbula, olhos e pálpebras (do rig padrão do MakeHuman): a engine abre a boca pela curva da
+        # fala, move os olhos para onde o personagem olha e pisca
+        extras = {}
+        if "head" in ebs:
             arq = os.path.join(self.dados, "rigs", "standard", "rig.default.json")
             if os.path.isfile(arq):
                 with open(arq) as f:
-                    jaw = json.load(f).get("jaw")
-            if jaw:
-                eb = dados.edit_bones.new("jaw")
-                eb.head = self._posicao(jaw["head"])
-                eb.tail = self._posicao(jaw["tail"])
+                    padrao = json.load(f)
+                for nosso, deles in OSSOS_DO_ROSTO.items():
+                    if nosso not in defs and deles in padrao:
+                        extras[nosso] = (deles, padrao[deles])
+            for nosso, (deles, d) in extras.items():
+                eb = dados.edit_bones.new(nosso)
+                eb.head = self._posicao(d["head"])
+                eb.tail = self._posicao(d["tail"])
                 if (eb.tail - eb.head).length < 1e-4:
-                    eb.tail = eb.head + Vector((0, -0.04, -0.05))
-                eb.roll = float(jaw.get("roll", 0.0))
+                    eb.tail = eb.head + Vector((0, -0.04, -0.05) if nosso == "jaw" else (0, -0.03, 0))
+                eb.roll = float(d.get("roll", 0.0))
                 eb.parent = ebs["head"]
         bpy.ops.object.mode_set(mode="OBJECT")
         with open(os.path.join(self.dados, "rigs", "standard", f"weights.{rig}.json")) as f:
             self.pesos = json.load(f)["weights"]
-        if jaw:
+        if extras:
             with open(os.path.join(self.dados, "rigs", "standard", "weights.default.json")) as f:
-                w_jaw = json.load(f)["weights"].get("jaw", [])
-            if w_jaw:
-                # o queixo e o lábio de baixo passam da cabeça para a mandíbula (a soma continua 1)
-                jw = {int(vi): float(w) for vi, w in w_jaw}
+                w_padrao = json.load(f)["weights"]
+            for nosso, (deles, _) in extras.items():
+                w = {int(vi): float(x) for vi, x in w_padrao.get(deles, [])}
+                if not w:
+                    continue
+                # os vértices passam da cabeça (e do pescoço) para o osso novo; a soma continua 1
                 for osso in ("head", "neck_01"):
                     if osso in self.pesos:
-                        self.pesos[osso] = [[vi, w * (1.0 - jw.get(int(vi), 0.0))] for vi, w in self.pesos[osso]]
-                self.pesos["jaw"] = [[vi, w] for vi, w in jw.items()]
+                        self.pesos[osso] = [[vi, x * (1.0 - w.get(int(vi), 0.0))] for vi, x in self.pesos[osso]]
+                self.pesos[nosso] = [[vi, x] for vi, x in w.items()]
         self.arm = arm
         return arm
 
@@ -575,6 +581,18 @@ def _olho_leitoso(mat):
     nova.pixels.foreach_set(px.ravel())
     nova.pack()
     no.image = nova
+
+
+# ossos do rosto que vêm do rig padrão do MakeHuman (nosso nome → nome deles), pendurados na cabeça
+OSSOS_DO_ROSTO = {
+    "jaw": "jaw",
+    "eye_l": "eye.L",
+    "eye_r": "eye.R",
+    "eyelid_upper_l": "orbicularis03.L",
+    "eyelid_upper_r": "orbicularis03.R",
+    "eyelid_lower_l": "orbicularis04.L",
+    "eyelid_lower_r": "orbicularis04.R",
+}
 
 
 def criar_humano(dados, assets, ficha):

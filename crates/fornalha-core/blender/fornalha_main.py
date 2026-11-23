@@ -133,6 +133,14 @@ def tarefa_humano(t):
         # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do
         # modelo, no sentido positivo, até ~20° (medido: o queixo desce 1,5 cm e os dentes de baixo vão junto)
         r["boca"] = {"osso": "jaw", "eixo_modelo": [1.0, 0.0, 0.0], "graus_aberta": 20}
+    if arm is not None and all(n in arm.data.bones for n in ("eye_l", "eye_r", "eyelid_upper_l", "eyelid_upper_r")):
+        # olhos e pálpebras (do rig padrão do MakeHuman). Eixos no espaço do modelo do glTF (Y para cima):
+        # os olhos giram em Y para os lados e em X para cima/baixo; a pálpebra de cima fecha girando +30° em
+        # X e a de baixo sobe girando −8° (medido no render: o olho fecha inteiro, os cílios acompanham)
+        r["olhos"] = {"ossos": ["eye_l", "eye_r"], "eixo_lados_modelo": [0.0, 1.0, 0.0], "eixo_cima_modelo": [1.0, 0.0, 0.0],
+                      "graus_max_lados": 25, "graus_max_cima": 15}
+        r["palpebras"] = {"cima": ["eyelid_upper_l", "eyelid_upper_r"], "baixo": ["eyelid_lower_l", "eyelid_lower_r"],
+                          "eixo_modelo": [1.0, 0.0, 0.0], "graus_fechar_cima": 30, "graus_fechar_baixo": -8}
     return r
 
 

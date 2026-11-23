@@ -386,7 +386,12 @@ def _rig_de_jogo(t, m, info):
         info_partes = fc_partes.trocar_cabeca(m, t["cabeca"])
     arm, info_rig = fc_rig_ia.rigar(m, nome, float(t.get("altura_m") or 1.8))
     info_rig.update(info_partes)
-    acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes")) if t.get("animacoes_de") else []
+    import fc_armas_pbr
+
+    clipes = {}
+    if t.get("escudo"):
+        clipes.update(fc_armas_pbr.CLIPES_DA_ARMA["escudo"])
+    acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes) if t.get("animacoes_de") else []
     objs = [m]
     arma = t.get("arma")
     if arma and arma != "nenhuma":

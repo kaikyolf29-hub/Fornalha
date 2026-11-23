@@ -337,3 +337,11 @@ def acertar_giro(obj, arm, acoes, lado="r", nomes=("parado", "andar")):
         arm.data.pose_position = "POSE"
         bpy.context.view_layer.update()
     return float(melhor)
+
+
+# clipes da captura (Quaternius, CC0) que combinam com o equipamento: parado de escudo erguido para quem
+# tem escudo. (Armas de duas mãos ainda usam os golpes de uma mão: a biblioteca CC0 não tem captura de
+# golpe com as duas mãos no cabo.)
+CLIPES_DA_ARMA = {
+    "escudo": {"parado": ("ual2", "Idle_Shield_Loop", True)},
+}

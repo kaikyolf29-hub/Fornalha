@@ -212,7 +212,15 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   criaturas. Tripo e Rodin prontas como a Meshy. O download do Blender tenta os espelhos oficiais
   (Berkeley, NLUUG) quando o site principal recusa a máquina de nuvem (403 no CI de 23/11); a soma
   SHA-256 é conferida igual.
-  Próximo: cabeça em close (por partes), saia ao andar, pegada de duas mãos, mais criaturas, mapa.
+  **Por partes (23/11):** a cabeça é recortada do conceito do corpo (`partes.rs`: figura pelo fundo
+  liso, fundo de cada linha pelas bordas), refinada em close pelo Z-Image (imagem → imagem, denoise
+  0,5: mesmo desenho, mais detalhe), vira malha própria no TRELLIS.2 e entra no lugar da cabeça do
+  corpo antes do esqueleto (`fc_partes`: escala pela altura do recorte, posição pelo alto da cabeça,
+  corte no pescoço). Testado aqui com uma cabeça de escala trocada (a troca acerta sozinha); em prova
+  no CI "ComfyUI 3D (cabeça por partes)" com o conceito do templário da referência. create_character
+  usa nos níveis Qualidade e Máximo. A arma na malha da IA gira em volta do eixo da mão para a lâmina
+  apontar para a frente no parado e no andar.
+  Próximo: capuz por cima do elmo no pedido, saia ao andar, pegada de duas mãos, mais criaturas, mapa.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

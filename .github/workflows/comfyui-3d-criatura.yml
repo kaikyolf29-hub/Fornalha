@@ -1,0 +1,73 @@
+name: ComfyUI 3D (criatura)
+
+# Criatura pela IA no ComfyUI de verdade, sem placa: o motor de imagem faz o conceito do dragão e o
+# TRELLIS.2 (MIT) transforma em malha texturizada. Mesmo instalador e mesmo teste do "ComfyUI 3D";
+# fluxo à parte para rodar junto (o criador aceitou a licença do DINOv3 para os testes em 22/11/2026).
+
+on:
+  workflow_dispatch:
+    inputs:
+      pedido:
+        description: "Pedido para o conceito da criatura"
+        default: ""
+  push:
+    paths:
+      - ".github/workflows/comfyui-3d-criatura.yml"
+
+concurrency:
+  group: comfyui-3d-criatura-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  criatura:
+    name: Dragão pela IA (TRELLIS.2 no processador)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      FORNALHA_HOME: ${{ github.workspace }}-home
+    steps:
+      - name: Espaço em disco (os modelos do 3D têm ~8,5 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compilar a Fornalha (linha de comando) e o teste
+        run: |
+          cargo build -q -p fornalha-cli
+          cargo test -q -p fornalha-core --test comfyui_3d_real --no-run
+      - name: Instalar o ComfyUI com o 3D pela IA (pelo instalador da Fornalha)
+        run: |
+          ./target/debug/fornalha-cli comfyui instalar --backend cpu --modelos gguf --3d
+          cat "$FORNALHA_HOME/dados/comfyui/instalacao.json"
+          df -h /
+      - name: Abrir o ComfyUI e gerar a malha
+        env:
+          FORNALHA_TESTE_COMFYUI_3D: "8188"
+          FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/comfyui-3d-saida
+          FORNALHA_TESTE_HORAS: "5"
+          FORNALHA_TESTE_PEDIDO: ${{ github.event.inputs.pedido || 'full body of a fierce ancient dark red dragon standing on four legs, wings folded tight against the body, long thick tail resting on the ground, horned head with jaws closed, detailed overlapping scales, three-quarter front view, plain light gray studio background, even soft lighting, realistic AAA game creature, highly detailed' }}
+          FORNALHA_TESTE_LARGURA: "896"
+          FORNALHA_TESTE_ALTURA: "640"
+          RUST_BACKTRACE: "1"
+        run: |
+          mkdir -p "$FORNALHA_TESTE_SAIDA"
+          ./target/debug/fornalha-cli comfyui abrir
+          cargo test -p fornalha-core --test comfyui_3d_real -- --nocapture
+      - name: Registro
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/comfyui-3d-saida"
+          cp "$FORNALHA_HOME/dados/comfyui/comfyui.log" "$FORNALHA_HOME/dados/comfyui/instalacao.log" "$RUNNER_TEMP/comfyui-3d-saida/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: comfyui-3d-dragao
+          path: ${{ runner.temp }}/comfyui-3d-saida

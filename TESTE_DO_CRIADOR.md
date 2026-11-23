@@ -103,8 +103,8 @@ Provado no CI (no processador, horas) e com vídeos aqui; falta provar no seu PC
    corpo inteiro com **Aceitar e fazer o 3D** e **Refazer**. Refazer gera outra; Aceitar faz a malha dessa.
 3. No fim: o personagem com esqueleto de jogo, a mesma captura de movimento do vídeo que você aprovou,
    a espada no punho (lâmina para a frente no andar) e, se tiver escudo, o parado de escudo erguido.
-   No nível **Máximo** (ou **Qualidade** numa placa com CUDA/ROCm) a cabeça sai por partes: recortada do
-   conceito, refinada em close e encaixada no corpo.
+   Numa placa com CUDA/ROCm, nos níveis Qualidade e Máximo, a cabeça sai por partes: recortada do
+   conceito, refinada em close e encaixada no corpo (no processador ela passaria de 6 h, então fica de fora).
 4. **Dragão:** Personagem com tipo **dragao**. Com o 3D pela IA instalado, ele sai pela IA com o esqueleto
    medido na malha (anda, voa, ruge, dá o bote); sem, sai da Forja de criaturas como antes.
 5. **APIs pagas (opcional):** Máquina → APIs de 3D: Meshy, Tripo ou Rodin, com a sua chave e o liga/desliga.

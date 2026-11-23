@@ -216,9 +216,12 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   liso, fundo de cada linha pelas bordas), refinada em close pelo Z-Image (imagem → imagem, denoise
   0,5: mesmo desenho, mais detalhe), vira malha própria no TRELLIS.2 e entra no lugar da cabeça do
   corpo antes do esqueleto (`fc_partes`: escala pela altura do recorte, posição pelo alto da cabeça,
-  corte no pescoço). Testado aqui com uma cabeça de escala trocada (a troca acerta sozinha); em prova
-  no CI "ComfyUI 3D (cabeça por partes)" com o conceito do templário da referência. create_character
-  usa nos níveis Qualidade e Máximo. A arma na malha da IA gira em volta do eixo da mão para a lâmina
+  corte no pescoço). Testado aqui com uma cabeça de escala trocada (a troca acerta sozinha). No CI
+  (processador): o recorte e o refino saíram certos (mesmo elmo, mais detalhe no metal, 54 min), mas a
+  malha da cabeça estourou as 5h50 do CI (a textura leva ~29 min por passo com a grade cheia). Por isso
+  create_character só faz a cabeça por partes com placa (CUDA/ROCm), nos níveis Qualidade e Máximo.
+  O pedido com "capuz por cima do elmo" foi reforçado e o motor de imagem ainda põe o capuz caído
+  atrás (limite do Z-Image com esse pedido). A arma na malha da IA gira em volta do eixo da mão para a lâmina
   apontar para a frente no parado e no andar.
   **Mais (23/11):** saia pela malha (a barra é achada onde o pano liga as pernas na frente; entre a
   barra e o quadril o pano fica no quadril e a parte de baixo segue as coxas/canelas aos poucos); o

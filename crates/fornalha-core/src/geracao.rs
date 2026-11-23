@@ -497,21 +497,9 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let conceito = arquivos.get("conceito").and_then(|v| v.as_str()).map(PathBuf::from);
     // criaturas (dragão…) têm esqueleto próprio: saem da Forja de criaturas, não do humano nem do TRELLIS.2
     let criatura = ficha["tipo"] == "dragao";
-    if criatura {
-        let cores = json!({"principal": ficha["cor_pele"].as_str().or(ficha["cor_roupa"].as_str()),
-                           "secundaria": ficha["cor_roupa_secundaria"]});
-        let tarefa = json!({"tarefa": "criatura", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20,
-                            "criatura": {"id": id, "tipo": "dragao", "altura": altura_do_tipo("dragao"), "cores": cores}});
-        let mut base = crate::pacotes::materiais_da_forja(&f.paths).unwrap_or(json!({}));
-        if let (Some(b), Some(t)) = (base.as_object_mut(), tarefa.as_object()) {
-            b.extend(t.clone());
-        }
-        r = forjar(f, &base).await?;
-        modelo_3d = "forja-criatura".into();
-    }
-    // 3D pela IA no ComfyUI (TRELLIS.2): conceito próprio de corpo inteiro → malha → esqueleto de jogo,
-    // captura de movimento e a arma na mão
-    if r.is_null() && !criatura && ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
+    // 3D pela IA no ComfyUI (TRELLIS.2) ou numa API ligada: conceito próprio de corpo inteiro → malha →
+    // esqueleto (de jogo com a captura de movimento e a arma na mão; no dragão, o do dragão da Fornalha)
+    if ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
         let disponivel = crate::apis::ligada_3d(&f.paths).is_some()
             || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
             || crate::comfyui::instalacao(&f.paths).is_some();
@@ -523,11 +511,19 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             if pronto {
                 if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
                     let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
-                    let tarefa = json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
-                                        "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
-                                        "esqueleto": "jogo", "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
-                                        "ceu": base["ceu"], "arma": ficha["arma"], "folha": true, "video": a.video.unwrap_or(false),
-                                        "amostras": 20});
+                    let tarefa = if criatura {
+                        // a altura do dragão da IA conta as asas abertas
+                        json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
+                               "altura_m": altura_do_tipo("dragao") * 1.25, "triangulos_max": 80000, "esqueleto": "dragao",
+                               "materiais": base["materiais"], "ceu": base["ceu"], "folha": true, "video": a.video.unwrap_or(false),
+                               "video_animacoes": ["voar", "rugir", "andar", "atacar"], "amostras": 20})
+                    } else {
+                        json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
+                               "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
+                               "esqueleto": "jogo", "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
+                               "ceu": base["ceu"], "arma": ficha["arma"], "escudo": ficha["escudo"].as_bool().unwrap_or(false),
+                               "folha": true, "video": a.video.unwrap_or(false), "amostras": 20})
+                    };
                     match forjar(f, &tarefa).await {
                         Ok(mut rr) => {
                             modelo_3d = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
@@ -540,6 +536,19 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                 }
             }
         }
+    }
+    // sem o 3D pela IA, o dragão sai da Forja de criaturas (esqueleto e malha procedurais)
+    if r.is_null() && criatura {
+        let cores = json!({"principal": ficha["cor_pele"].as_str().or(ficha["cor_roupa"].as_str()),
+                           "secundaria": ficha["cor_roupa_secundaria"]});
+        let tarefa = json!({"tarefa": "criatura", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20,
+                            "criatura": {"id": id, "tipo": "dragao", "altura": altura_do_tipo("dragao"), "cores": cores}});
+        let mut base = crate::pacotes::materiais_da_forja(&f.paths).unwrap_or(json!({}));
+        if let (Some(b), Some(t)) = (base.as_object_mut(), tarefa.as_object()) {
+            b.extend(t.clone());
+        }
+        r = forjar(f, &base).await?;
+        modelo_3d = "forja-criatura".into();
     }
     // TRELLIS.2 como worker próprio (NVIDIA), a partir da imagem de conceito
     if !r.is_null() || criatura {
@@ -663,6 +672,17 @@ fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
     } else {
         p.biblia.guia_visual.texto_de_estilo.clone()
     };
+    if ficha["tipo"] == "dragao" {
+        return format!(
+            "{estilo}. Corpo inteiro de um dragão em pé no chão, asas abertas, cauda longa apoiada no chão, cabeça com chifres \
+             e a boca fechada, escamas detalhadas, vista de três quartos de frente, fundo cinza claro liso, luz suave e \
+             uniforme. {}: {}. Cores {} e {}.",
+            ficha["nome"].as_str().unwrap_or(""),
+            ficha["descricao"].as_str().unwrap_or(""),
+            ficha["cor_pele"].as_str().or(ficha["cor_roupa"].as_str()).unwrap_or(""),
+            ficha["cor_roupa_secundaria"].as_str().unwrap_or(""),
+        );
+    }
     format!(
         "{estilo}. Foto de corpo inteiro de frente, em pé e reto, braços relaxados um pouco afastados do corpo, mãos \
          abertas e vazias, fundo cinza claro liso, luz suave e uniforme. {} ({}): {}. Roupa nas cores {} e {}. Armadura {}.",

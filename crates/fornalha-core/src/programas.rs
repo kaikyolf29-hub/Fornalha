@@ -30,6 +30,8 @@ pub struct Download {
     pub programa: Programa,
     pub versao: &'static str,
     pub url: &'static str,
+    /// espelhos oficiais com o mesmo arquivo (a soma é conferida igual), tentados se o principal recusar
+    pub espelhos: &'static [&'static str],
     pub arquivo: &'static str,
     pub soma: Soma,
     /// tamanho aproximado, para a janela
@@ -46,6 +48,10 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             programa,
             versao: BLENDER_VERSAO,
             url: "https://download.blender.org/release/Blender5.2/blender-5.2.4-windows-x64.zip",
+            espelhos: &[
+                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.4-windows-x64.zip",
+                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.2/blender-5.2.4-windows-x64.zip",
+            ],
             arquivo: "blender-5.2.4-windows-x64.zip",
             soma: Soma::Sha256("bbd78f8931dc940444da4ff2983374930f9f5c092ae0e330588e9760bb9d967c"),
             tamanho: "≈ 420 MB",
@@ -54,6 +60,10 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             programa,
             versao: BLENDER_VERSAO,
             url: "https://download.blender.org/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
+            espelhos: &[
+                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
+                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
+            ],
             arquivo: "blender-5.2.4-linux-x64.tar.xz",
             soma: Soma::Sha256("2fd14c50987426897ba60237ee996edf2b4151f4b1a72a460ca20be58c1d2d86"),
             tamanho: "≈ 380 MB",
@@ -62,6 +72,7 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             programa,
             versao: GODOT_VERSAO,
             url: "https://github.com/godotengine/godot/releases/download/4.6.1-stable/Godot_v4.6.1-stable_win64.exe.zip",
+            espelhos: &[],
             arquivo: "Godot_v4.6.1-stable_win64.exe.zip",
             soma: Soma::Sha512(
                 "67c63291115c66ebe7145415b5aac235e1667e417d6cd3d1975848670a1d31cbfad111c8231cb53195bb62e6e4fde951d97aaca227736a94f93dcbf8f23b1fbb",
@@ -72,6 +83,7 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             programa,
             versao: GODOT_VERSAO,
             url: "https://github.com/godotengine/godot/releases/download/4.6.1-stable/Godot_v4.6.1-stable_linux.x86_64.zip",
+            espelhos: &[],
             arquivo: "Godot_v4.6.1-stable_linux.x86_64.zip",
             soma: Soma::Sha512(
                 "a76fd0fe1d44a2dd6c065b6f7b434ad75f5593c07bda3d3017f8304f2d069acbcf0f39cb5d0976f0434b56e9ea852032ddbcbdb7e0ce1c75a47e1dacb6794bd7",
@@ -205,16 +217,27 @@ async fn instalar(paths: &Paths, d: &Download, base: &Path) -> Resultado<PathBuf
     registrar(paths, p, &format!("baixando {} {} ({})", p.nome(), d.versao, d.tamanho));
     let parte_s = parte.to_string_lossy().into_owned();
     let curl = do_sistema("curl");
-    let s = crate::externas::rodar(
-        &curl,
-        &["-fsSL", "--retry", "3", "--retry-delay", "5", "-o", &parte_s, d.url],
-        Duration::from_secs(60 * 60),
-        Some(base),
-    )
-    .await
-    .map_err(|e| Erro::novo("download_falhou", format!("Não consegui rodar o curl para baixar o {}: {}", p.nome(), e.mensagem)))?;
-    if !s.ok() || !parte.is_file() {
-        return Err(Erro::novo("download_falhou", format!("O download do {} falhou: {}", p.nome(), s.final_da_saida(5))));
+    // o site principal às vezes recusa (403) máquinas de nuvem: tenta os espelhos oficiais em sequência
+    let mut falhas = Vec::new();
+    for url in std::iter::once(d.url).chain(d.espelhos.iter().copied()) {
+        let _ = std::fs::remove_file(&parte);
+        let s = crate::externas::rodar(
+            &curl,
+            &["-fsSL", "--retry", "3", "--retry-delay", "5", "-o", &parte_s, url],
+            Duration::from_secs(60 * 60),
+            Some(base),
+        )
+        .await
+        .map_err(|e| Erro::novo("download_falhou", format!("Não consegui rodar o curl para baixar o {}: {}", p.nome(), e.mensagem)))?;
+        if s.ok() && parte.is_file() {
+            falhas.clear();
+            break;
+        }
+        registrar(paths, p, &format!("falhou em {url}; tentando o próximo endereço"));
+        falhas.push(format!("{}: {}", url, s.final_da_saida(2)));
+    }
+    if !falhas.is_empty() || !parte.is_file() {
+        return Err(Erro::novo("download_falhou", format!("O download do {} falhou: {}", p.nome(), falhas.join(" | "))));
     }
     registrar(paths, p, "conferindo a soma publicada");
     if let Err(e) = conferir(&parte, d.soma) {
@@ -348,7 +371,9 @@ mod testes {
         for w in [true, false] {
             for p in [Programa::Blender, Programa::Godot] {
                 let d = download(p, w).unwrap();
-                assert!(d.url.starts_with("https://") && d.url.ends_with(d.arquivo), "{d:?}");
+                for u in std::iter::once(d.url).chain(d.espelhos.iter().copied()) {
+                    assert!(u.starts_with("https://") && u.ends_with(d.arquivo), "{d:?}");
+                }
                 match d.soma {
                     Soma::Sha256(h) => assert_eq!(h.len(), 64),
                     Soma::Sha512(h) => assert_eq!(h.len(), 128),

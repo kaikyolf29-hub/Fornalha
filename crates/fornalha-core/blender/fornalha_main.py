@@ -341,6 +341,8 @@ def tarefa_rig(t):
     info = limpar_malha(m, t)
     if t.get("esqueleto") == "jogo":
         return _rig_de_jogo(t, m, info)
+    if t.get("esqueleto") == "dragao":
+        return _rig_de_dragao(t, m, info)
     mn, mx = c.caixa_envolvente([m])
     H = mx.z - mn.z
     porte = max(0.7, min(1.4, ((mx.x - mn.x) / H) / 0.9)) if H > 0 else 1.0
@@ -390,6 +392,12 @@ def _rig_de_jogo(t, m, info):
             o = fc_armas.criar_arma({"tipo": arma, "id": f"{nome}_{arma}", "escala": 1.0})
         fc_armas_pbr.prender_na_mao(o, arm, "r")
         objs.append(o)
+    if t.get("escudo"):
+        import fc_armas_pbr
+
+        e = fc_armas_pbr.escudo_pipa(nome)
+        fc_armas_pbr.prender_na_mao(e, arm, "l", escudo=True)
+        objs.append(e)
     saida = t["saida"]
     tamanho = c.exportar_glb(saida, [arm] + objs, animacoes=bool(acoes))
     arquivos = {"modelo": saida}
@@ -398,6 +406,29 @@ def _rig_de_jogo(t, m, info):
     st.update(info)
     st.update(info_rig)
     st["pecas"] = [o.name for o in objs]
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
+def _rig_de_dragao(t, m, info):
+    """Malha de dragão da IA com o esqueleto e as animações do dragão da Fornalha (asas, pescoço, cauda)."""
+    import fc_rig_criatura
+
+    nome = t.get("nome", "dragao")
+    arm, acoes, info_rig = fc_rig_criatura.rigar(m, nome, float(t.get("altura_m") or 5.0))
+    pedidas = t.get("animacoes")
+    if pedidas:
+        fora = [a for a in acoes if a.name not in pedidas]
+        acoes = [a for a in acoes if a.name in pedidas]
+        arm.animation_data.action = acoes[0] if acoes else None
+        for a in fora:
+            bpy.data.actions.remove(a)
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, [arm, m], animacoes=bool(acoes))
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, [m], saida, arm if acoes else None, acoes))
+    st = estatisticas([m], arm, acoes)
+    st.update(info)
+    st.update(info_rig)
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 

@@ -200,10 +200,19 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   instalado e aceito (ou a API da Meshy ligada). Olhos e pálpebras do rig do MakeHuman no humano
   (piscar e olhar testados no render) e o modificador "Rosto" na Godot (piscar, olhadas, boca pela
   curva da fala). API da Meshy pronta (desligada por padrão; chave e liga/desliga na janela; teste com
-  servidor falso). Em prova no CI: o templário da referência do criador (capuz, elmo, cota, cruz preta,
-  cintos vermelhos, uma ombreira, capa longa).
-  Próximo: templário da referência com esqueleto e vídeo, cabeça em close (por partes), saia,
-  Tripo/Rodin, criaturas pela IA, mapa.
+  servidor falso). **Provado (23/11, CI no processador):** o templário da referência do criador
+  (conceito pelo motor de imagem → TRELLIS.2 em 3,4 h: elmo, cota, cruz preta na frente e na barra,
+  cintos vermelhos, ombreiras, capa longa, espada na bainha) e o dragão (1,4 h: serpe vermelha de asas
+  abertas, chifres, cauda enrolada). Os dois ganham esqueleto aqui (vídeos em render): o templário com o
+  esqueleto de jogo e a captura do humano; o dragão com `fc_rig_criatura` (pés pela fatia do chão,
+  raiz da asa onde a membrana encosta no corpo, pulso no topo da asa, dedos nos picos mais longe do
+  pulso, focinho, topo do crânio, cauda pelas fatias de baixo; serpe ou quadrúpede detectado pelos
+  pés; pesos por regiões) e as animações do dragão da Fornalha (bater de asas centrado na pose da
+  malha). create_character faz o dragão pela IA quando o 3D pela IA está pronto; senão, a Forja de
+  criaturas. Tripo e Rodin prontas como a Meshy. O download do Blender tenta os espelhos oficiais
+  (Berkeley, NLUUG) quando o site principal recusa a máquina de nuvem (403 no CI de 23/11); a soma
+  SHA-256 é conferida igual.
+  Próximo: cabeça em close (por partes), saia ao andar, pegada de duas mãos, mais criaturas, mapa.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

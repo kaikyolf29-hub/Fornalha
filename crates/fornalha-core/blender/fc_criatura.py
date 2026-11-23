@@ -626,12 +626,18 @@ def pose_apontada(arm, alvos):
     return resultado
 
 
-def asas_fechadas(arm, S=1.0):
+def asas_fechadas(arm, S=1.0, dragao=None):
     """Asas recolhidas como as de um morcego: cotovelo para trás e para baixo, pulso à frente perto do
-    ombro, dedos deitados para trás ao longo do corpo."""
+    ombro, dedos deitados para trás ao longo do corpo. Com `dragao` (esqueleto medido numa malha de fora),
+    os alvos saem da raiz da asa dele, na escala do comprimento da asa."""
     alvos = []
     for lado, s in (("l", 1), ("r", -1)):
         P = lambda x, y, z: Vector((s * x * S, y * S, z * S))  # noqa: E731
+        if dragao is not None:
+            a = dragao.asa[lado]
+            raiz_modelo = Vector((s * 0.42, -0.75, 2.25))
+            k = ((a["cotovelo"] - a["raiz"]).length + (a["pulso"] - a["cotovelo"]).length) / 4.1
+            P = lambda x, y, z, a=a, r=raiz_modelo, k=k, s=s: a["raiz"] + (Vector((s * x, y, z)) - r) * k  # noqa: E731
         alvos += [
             (f"asa_umero_{lado}", P(1.05, 0.75, 2.45)),
             (f"asa_antebraco_{lado}", P(0.95, -0.85, 2.75)),
@@ -671,10 +677,13 @@ def juntar(*partes):
 
 
 class AnimadorDragao:
-    def __init__(self, arm, escala):
+    def __init__(self, arm, escala, dragao=None, abrir_base=0.0):
         self.arm = arm
         self.S = escala
         self.acoes = []
+        # malha de fora: alvos das asas recolhidas pelo esqueleto medido e o bater centrado na pose dela
+        self.dragao = dragao
+        self.abrir_base = abrir_base
 
     def acao(self, nome, quadros, chaves, laco=True):
         """chaves: (quadro, poses, deslocamento do quadril em m (x, y, z))."""
@@ -711,7 +720,8 @@ class AnimadorDragao:
 
     def tudo(self):
         A = self.acao
-        fech = asas_fechadas(self.arm, self.S)
+        fech = asas_fechadas(self.arm, self.S, self.dragao)
+        b = self.abrir_base
         # parado: respira, cauda balança devagar, asas recolhidas
         A("parado", 90, [(1, juntar(fech, cauda(10, 6, 0), pescoco(0)), (0, 0, 0)),
                          (46, juntar(fech, cauda(-8, 6, math.pi), pescoco(5), {"coluna_3": [("X", 1.5)]}), (0, 0, 0.03)),
@@ -731,14 +741,14 @@ class AnimadorDragao:
             s = math.sin(fase)
             asas = {}
             for lado in ("l", "r"):
-                asas.update(asa(lado, abrir=38 * s, varrer=-5, dobrar=18 * max(0.0, -s), dedos=-6 * s))
+                asas.update(asa(lado, abrir=b + 38 * s, varrer=-5, dobrar=18 * max(0.0, -s), dedos=-6 * s))
             return juntar(asas, pata("", -35, 60, "l", True), pata("", -35, 60, "r", True), pata("", -20, 70, "l", False),
                           pata("", -20, 70, "r", False), cauda(0, 8, fase, subir=10), pescoco(-10), {"coluna_3": [("X", 4 * s)]})
         A("voar", 30, [(1 + k * 5, voo(k * math.pi / 3), (0, 0, 0.6 + 0.12 * math.sin(k * math.pi / 3 + 1.0))) for k in range(7)])
         # rugir: ergue o pescoço, abre a boca e as asas
         abre = {}
         for lado in ("l", "r"):
-            abre.update(asa(lado, abrir=25, varrer=-10, dobrar=10, dedos=-5))
+            abre.update(asa(lado, abrir=b + 25, varrer=-10, dobrar=10, dedos=-5))
         A("rugir", 60, [(1, juntar(fech, pescoco(0)), (0, 0, 0)), (14, juntar(abre, pescoco(30), {"cabeca": [("X", -20)], "jaw": [("X", 30)]}, cauda(0, 0, 0, subir=8)),
                         (0, 0.1, 0.1)), (44, juntar(abre, pescoco(26, 6), {"cabeca": [("X", -16)], "jaw": [("X", 34)]}), (0, 0.1, 0.1)),
                         (61, juntar(fech, pescoco(0)), (0, 0, 0))], laco=False)

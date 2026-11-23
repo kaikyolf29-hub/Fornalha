@@ -662,6 +662,26 @@
       "uso_comercial": "sim"
     },
     {
+      "id": "tripo-pago",
+      "nome": "Tripo (plano pago, API)",
+      "funcao": "3d",
+      "onde": "api",
+      "licenca": "Termos da Tripo (plano pago)",
+      "url_licenca": "https://developers.tripo3d.ai/en/terms",
+      "uso_comercial": "sim",
+      "nota": "Termos de 11/07/2025, seção 5.2.2: no plano pago os direitos sobre entradas e saídas são do usuário e a Tripo não usa para treinar; no grátis (5.2.1) a Tripo fica com os direitos. Por isso, só o plano pago."
+    },
+    {
+      "id": "rodin-pago",
+      "nome": "Rodin / Hyper3D (plano pago, API)",
+      "funcao": "3d",
+      "onde": "api",
+      "licenca": "Termos da Hyper3D (plano pago)",
+      "url_licenca": "https://hyper3d.ai/legal/terms",
+      "uso_comercial": "sim",
+      "nota": "Termos, seção 5(b): a Hyper3D não limita o uso da saída; a tabela de planos dá exportação e uso livres nos planos pagos (no grátis, não). A política de retenção da API diz que entradas e saídas não são usadas para treinar."
+    },
+    {
       "id": "mixamo",
       "nome": "Mixamo",
       "funcao": "animacao",

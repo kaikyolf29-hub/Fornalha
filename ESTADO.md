@@ -192,8 +192,18 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   Fornalha converte os fluxos oficiais do ComfyUI (formato da interface) para o formato da API com a
   lista de nós do próprio ComfyUI (`comfyui_ui.rs`). Página ao vivo do que falta:
   https://claude.ai/artifact/MGUnTUeKzEvVzYp5TJDLFY.
-  Próximo: 3D pela IA no CI (TRELLIS.2 no processador), vídeo de movimento com a pegada certa nas
-  armas, depois cabelo, olhos/expressões e criaturas pela IA.
+  **Provado (23/11):** o TRELLIS.2 no processador do CI gerou o templário (200 mil triângulos com
+  textura) em 2,5 h, muito parecido com o conceito; a malha recebe o esqueleto de jogo (`fc_rig_ia`:
+  juntas pelas proporções medidas na malha, pernas pelos pés, pesos por regiões — mão só no braço,
+  capa e saia no quadril com mistura gradual) e a mesma captura de movimento do humano (o criador
+  aprovou o vídeo de movimento). create_character usa esse caminho quando o 3D pela IA está
+  instalado e aceito (ou a API da Meshy ligada). Olhos e pálpebras do rig do MakeHuman no humano
+  (piscar e olhar testados no render) e o modificador "Rosto" na Godot (piscar, olhadas, boca pela
+  curva da fala). API da Meshy pronta (desligada por padrão; chave e liga/desliga na janela; teste com
+  servidor falso). Em prova no CI: o templário da referência do criador (capuz, elmo, cota, cruz preta,
+  cintos vermelhos, uma ombreira, capa longa).
+  Próximo: templário da referência com esqueleto e vídeo, cabeça em close (por partes), saia,
+  Tripo/Rodin, criaturas pela IA, mapa.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

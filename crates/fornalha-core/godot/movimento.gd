@@ -110,6 +110,80 @@ class AlinhaPes extends SkeletonModifier3D:
 			mov._depois_do_ik(get_skeleton())
 
 
+class Rosto extends SkeletonModifier3D:
+	## Piscar (pálpebras), olhadas rápidas (olhos) e a boca seguindo a curva da fala (mandíbula), com os
+	## ossos que a Fornalha põe no humano (eye_l/r, eyelid_upper_l/r, eyelid_lower_l/r, jaw).
+	var olhos: Array[int] = []
+	var cima: Array[int] = []
+	var baixo: Array[int] = []
+	var jaw := -1
+	var eixo_x := Vector3.RIGHT   # eixo X do modelo no espaço do esqueleto
+	var eixo_y := Vector3.UP
+	var _piscar := 0.0
+	var _fase := -1.0
+	var _ate_piscar := 2.0
+	var _olho := Vector2.ZERO
+	var _alvo := Vector2.ZERO
+	var _ate_olhar := 1.0
+	var _curva: Array = []
+	var _qps := 30.0
+	var _t_fala := -1.0
+
+	## Abre e fecha a boca pela curva (0 a 1 por quadro) do arquivo .boca.json da fala.
+	func falar(curva: Array, quadros_por_segundo := 30.0) -> void:
+		_curva = curva
+		_qps = maxf(quadros_por_segundo, 1.0)
+		_t_fala = 0.0
+
+	func _process_modification_with_delta(dt: float) -> void:
+		var sk := get_skeleton()
+		if sk == null:
+			return
+		# piscar: fecha em 70 ms, segura 50 ms, abre em 120 ms; a cada 2,5–6 s
+		_ate_piscar -= dt
+		if _ate_piscar <= 0.0 and _fase < 0.0:
+			_fase = 0.0
+			_ate_piscar = randf_range(2.5, 6.0)
+		if _fase >= 0.0:
+			_fase += dt
+			if _fase < 0.07:
+				_piscar = _fase / 0.07
+			elif _fase < 0.12:
+				_piscar = 1.0
+			elif _fase < 0.24:
+				_piscar = 1.0 - (_fase - 0.12) / 0.12
+			else:
+				_piscar = 0.0
+				_fase = -1.0
+		# olhadas rápidas (sacadas) para pontos perto do centro
+		_ate_olhar -= dt
+		if _ate_olhar <= 0.0:
+			_alvo = Vector2(randf_range(-9.0, 9.0), randf_range(-4.0, 3.0))
+			_ate_olhar = randf_range(0.8, 2.6)
+		_olho = _olho.lerp(_alvo, clampf(dt * 22.0, 0.0, 1.0))
+		for i in cima:
+			_girar(sk, i, eixo_x, deg_to_rad(30.0 * _piscar))
+		for i in baixo:
+			_girar(sk, i, eixo_x, deg_to_rad(-8.0 * _piscar))
+		for i in olhos:
+			_girar(sk, i, eixo_y, deg_to_rad(_olho.x))
+			_girar(sk, i, eixo_x, deg_to_rad(-_olho.y))
+		if jaw >= 0 and _t_fala >= 0.0:
+			_t_fala += dt
+			var q := int(_t_fala * _qps)
+			if q >= _curva.size():
+				_t_fala = -1.0
+			else:
+				_girar(sk, jaw, eixo_x, deg_to_rad(20.0 * clampf(float(_curva[q]), 0.0, 1.0)))
+
+	func _girar(sk: Skeleton3D, i: int, eixo: Vector3, ang: float) -> void:
+		if absf(ang) < 1e-5:
+			return
+		var g := sk.get_bone_global_pose(i)
+		g.basis = Basis(eixo.normalized(), ang) * g.basis
+		sk.set_bone_global_pose(i, g)
+
+
 ## Cria o movimento de um personagem (filho do corpo). Devolve null se o modelo não tiver o que precisa.
 static func criar(corpo_: CharacterBody3D, modelo_: Node3D, anim_: AnimationPlayer) -> Node:
 	if corpo_ == null or modelo_ == null or anim_ == null:
@@ -151,6 +225,7 @@ func preparar(corpo_: CharacterBody3D, modelo_: Node3D, anim_: AnimationPlayer) 
 	_criar_arvore()
 	_criar_pes()
 	_criar_olhar()
+	_criar_rosto()
 	esqueleto.skeleton_updated.connect(_esqueleto_atualizado)
 	ativo = true
 	add_to_group("movimento_fornalha")
@@ -866,6 +941,30 @@ func _criar_olhar() -> void:
 		la.active = false
 		_olhar.append(la)
 		_olhar_base.append(c[3])
+
+
+var rosto: Rosto
+
+
+func _criar_rosto() -> void:
+	if esqueleto.find_bone("eyelid_upper_l") < 0:
+		return
+	var sk_para_modelo := (modelo.global_transform.affine_inverse() * esqueleto.global_transform).basis.orthonormalized()
+	rosto = Rosto.new()
+	rosto.name = "Rosto"
+	rosto.eixo_x = sk_para_modelo.inverse() * Vector3(1, 0, 0)
+	rosto.eixo_y = sk_para_modelo.inverse() * Vector3(0, 1, 0)
+	for n in ["eye_l", "eye_r"]:
+		if esqueleto.find_bone(n) >= 0:
+			rosto.olhos.append(esqueleto.find_bone(n))
+	for n in ["eyelid_upper_l", "eyelid_upper_r"]:
+		if esqueleto.find_bone(n) >= 0:
+			rosto.cima.append(esqueleto.find_bone(n))
+	for n in ["eyelid_lower_l", "eyelid_lower_r"]:
+		if esqueleto.find_bone(n) >= 0:
+			rosto.baixo.append(esqueleto.find_bone(n))
+	rosto.jaw = esqueleto.find_bone("jaw")
+	esqueleto.add_child(rosto)
 
 
 ## Para onde olhar (ponto no mundo) e com quanta vontade (0 a 1). Chame a cada quadro.

@@ -77,6 +77,14 @@ func falar(personagem: String, arquivo: String) -> AudioStreamPlayer3D:
 		add_child(p)
 	p.play()
 	p.finished.connect(p.queue_free)
+	# a boca acompanha a fala (curva gravada pela Fornalha ao lado do .wav)
+	if dono:
+		var arq_boca := caminho.get_basename() + ".boca.json"
+		var mov := dono.get_node_or_null("Movimento")
+		if mov and mov.get("rosto") and FileAccess.file_exists(arq_boca):
+			var dados = JSON.parse_string(FileAccess.get_file_as_string(arq_boca))
+			if dados is Dictionary and dados.has("abertura"):
+				mov.rosto.falar(dados["abertura"], float(dados.get("quadros_por_segundo", 30)))
 	return p
 
 

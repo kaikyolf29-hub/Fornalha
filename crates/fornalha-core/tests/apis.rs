@@ -41,6 +41,43 @@ async fn consultar(State(v): State<Estado>, Path(id): Path<String>) -> Json<Valu
                 "model_urls": {"glb": format!("http://127.0.0.1:{}/arquivo/modelo.glb", g.porta)}}))
 }
 
+async fn tripo_arquivo(body: axum::body::Bytes) -> Json<Value> {
+    assert!(String::from_utf8_lossy(&body).contains("name=\"file\"; filename="), "upload multipart com o campo file");
+    Json(json!({"code": 0, "data": {"file_token": "arq-1"}}))
+}
+
+async fn tripo_criar(h: HeaderMap, Json(corpo): Json<Value>) -> Json<Value> {
+    assert_eq!(h.get("authorization").unwrap(), "Bearer chave-tripo");
+    assert_eq!(corpo["input"], "arq-1");
+    assert_eq!(corpo["pbr"], true);
+    Json(json!({"code": 0, "data": {"task_id": "t-2"}}))
+}
+
+async fn tripo_tarefa(State(v): State<Estado>) -> Json<Value> {
+    let porta = v.lock().unwrap().porta;
+    Json(json!({"code": 0, "data": {"status": "success", "credits_consumed": 30,
+                                      "output": {"model_url": format!("http://127.0.0.1:{porta}/arquivo/modelo.glb")}}}))
+}
+
+async fn rodin_criar(body: axum::body::Bytes) -> Json<Value> {
+    let t = String::from_utf8_lossy(&body);
+    assert!(t.contains("name=\"images\"; filename=") && t.contains("Gen-2.5"), "multipart com images e tier");
+    Json(json!({"message": "Submitted.", "uuid": "u-3", "jobs": {"uuids": ["j"], "subscription_key": "k-3"}, "consumed": 0.5}))
+}
+
+async fn rodin_status(Json(corpo): Json<Value>) -> Json<Value> {
+    assert_eq!(corpo["subscription_key"], "k-3");
+    Json(json!({"jobs": [{"uuid": "j", "status": "Done"}]}))
+}
+
+async fn rodin_baixar(State(v): State<Estado>, Json(corpo): Json<Value>) -> Json<Value> {
+    assert_eq!(corpo["task_uuid"], "u-3");
+    let porta = v.lock().unwrap().porta;
+    Json(
+        json!({"list": [{"name": "preview.webp", "url": "x"}, {"name": "model.glb", "url": format!("http://127.0.0.1:{porta}/arquivo/modelo.glb")}]}),
+    )
+}
+
 async fn arquivo() -> Vec<u8> {
     let mut b = b"glTF".to_vec();
     b.extend(std::iter::repeat_n(0u8, 2000));
@@ -48,7 +85,7 @@ async fn arquivo() -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn meshy_gera_o_glb_com_a_chave_no_cabecalho() {
+async fn apis_de_3d_geram_o_glb_com_a_chave_no_cabecalho() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = Paths::under(tmp.path());
     if fornalha_core::workers::python_para(&paths).await.is_none() {
@@ -60,6 +97,12 @@ async fn meshy_gera_o_glb_com_a_chave_no_cabecalho() {
         .route("/openapi/v1/image-to-3d", post(criar))
         .route("/openapi/v1/image-to-3d/{id}", get(consultar))
         .route("/arquivo/modelo.glb", get(arquivo))
+        .route("/v3/files", post(tripo_arquivo))
+        .route("/v3/generation/image-to-model", post(tripo_criar))
+        .route("/v3/tasks/{id}", get(tripo_tarefa))
+        .route("/api/v2/rodin", post(rodin_criar))
+        .route("/api/v2/status", post(rodin_status))
+        .route("/api/v2/download", post(rodin_baixar))
         .with_state(visto.clone());
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let porta = l.local_addr().unwrap().port();
@@ -75,8 +118,21 @@ async fn meshy_gera_o_glb_com_a_chave_no_cabecalho() {
     let r = apis::gerar_3d(&paths, p, &img, &saida, &json!({"intervalo": 0.1})).await.unwrap();
     assert_eq!(r["creditos"], 30);
     assert_eq!(&std::fs::read(&saida).unwrap()[0..4], b"glTF");
-    let g = visto.lock().unwrap();
-    assert_eq!(g.chave, "Bearer chave-teste");
-    assert!(g.imagem_ok, "a imagem vai como data URI");
-    assert_eq!(g.pose, "a-pose", "pose A para o esqueleto encaixar");
+    {
+        let g = visto.lock().unwrap();
+        assert_eq!(g.chave, "Bearer chave-teste");
+        assert!(g.imagem_ok, "a imagem vai como data URI");
+        assert_eq!(g.pose, "a-pose", "pose A para o esqueleto encaixar");
+    }
+    // Tripo e Rodin pelo mesmo caminho (o mesmo servidor falso responde as três APIs)
+    apis::definir(&paths, "meshy", Some(false), None).unwrap();
+    for (id, chave) in [("tripo", "chave-tripo"), ("rodin", "chave-rodin")] {
+        apis::definir(&paths, id, Some(true), Some(chave.into())).unwrap();
+        let p = apis::provedor(id).unwrap();
+        let saida = tmp.path().join(format!("{id}.glb"));
+        let r = apis::gerar_3d(&paths, p, &img, &saida, &json!({"intervalo": 0.1})).await.unwrap();
+        assert_eq!(r["provedor"], id);
+        assert_eq!(&std::fs::read(&saida).unwrap()[0..4], b"glTF", "{id}");
+        apis::definir(&paths, id, Some(false), None).unwrap();
+    }
 }

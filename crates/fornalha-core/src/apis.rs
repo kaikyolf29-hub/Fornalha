@@ -27,16 +27,38 @@ pub struct Provedor {
     pub pronto: bool,
 }
 
-pub const PROVEDORES_3D: [Provedor; 1] = [Provedor {
-    id: "meshy",
-    nome: "Meshy (imagem → 3D)",
-    modelo: "meshy-pago",
-    preco: "30 créditos por modelo com textura 2K (Meshy 7.1, tabela de preços da API da Meshy em 23/11/2026). A API exige plano pago.",
-    licenca: "Termos da Meshy (plano pago): uso comercial do modelo gerado. Confira os termos antes de ligar.",
-    url_licenca: "https://www.meshy.ai/",
-    url_chave: "https://www.meshy.ai/settings/api",
-    pronto: true,
-}];
+pub const PROVEDORES_3D: [Provedor; 3] = [
+    Provedor {
+        id: "meshy",
+        nome: "Meshy (imagem → 3D)",
+        modelo: "meshy-pago",
+        preco: "30 créditos por modelo com textura 2K (Meshy 7.1; tabela de preços da API da Meshy em 23/11/2026). A API exige plano pago.",
+        licenca: "Termos da Meshy (plano pago): uso comercial do modelo gerado. Confira os termos antes de ligar.",
+        url_licenca: "https://www.meshy.ai/",
+        url_chave: "https://www.meshy.ai/settings/api",
+        pronto: true,
+    },
+    Provedor {
+        id: "tripo",
+        nome: "Tripo (imagem → 3D)",
+        modelo: "tripo-pago",
+        preco: "30 créditos (US$ 0,30) por modelo com textura padrão (v3.1; tabela da API da Tripo em 23/11/2026). Créditos de tarefa que falhar voltam.",
+        licenca: "Termos da Tripo: no plano pago os direitos sobre o modelo são seus (uso comercial); no grátis a Tripo fica com os direitos. Use só com plano pago.",
+        url_licenca: "https://developers.tripo3d.ai/en/terms",
+        url_chave: "https://developers.tripo3d.ai/en/keys",
+        pronto: true,
+    },
+    Provedor {
+        id: "rodin",
+        nome: "Rodin / Hyper3D (imagem → 3D)",
+        modelo: "rodin-pago",
+        preco: "0,5 crédito por geração Gen-2.5 (mais 0,5 no nível mais alto; tabela da Hyper3D em 23/11/2026). Planos a partir de US$ 24/mês.",
+        licenca: "Termos da Hyper3D: no plano pago a exportação e o uso são livres; no grátis não. Use só com plano pago.",
+        url_licenca: "https://hyper3d.ai/legal/terms",
+        url_chave: "https://hyper3d.ai/workspace/api-dashboard",
+        pronto: true,
+    },
+];
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]

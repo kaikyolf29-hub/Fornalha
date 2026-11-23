@@ -60,6 +60,9 @@ License 1.1 (texto em `app/ui/fontes/OFL-Archivo.txt`).
   fixa master-1045-6225bf8 conferida pelo SHA-256, com ggml MIT, libwebp e libwebm BSD), chamado
   pela linha de comando nas placas sem CUDA nem ROCm. Os modelos (Z-Image Turbo, Qwen3-4B e o VAE
   ae, Apache 2.0) estão em `manifest/modelos.json`.
+- **APIs pagas de 3D** (opcionais, desligadas por padrão): a Meshy (imagem → 3D) só quando a pessoa liga
+  e põe a chave em Máquina → APIs de 3D, vendo o preço (créditos por modelo) e os termos antes. A chave
+  fica só no computador da pessoa (`dados/chaves_api.json`) e quem fala com o serviço é o script à parte.
 - **3D pela IA no ComfyUI** (opcional, depois do aceite): TRELLIS.2 (MIT, arquivos de Comfy-Org/TRELLIS.2),
   codificador DINOv3 (DINOv3 License da Meta — uso comercial permitido; proibido para fins militares,
   armas reais, espionagem e para quem está sob sanções; o aceite é da pessoa, pela janela) e BiRefNet

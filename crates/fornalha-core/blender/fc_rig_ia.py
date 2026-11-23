@@ -57,7 +57,10 @@ def medir(obj):
     maos = {}
     for lado, s in (("l", 1.0), ("r", -1.0)):
         f = faixa(0.38, 0.62)
-        f = f[f[:, 0] * s > 0.08 * H]
+        # só a metade da frente: a capa pendurada atrás pode ser mais larga que as mãos
+        cab = faixa(0.88, 0.97)
+        y_meio = (float(cab[:, 1].min()) + float(cab[:, 1].max())) / 2 if len(cab) else 0.0
+        f = f[(f[:, 0] * s > 0.08 * H) & (f[:, 1] < y_meio + 0.04 * H)]
         if len(f):
             ext = f[np.argmax(f[:, 0] * s)]
             perto = f[np.abs(f[:, 0] - ext[0]) < 0.035 * H]
@@ -69,8 +72,23 @@ def medir(obj):
     largura = float(np.percentile(np.abs(f[:, 0]), 90)) if len(f) else 0.13 * H
     ombro_x = float(np.clip(largura * 0.78, 0.085 * H, 0.13 * H))
     p = {}
-    yc = {k: centro_y(a, b) for k, a, b in (("pelvis", 0.5, 0.56), ("s1", 0.56, 0.62), ("s2", 0.63, 0.69),
-                                            ("s3", 0.7, 0.76), ("pescoco", 0.84, 0.87), ("cabeca", 0.88, 0.96))}
+    # profundidade (y) das pernas pelos pés, que aparecem embaixo da roupa; a da cabeça pelo elmo/rosto
+    # (compacto, sem capa). A média de uma fatia do tronco puxa para a frente da sobreveste ou para a capa.
+    pes = {}
+    for lado, s in (("l", 1.0), ("r", -1.0)):
+        f = faixa(0.0, 0.07)
+        f = f[f[:, 0] * s > 0.01 * H]
+        if len(f):
+            pes[lado] = (float(np.median(f[:, 0])), float(f[:, 1].min()), float(f[:, 1].max()))
+        else:
+            pes[lado] = (s * 0.06 * H, -0.06 * H, 0.06 * H)
+    f = faixa(0.88, 0.97)
+    cab_y = (float(f[:, 1].min()) + float(f[:, 1].max())) / 2 if len(f) else 0.0
+    # tornozelo um pouco para trás do meio do pé (o calcanhar fica atrás)
+    tornozelo_y = float(np.mean([(pes[k][1] + pes[k][2]) / 2 + 0.2 * (pes[k][2] - pes[k][1]) for k in ("l", "r")]))
+    quadril_y = tornozelo_y + 0.004 * H
+    yc = {"pelvis": quadril_y, "s1": quadril_y + 0.002 * H, "s2": (2 * quadril_y + cab_y) / 3, "s3": (quadril_y + 2 * cab_y) / 3,
+          "pescoco": cab_y + 0.01 * H, "cabeca": cab_y}
     p["pelvis"] = ((0, yc["pelvis"], 0.53 * H), (0, yc["s1"], 0.585 * H))
     p["spine_01"] = (p["pelvis"][1], (0, yc["s2"], 0.65 * H))
     p["spine_02"] = (p["spine_01"][1], (0, yc["s3"], 0.72 * H))
@@ -87,11 +105,13 @@ def medir(obj):
         p[f"upperarm_{lado}"] = (tuple(ombro), tuple(cot))
         p[f"lowerarm_{lado}"] = (tuple(cot), tuple(mao))
         p[f"hand_{lado}"] = (tuple(mao), tuple(mao + dir_mao * 0.055 * H))
-        quadril = (s * 0.055 * H, yc["pelvis"], 0.5 * H)
-        joelho = (s * 0.052 * H, yc["pelvis"] - 0.012 * H, 0.275 * H)
-        tornozelo = (s * 0.055 * H, yc["pelvis"] + 0.01 * H, 0.045 * H)
-        bola = (s * 0.058 * H, yc["pelvis"] - 0.065 * H, 0.012 * H)
-        ponta = (s * 0.06 * H, yc["pelvis"] - 0.11 * H, 0.012 * H)
+        px, ymin, ymax = pes[lado]
+        tor_y = (ymin + ymax) / 2 + 0.2 * (ymax - ymin)
+        quadril = (s * 0.055 * H, quadril_y, 0.5 * H)
+        joelho = (float(np.clip(px, s * 0.04 * H, s * 0.07 * H) if s > 0 else np.clip(px, s * 0.07 * H, s * 0.04 * H)), tor_y - 0.012 * H, 0.275 * H)
+        tornozelo = (px, tor_y, 0.045 * H)
+        bola = (px, ymin + 0.3 * (ymax - ymin), 0.012 * H)
+        ponta = (px, ymin, 0.012 * H)
         p[f"thigh_{lado}"] = (quadril, joelho)
         p[f"calf_{lado}"] = (joelho, tornozelo)
         p[f"foot_{lado}"] = (tornozelo, bola)
@@ -122,6 +142,94 @@ def criar_esqueleto(nome, pontos):
     return arm
 
 
+def _seg(co, a, b):
+    ab = b - a
+    t = np.clip(((co - a) @ ab) / max(float(ab @ ab), 1e-12), 0.0, 1.0)
+    return np.linalg.norm(co - (a + t[:, None] * ab), axis=1)
+
+
+def pesos_por_regioes(obj, arm, H):
+    """Pesos pela distância aos ossos, mas cada região só nos ossos que fazem sentido: a mão e o
+    antebraço só pegam o que está perto do braço (a mão da malha não fica para trás do osso, e a arma
+    acompanha); as pernas só o que está perto da perna; a capa e a saia (longe das pernas, abaixo da
+    cintura) ficam no quadril, para não dobrarem junto com as pernas."""
+    co = _vertices(obj)
+    mw = arm.matrix_world
+    ossos = [b for b in arm.data.bones]
+    nomes = [b.name for b in ossos]
+    seg = {b.name: (np.array(mw @ b.head_local), np.array(mw @ b.tail_local)) for b in ossos}
+    D = np.stack([_seg(co, *seg[n]) for n in nomes], axis=1)
+    idx = {n: i for i, n in enumerate(nomes)}
+    valido = np.ones_like(D, dtype=bool)
+    braco = {lado: [f"upperarm_{lado}", f"lowerarm_{lado}", f"hand_{lado}"] for lado in "lr"}
+    perna = {lado: [f"thigh_{lado}", f"calf_{lado}", f"foot_{lado}", f"ball_{lado}"] for lado in "lr"}
+    tronco = ["pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head", "clavicle_l", "clavicle_r"]
+    d_tronco = D[:, [idx[n] for n in tronco]].min(1)
+    for lado in "lr":
+        d_braco = D[:, [idx[n] for n in braco[lado]]].min(1)
+        no_braco = (d_braco < 0.075 * H) & (d_braco < d_tronco + 0.01 * H)
+        for n in braco[lado]:
+            valido[:, idx[n]] = no_braco
+        d_perna = D[:, [idx[n] for n in perna[lado]]].min(1)
+        na_perna = (d_perna < 0.07 * H) & ~no_braco
+        for n in perna[lado]:
+            valido[:, idx[n]] = na_perna
+    # capa e saia: abaixo da cintura e longe das duas pernas → só quadril (e um pouco de spine_01);
+    # perto da perna a mistura é gradual (sem "rasgo" entre o que segue a perna e o que fica no quadril)
+    d_pernas = np.minimum(D[:, [idx[n] for n in perna["l"]]].min(1), D[:, [idx[n] for n in perna["r"]]].min(1))
+    baixo = co[:, 2] < 0.56 * H
+    pano = baixo & (d_pernas >= 0.07 * H)
+    for n in nomes:
+        if n not in ("pelvis", "spine_01"):
+            valido[pano, idx[n]] = False
+    # quanto do quadril entra no lugar da perna (0 colado na perna, 1 já na roupa solta)
+    mistura = np.where(baixo, np.clip((d_pernas - 0.03 * H) / (0.07 * H - 0.03 * H), 0.0, 1.0), 0.0)
+    mistura = mistura * mistura * (3 - 2 * mistura)
+    # cabeça e elmo: acima do pescoço, só cabeça/pescoço
+    alto = co[:, 2] > 0.885 * H
+    for n in nomes:
+        if n not in ("head", "neck_01"):
+            valido[alto, idx[n]] = False
+    Dm = np.where(valido, D, np.inf)
+    sem = ~np.isfinite(Dm).any(1)
+    Dm[sem] = np.where(np.isin(np.arange(len(nomes)), [idx[n] for n in tronco]), D[sem], np.inf)
+    for g in list(obj.vertex_groups):
+        obj.vertex_groups.remove(g)
+    grupos = {n: obj.vertex_groups.new(name=n) for n in nomes}
+    ordem = np.argsort(Dm, axis=1)[:, :3]
+    suave = 0.012 * H
+    i_pelvis = idx["pelvis"]
+    for vi in range(len(co)):
+        k = ordem[vi]
+        d = Dm[vi, k]
+        ok = np.isfinite(d)
+        if not ok.any():
+            continue
+        w = np.where(ok, 1.0 / (np.where(ok, d, 1.0) + suave) ** 4, 0.0)
+        w /= w.sum()
+        pesos = {int(kk): float(peso) for kk, peso in zip(k, w)}
+        a = float(mistura[vi])
+        if a > 0:
+            pesos = {kk: peso * (1 - a) for kk, peso in pesos.items()}
+            pesos[i_pelvis] = pesos.get(i_pelvis, 0.0) + a
+        for kk, peso in pesos.items():
+            if peso > 0.01:
+                grupos[nomes[kk]].add([vi], peso, "REPLACE")
+    # alisa as fronteiras (poucas passadas: não espalha a mão para a coxa) e renormaliza
+    for o in bpy.context.scene.objects:
+        o.select_set(o == obj)
+    bpy.context.view_layer.objects.active = obj
+    try:
+        bpy.ops.object.vertex_group_smooth(group_select_mode="ALL", factor=0.5, repeat=3)
+        bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+    except Exception as e:
+        print(f"[rig_ia] sem alisar os pesos: {e}")
+    if not any(m.type == "ARMATURE" for m in obj.modifiers):
+        mod = obj.modifiers.new("esqueleto", "ARMATURE")
+        mod.object = arm
+    obj.parent = arm
+
+
 def vestir(obj, arm):
     """Pesos pelo calor; se o Blender não achar solução (malha fundida da IA), pela distância aos ossos."""
     for o in bpy.context.scene.objects:
@@ -150,5 +258,8 @@ def rigar(obj, nome, altura=1.8):
     normalizar(obj, altura)
     pontos, H = medir(obj)
     arm = criar_esqueleto(nome, pontos)
-    metodo = vestir(obj, arm)
+    # a malha da IA vem fundida (mão encostada na coxa, capa por cima das pernas): o calor do Blender
+    # espalha os pesos entre o que se toca. Pesos por regiões resolvem isso.
+    pesos_por_regioes(obj, arm, H)
+    metodo = "regioes"
     return arm, {"altura_m": round(H, 3), "pesos": metodo, "ossos": len(HIERARQUIA)}

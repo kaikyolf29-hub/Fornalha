@@ -649,6 +649,7 @@ async function pintarMaquina() {
   if (Object.values(baixando).some((d) => d.baixando)) vigiaProgramas = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 3000);
   pintarModelosDePlaca(a.cuda);
   pintarComfyUI();
+  pintarApis();
   pintarPacotes();
   $("nivel-maquina").value = (info && info.nivel_da_maquina) || "auto";
   const emUso = niveis.nivel_em_uso;
@@ -726,6 +727,27 @@ function pintarComfyUI() {
   clearTimeout(vigiaComfy);
   if (inst.instalando) vigiaComfy = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
 }
+function pintarApis() {
+  const lista = (estado && estado.apis_3d) || [];
+  pinta($("apis"), lista.map((a) => `<div class="item"><div><strong>${esc(a.nome)}${a.ligada ? " — ligada" : ""}</strong>
+      <small>${esc(a.preco)}</small><small>${esc(a.licenca)} <a href="#" data-link="${esc(a.url_licenca)}">Termos</a> · <a href="#" data-link="${esc(a.url_chave)}">Onde pegar a chave</a></small>
+      <span style="display:flex;gap:8px;margin-top:6px"><input type="password" id="chave-${esc(a.id)}" placeholder="${a.tem_chave ? "chave guardada" : "cole a chave aqui"}" autocomplete="off" style="flex:1;min-width:0">
+      <button class="botao" data-api-chave="${esc(a.id)}">Salvar chave</button></span></div>
+      <div class="lado"><label class="chave"><input type="checkbox" data-api-ligar="${esc(a.id)}" ${a.ligada ? "checked" : ""} ${a.tem_chave ? "" : "disabled"}><span>Ligada</span></label></div></div>`).join(""));
+}
+$("apis").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-api-chave]");
+  if (!b) return;
+  const id = b.dataset.apiChave, campo = $("chave-" + id);
+  try { await api("POST", "/janela/api", { provedor: id, chave: campo.value }); campo.value = ""; mensagem("Chave guardada neste computador."); carregar("maquina"); }
+  catch (err) { mensagem(err.message, "erro"); }
+});
+$("apis").addEventListener("change", async (e) => {
+  const c = e.target.closest("[data-api-ligar]");
+  if (!c) return;
+  try { await api("POST", "/janela/api", { provedor: c.dataset.apiLigar, ligada: c.checked }); mensagem(c.checked ? "API ligada: o Personagem sai por ela." : "API desligada."); carregar("maquina"); }
+  catch (err) { mensagem(err.message, "erro"); c.checked = !c.checked; }
+});
 $("comfyui").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-comfy]");
   if (!b) return;

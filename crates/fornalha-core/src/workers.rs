@@ -19,8 +19,9 @@ use crate::erro::{Erro, Resultado};
 use crate::externas;
 use crate::paths::Paths;
 
-const SCRIPTS: [(&str, &str); 7] = [
+const SCRIPTS: [(&str, &str); 8] = [
     ("fw_comum.py", include_str!("../workers/fw_comum.py")),
+    ("api_3d.py", include_str!("../workers/api_3d.py")),
     ("trellis2_fornalha.py", include_str!("../workers/trellis2_fornalha.py")),
     ("unirig_fornalha.py", include_str!("../workers/unirig_fornalha.py")),
     ("hymotion_fornalha.py", include_str!("../workers/hymotion_fornalha.py")),

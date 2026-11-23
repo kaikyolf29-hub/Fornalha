@@ -512,7 +512,9 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     // 3D pela IA no ComfyUI (TRELLIS.2): conceito próprio de corpo inteiro → malha → esqueleto de jogo,
     // captura de movimento e a arma na mão
     if r.is_null() && !criatura && ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
-        let disponivel = crate::comfyui::consultar(f.porta_comfyui()).await.conectado || crate::comfyui::instalacao(&f.paths).is_some();
+        let disponivel = crate::apis::ligada_3d(&f.paths).is_some()
+            || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
+            || crate::comfyui::instalacao(&f.paths).is_some();
         if disponivel {
             let img = pasta.join("conceito_3d.png");
             let pronto = img.is_file()
@@ -528,8 +530,8 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                                         "amostras": 20});
                     match forjar(f, &tarefa).await {
                         Ok(mut rr) => {
+                            modelo_3d = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
                             rr["ia"] = info;
-                            modelo_3d = "trellis2-comfyui".into();
                             arquivos.insert("conceito_3d".into(), json!(img));
                             r = rr;
                         }
@@ -676,6 +678,16 @@ fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
 /// 3D pela IA: com o TRELLIS.2 instalado no ComfyUI (e o aceite do DINOv3), a imagem vira malha
 /// texturizada. Devolve o .glb da malha alta, ou None se o caminho não está disponível.
 async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, seed: u64, avisos: &mut Vec<String>) -> Option<Value> {
+    // 1º a API paga, se a pessoa ligou (minutos em vez de horas)
+    if let Some(p) = crate::apis::ligada_3d(&f.paths) {
+        match crate::apis::gerar_3d(&f.paths, p, imagem, destino, &json!({"triangulos": 60000})).await {
+            Ok(mut r) => {
+                r["modelo"] = json!(p.modelo);
+                return Some(r);
+            }
+            Err(e) => avisos.push(format!("A API ({}) não gerou ({}): tentei o 3D local.", p.nome, e.mensagem)),
+        }
+    }
     if !f.estudio().licencas_aceitas.iter().any(|a| a == "meta-dinov3") {
         return None; // o 3D pela IA usa o DINOv3: só com o aceite da pessoa (Licenças)
     }

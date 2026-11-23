@@ -32,7 +32,7 @@ fn elementos_do_app_js_existem_antes_do_script() {
 #[test]
 fn telas_novas_estao_na_janela() {
     let html = arquivo("index.html");
-    for id in ["comfyui", "bruto-rodar", "bruto-nivel", "bruto-resultado", "visualizador", "modelos-placa"] {
+    for id in ["comfyui", "apis", "bruto-rodar", "bruto-nivel", "bruto-resultado", "visualizador", "modelos-placa"] {
         assert!(html.contains(&format!("id=\"{id}\"")), "falta #{id} na janela");
     }
 }

@@ -335,6 +335,15 @@ mod nucleo {
         }
     }
 
+    /// Ligar uma API paga e guardar a chave: só a pessoa, pela janela (a chave fica neste computador).
+    async fn api_paga(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        let id = v["provedor"].as_str().unwrap_or("");
+        match fornalha_core::apis::definir(&c.fornalha.paths, id, v["ligada"].as_bool(), v["chave"].as_str().map(String::from)) {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
     /// Canal exclusivo da janela: a mesma API (como "pessoa") + rotas que só a pessoa usa.
     async fn servir_canal_janela(app: AppHandle) {
         let st = app.state::<Estado>();
@@ -350,6 +359,7 @@ mod nucleo {
                     .route("/janela/modelo-de-placa", post(modelo_de_placa))
                     .route("/janela/pacote", post(baixar_pacote))
                     .route("/janela/programa", post(baixar_programa))
+                    .route("/janela/api", post(api_paga))
                     .route("/janela/comfyui", post(comfyui))
                     .with_state(canal),
             )

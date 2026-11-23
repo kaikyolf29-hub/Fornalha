@@ -6,6 +6,7 @@
 //! `gpu`, `distro`, `janela` e `util` vieram do Ignis (licença MIT, veja AVISOS.md).
 
 pub mod api;
+pub mod apis;
 pub mod audio;
 pub mod bruto;
 pub mod comfyui;

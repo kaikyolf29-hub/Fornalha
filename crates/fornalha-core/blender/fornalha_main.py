@@ -377,7 +377,15 @@ def _rig_de_jogo(t, m, info):
     import fc_rig_ia
 
     nome = t.get("nome", "personagem")
+    info_partes = {}
+    if t.get("cabeca"):
+        # por partes: a cabeça feita em close entra no lugar da cabeça do corpo antes do esqueleto
+        import fc_partes
+
+        fc_rig_ia.normalizar(m, float(t.get("altura_m") or 1.8))
+        info_partes = fc_partes.trocar_cabeca(m, t["cabeca"])
     arm, info_rig = fc_rig_ia.rigar(m, nome, float(t.get("altura_m") or 1.8))
+    info_rig.update(info_partes)
     acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes")) if t.get("animacoes_de") else []
     objs = [m]
     arma = t.get("arma")
@@ -391,6 +399,8 @@ def _rig_de_jogo(t, m, info):
 
             o = fc_armas.criar_arma({"tipo": arma, "id": f"{nome}_{arma}", "escala": 1.0})
         fc_armas_pbr.prender_na_mao(o, arm, "r")
+        if acoes:
+            info_rig["giro_da_arma_graus"] = fc_armas_pbr.acertar_giro(o, arm, acoes, "r")
         objs.append(o)
     if t.get("escudo"):
         import fc_armas_pbr

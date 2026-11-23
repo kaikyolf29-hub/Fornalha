@@ -29,6 +29,7 @@ pub mod licencas;
 pub mod mcp;
 pub mod niveis;
 pub mod pacotes;
+pub mod partes;
 pub mod paths;
 pub mod plano;
 pub mod programas;

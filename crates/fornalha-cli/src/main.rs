@@ -26,6 +26,7 @@ Uso:
   fornalha-cli comfyui [estado|instalar|abrir] [--modelos gguf|inteiro|nenhum] [--backend nvidia|rocm|vulkan|cpu]
                                            motor de imagem local (ComfyUI ou Vulkan) na placa desta máquina
   fornalha-cli comfyui gerar <pedido> [--lado 512] [--saida imagem.png]
+  fornalha-cli comfyui cabeca <conceito.png> [--pedido texto] [--saida pasta] [--horas 6] [--so-recorte]
                                            uma imagem pelo motor instalado (para testar a placa)
   fornalha-cli versao
 
@@ -196,6 +197,39 @@ async fn main() {
                         std::fs::write(&saida, &png).map_err(|e| fornalha_core::erro::Erro::io(&saida, e))?;
                         Ok(serde_json::json!({"arquivo": saida, "info": info}))
                     }))
+                }
+                Some("cabeca") => {
+                    // 3D por partes: a cabeça recortada do conceito, refinada em close e feita malha
+                    let conceito = std::path::PathBuf::from(args.get(2).cloned().unwrap_or_default());
+                    let descricao = opcao("--pedido").unwrap_or_default();
+                    let saida = std::path::PathBuf::from(opcao("--saida").unwrap_or_else(|| "cabeca".into()));
+                    let horas: u64 = opcao("--horas").and_then(|v| v.parse().ok()).unwrap_or(6);
+                    let bytes = std::fs::read(&conceito).map_err(|e| fornalha_core::erro::Erro::io(&conceito, e));
+                    imprimir(match bytes {
+                        Ok(b) if args.iter().any(|a| a == "--so-recorte") => {
+                            // só o recorte (sem ComfyUI), para conferir onde a cabeça foi achada
+                            let img = fornalha_core::partes::ler_png(&b);
+                            match img.as_ref().and_then(fornalha_core::partes::recorte_da_cabeca) {
+                                Some(r) => {
+                                    let _ = std::fs::create_dir_all(&saida);
+                                    let png = fornalha_core::partes::escrever_png(&fornalha_core::partes::recortar(
+                                        img.as_ref().unwrap(),
+                                        &r,
+                                        1024,
+                                    ));
+                                    let arq = saida.join("cabeca_recorte.png");
+                                    std::fs::write(&arq, png)
+                                        .map_err(|e| fornalha_core::erro::Erro::io(&arq, e))
+                                        .map(|_| serde_json::json!(r))
+                                }
+                                None => Err(fornalha_core::erro::Erro::novo("sem_figura", "não achei a figura de corpo inteiro")),
+                            }
+                        }
+                        Ok(b) => {
+                            fornalha_core::partes::cabeca_no_comfyui(f.porta_comfyui(), &b, &descricao, &saida, 1000, horas * 3600).await
+                        }
+                        Err(e) => Err(e),
+                    })
                 }
                 _ => {
                     let e = comfyui::consultar(f.porta_comfyui()).await;

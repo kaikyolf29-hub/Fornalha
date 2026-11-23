@@ -511,6 +511,42 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             if pronto {
                 if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
                     let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
+                    // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
+                    // feita malha própria, entra no lugar da cabeça do corpo
+                    let cabeca = if !criatura
+                        && info["modelo"] == "trellis2-comfyui"
+                        && matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo)
+                    {
+                        let descricao =
+                            format!("{} ({})", ficha["descricao"].as_str().unwrap_or(""), ficha["armadura"].as_str().unwrap_or(""));
+                        match std::fs::read(&img) {
+                            Ok(b) => match com_placa(
+                                f,
+                                12_000,
+                                360,
+                                crate::partes::cabeca_no_comfyui(
+                                    f.porta_comfyui(),
+                                    &b,
+                                    &descricao,
+                                    &pasta.join(format!("{id}_cabeca")),
+                                    seed,
+                                    8 * 3600,
+                                ),
+                            )
+                            .await
+                            {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    avisos
+                                        .push(format!("A cabeça por partes não saiu ({}): ficou a cabeça da malha do corpo.", e.mensagem));
+                                    Value::Null
+                                }
+                            },
+                            Err(_) => Value::Null,
+                        }
+                    } else {
+                        Value::Null
+                    };
                     let tarefa = if criatura {
                         // a altura do dragão da IA conta as asas abertas
                         json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
@@ -522,7 +558,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                                "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
                                "esqueleto": "jogo", "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
                                "ceu": base["ceu"], "arma": ficha["arma"], "escudo": ficha["escudo"].as_bool().unwrap_or(false),
-                               "folha": true, "video": a.video.unwrap_or(false), "amostras": 20})
+                               "cabeca": cabeca, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20})
                     };
                     match forjar(f, &tarefa).await {
                         Ok(mut rr) => {

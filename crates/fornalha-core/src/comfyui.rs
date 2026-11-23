@@ -267,6 +267,43 @@ pub fn fluxo_z_image(m: &ModeloImagem, prompt: &str, largura: u32, altura: u32, 
     })
 }
 
+/// Imagem → imagem com o Z-Image Turbo (refino: a imagem enviada vira o ponto de partida; `denoise`
+/// perto de 0,5 mantém o desenho e acrescenta detalhe). A imagem é escalada para `lado` × `lado`.
+pub fn fluxo_z_image_de_imagem(m: &ModeloImagem, prompt: &str, imagem: &str, lado: u32, semente: u64, passos: u32, denoise: f64) -> Value {
+    let mut f = fluxo_z_image(m, prompt, lado, lado, semente, passos);
+    f["11"] = json!({"class_type": "LoadImage", "inputs": {"image": imagem}});
+    f["12"] = json!({"class_type": "ImageScale", "inputs": {"image": ["11", 0], "upscale_method": "lanczos", "width": lado, "height": lado,
+                     "crop": "center"}});
+    f["7"] = json!({"class_type": "VAEEncode", "inputs": {"pixels": ["12", 0], "vae": ["3", 0]}});
+    f["8"]["inputs"]["denoise"] = json!(denoise);
+    f
+}
+
+/// Refina uma imagem no ComfyUI (Z-Image Turbo, imagem → imagem). Devolve o PNG e o resumo.
+pub async fn gerar_imagem_de_imagem(
+    porta: u16,
+    png: Vec<u8>,
+    nome: &str,
+    prompt: &str,
+    lado: u32,
+    semente: u64,
+    denoise: f64,
+) -> Resultado<(Vec<u8>, Value)> {
+    let m = modelo_de_imagem(porta)
+        .await
+        .ok_or_else(|| Erro::novo("comfyui_sem_modelo", "O ComfyUI está aberto, mas sem o Z-Image Turbo para refinar a imagem."))?;
+    let enviada = enviar_imagem(porta, nome, png).await?;
+    let fluxo = fluxo_z_image_de_imagem(&m, prompt, &enviada, lado, semente, 8, denoise);
+    let inicio = Instant::now();
+    let saidas = executar(porta, &fluxo, 6 * 3600).await?;
+    let png = saidas
+        .into_iter()
+        .find(|s| s.tipo == "images")
+        .map(|s| s.bytes)
+        .ok_or_else(|| Erro::novo("comfyui_recusou", "O refino não devolveu imagem."))?;
+    Ok((png, json!({"modelo": m, "segundos": inicio.elapsed().as_secs_f64(), "lado": lado, "denoise": denoise})))
+}
+
 /// Nós que um fluxo usa (para conferir antes de mandar).
 pub fn nos_do_fluxo(fluxo: &Value) -> BTreeSet<String> {
     fluxo.as_object().into_iter().flat_map(|m| m.values()).filter_map(|n| n["class_type"].as_str().map(String::from)).collect()
@@ -917,6 +954,26 @@ mod testes {
         assert!(a.contains(&"--vae-tiling".to_string()));
         assert!(so_processador(&["CPU\tAMD Ryzen".into()]));
         assert!(!so_processador(&["Vulkan0\tAMD Radeon RX 580 Series".into(), "CPU\tx".into()]));
+    }
+
+    #[test]
+    fn refino_parte_da_imagem_enviada() {
+        let m = ModeloImagem {
+            id: "z-image-turbo-comfyui",
+            difusao: "z.safetensors".into(),
+            texto: "q.safetensors".into(),
+            vae: "ae.safetensors".into(),
+            difusao_gguf: false,
+            texto_gguf: false,
+        };
+        let f = fluxo_z_image_de_imagem(&m, "cabeça", "cabeca.png", 1024, 7, 8, 0.5);
+        let nos = nos_do_fluxo(&f);
+        assert!(nos.contains("LoadImage") && nos.contains("ImageScale") && nos.contains("VAEEncode"), "{nos:?}");
+        assert!(!nos.contains("EmptySD3LatentImage"));
+        assert_eq!(f["8"]["inputs"]["latent_image"], json!(["7", 0]));
+        assert_eq!(f["8"]["inputs"]["denoise"], json!(0.5));
+        assert_eq!(f["11"]["inputs"]["image"], "cabeca.png");
+        assert_eq!(f["12"]["inputs"]["width"], 1024);
     }
 
     #[test]

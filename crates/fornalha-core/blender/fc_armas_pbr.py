@@ -270,3 +270,70 @@ def prender_na_mao(obj, arm, lado="r", escudo=False):
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.parent_set(type="BONE", keep_transform=True)
     return obj
+
+
+def acertar_giro(obj, arm, acoes, lado="r", nomes=("parado", "andar")):
+    """Gira a arma em volta do eixo da mão para a lâmina apontar para a frente e um pouco para baixo
+    no parado e no andar (esqueletos medidos numa malha de fora não têm polegar, e o giro da mão da
+    captura muda de um esqueleto para outro). O cabo continua na palma."""
+    import math
+
+    from mathutils import Matrix, Quaternion
+
+    escolhidas = [a for a in acoes if a.name in nomes] or list(acoes)[:1]
+    if not escolhidas or arm.animation_data is None:
+        return 0.0
+    mw = arm.matrix_world
+    osso = arm.data.bones[f"hand_{lado}"]
+    pb = arm.pose.bones[f"hand_{lado}"]
+    pulso = mw @ osso.head_local
+    eixo = ((mw @ osso.tail_local) - pulso).normalized()
+    # a ponta da lâmina: o vértice mais longe da pegada
+    ponta_local = max((v.co for v in obj.data.vertices), key=lambda c: c.length)
+    lamina0 = (obj.matrix_world.to_3x3() @ ponta_local).normalized()
+    resto_inv = (mw @ osso.matrix_local).to_3x3().inverted()
+    # giro do osso da mão em cada quadro (sem deformar a malha: só o esqueleto)
+    malhas = [o for o in bpy.context.scene.objects if o.type == "MESH" and any(m.type == "ARMATURE" for m in o.modifiers)]
+    estados = [(m, m.show_viewport) for o in malhas for m in o.modifiers if m.type == "ARMATURE"]
+    for m, _ in estados:
+        m.show_viewport = False
+    ad = arm.animation_data
+    acao_antes = ad.action
+    quadro_antes = bpy.context.scene.frame_current
+    deltas = []
+    # como no vídeo: as ações em fila numa trilha da NLA (a ação ativa precisa de "slot" no Blender 5)
+    ad.action = None
+    trilha = ad.nla_tracks.new()
+    try:
+        inicio = 1
+        for act in escolhidas:
+            tira = trilha.strips.new(act.name, inicio, act)
+            ini, fim = int(tira.frame_start), int(tira.frame_end)
+            inicio = fim + 1
+            for k in range(8):
+                bpy.context.scene.frame_set(ini + (fim - ini) * k // 8)
+                deltas.append((mw @ pb.matrix).to_3x3() @ resto_inv)
+    finally:
+        ad.nla_tracks.remove(trilha)
+        ad.action = acao_antes
+        bpy.context.scene.frame_set(quadro_antes)
+        for m, v in estados:
+            m.show_viewport = v
+    print(f"[arma] giro da mão nos quadros: {[round(math.degrees(d.to_quaternion().angle)) for d in deltas]}")
+    alvo = Vector((0.0, -1.0, -0.35)).normalized()
+    melhor, nota_melhor = 0.0, -9.0
+    for graus in range(0, 360, 10):
+        r = Quaternion(eixo, math.radians(graus)).to_matrix()
+        lam = r @ lamina0
+        nota = sum((d @ lam).normalized().dot(alvo) for d in deltas) / len(deltas)
+        if nota > nota_melhor:
+            melhor, nota_melhor = graus, nota
+    if melhor:
+        # aplicado na pose de descanso, em volta da linha da mão (o cabo fica na palma)
+        arm.data.pose_position = "REST"
+        bpy.context.view_layer.update()
+        giro = Matrix.Translation(pulso) @ Quaternion(eixo, math.radians(melhor)).to_matrix().to_4x4() @ Matrix.Translation(-pulso)
+        obj.matrix_world = giro @ obj.matrix_world
+        arm.data.pose_position = "POSE"
+        bpy.context.view_layer.update()
+    return float(melhor)

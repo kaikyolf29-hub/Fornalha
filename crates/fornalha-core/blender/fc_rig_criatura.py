@@ -338,6 +338,17 @@ def rigar(obj, nome, altura=5.0):
     base = 18.0 - _elevacao(d.asa["l"]["raiz"], d.asa["l"]["pulso"])
     escala = altura / 4.6
     acoes = fcc.AnimadorDragao(arm, escala, dragao=d, abrir_base=base).tudo()
+    # andar e correr com o pé no chão (IK de dois ossos, a mesma passada das criaturas de patas): as
+    # asas, o pescoço e a cauda ficam como o animador do dragão fez
+    import fc_rig_generico
+
+    patas = [[f"coxa_{l}", f"canela_{l}", f"tarso_{l}"] for l in ("l", "r")]
+    if info["quadrupede"]:
+        patas += [[f"ombro_{l}", f"antebraco_{l}", f"mao_{l}"] for l in ("l", "r")]
+    for a in acoes:
+        if a.name in ("andar", "correr"):
+            ini, fim = (int(round(x)) for x in a.frame_range)
+            fc_rig_generico.passada_com_ik(arm, a, patas, a.name == "correr", fim)
     arm.animation_data.action = acoes[0]
     info.update({"pesos": "regioes", "ossos": len(arm.data.bones), "abrir_base_graus": round(base, 1)})
     return arm, acoes, info

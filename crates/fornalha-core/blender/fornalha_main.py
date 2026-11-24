@@ -356,10 +356,17 @@ def tarefa_rig(t):
             print(f"[rig] mapa de normais não assou: {e}")
             info["normal_da_alta"] = False
         bpy.data.objects.remove(alta, do_unlink=True)
-    if t.get("esqueleto") == "jogo":
+    esq = t.get("esqueleto")
+    if esq == "auto":
+        # qualquer corpo: humanoide (duas patas, de pé), alado (asas grandes) ou criatura de patas
+        esq = _tipo_de_corpo(m)
+        info["corpo_detectado"] = esq
+    if esq == "jogo":
         return _rig_de_jogo(t, m, info)
-    if t.get("esqueleto") == "dragao":
+    if esq == "dragao":
         return _rig_de_dragao(t, m, info)
+    if esq == "criatura":
+        return _rig_de_criatura(t, m, info)
     mn, mx = c.caixa_envolvente([m])
     H = mx.z - mn.z
     porte = max(0.7, min(1.4, ((mx.x - mn.x) / H) / 0.9)) if H > 0 else 1.0
@@ -401,7 +408,14 @@ def _rig_de_jogo(t, m, info):
 
         fc_rig_ia.normalizar(m, float(t.get("altura_m") or 1.8))
         info_partes = fc_partes.trocar_cabeca(m, t["cabeca"])
-    arm, info_rig = fc_rig_ia.rigar(m, nome, float(t.get("altura_m") or 1.8))
+    if t.get("makehuman") and t.get("molde", True):
+        # o mesmo esqueleto (com dedos) e pesos do humano da Fornalha, passados de um corpo-molde
+        # encaixado na malha: o movimento e a pegada da arma ficam iguais aos do humano
+        import fc_molde
+
+        arm, info_rig = fc_molde.rigar(m, nome, float(t.get("altura_m") or 1.8), t["makehuman"])
+    else:
+        arm, info_rig = fc_rig_ia.rigar(m, nome, float(t.get("altura_m") or 1.8))
     info_rig.update(info_partes)
     import fc_armas_pbr
 
@@ -421,7 +435,8 @@ def _rig_de_jogo(t, m, info):
 
             o = fc_armas.criar_arma({"tipo": arma, "id": f"{nome}_{arma}", "escala": 1.0})
         fc_armas_pbr.prender_na_mao(o, arm, "r")
-        if acoes:
+        if acoes and "thumb_01_r" not in arm.data.bones:
+            # sem dedos no esqueleto, o giro da arma vem da captura (com dedos, é o do humano)
             info_rig["giro_da_arma_graus"] = fc_armas_pbr.acertar_giro(o, arm, acoes, "r")
         objs.append(o)
     if t.get("escudo"):
@@ -438,6 +453,49 @@ def _rig_de_jogo(t, m, info):
     st.update(info)
     st.update(info_rig)
     st["pecas"] = [o.name for o in objs]
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
+
+
+def _tipo_de_corpo(m):
+    """'jogo' (humanoide de pé), 'dragao' (asas grandes) ou 'criatura' (patas), medido na malha."""
+    import numpy as np
+
+    import fc_rig_generico
+
+    co = np.array([(m.matrix_world @ v.co)[:] for v in m.data.vertices])
+    mn, mx = co.min(0), co.max(0)
+    W, L, H = (mx - mn).tolist()
+    cx = (mn[0] + mx[0]) / 2
+    z = co[:, 2] - mn[2]
+    asas = float(np.mean((np.abs(co[:, 0] - cx) > 0.25 * W) & (z > 0.35 * H)))
+    pes = fc_rig_generico.contar_pes(co)
+    if pes == 2 and H > 1.15 * L and asas < 0.2:
+        return "jogo"
+    if asas > 0.2 and W > 0.9 * L:
+        return "dragao"
+    return "criatura"
+
+
+def _rig_de_criatura(t, m, info):
+    """Criatura de patas (qualquer número) com o esqueleto medido e as animações procedurais."""
+    import fc_rig_generico
+
+    nome = t.get("nome", "criatura")
+    arm, acoes, info_rig = fc_rig_generico.rigar(m, nome, float(t.get("altura_m") or 2.0))
+    pedidas = t.get("animacoes")
+    if pedidas:
+        fora = [a for a in acoes if a.name not in pedidas]
+        acoes = [a for a in acoes if a.name in pedidas]
+        arm.animation_data.action = acoes[0] if acoes else None
+        for a in fora:
+            bpy.data.actions.remove(a)
+    saida = t["saida"]
+    tamanho = c.exportar_glb(saida, [arm, m], animacoes=bool(acoes))
+    arquivos = {"modelo": saida}
+    arquivos.update(previas(t, [m], saida, arm if acoes else None, acoes))
+    st = estatisticas([m], arm, acoes)
+    st.update(info)
+    st.update(info_rig)
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 

@@ -192,7 +192,7 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "create_character",
             titulo: "Criar personagem ou inimigo",
-            descricao: "Cria um personagem do zero: a ficha (o cérebro do Ignis completa o que faltar, coerente com a bíblia), a imagem de conceito (Ignis), o modelo 3D com o esqueleto padrão e 9 animações (parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer), a arma na mão, prévia e folha de modelo, e a fala dublada com a curva da boca. Grava em Characters/<id>/ (ou Enemies/<id>/ se o papel for inimigo ou chefe), atualiza a bíblia e registra os recibos. Com testar_na_engine, monta o jogo e roda o teste (o inimigo novo aparece na frente do jogador). Pode levar alguns minutos.",
+            descricao: "Cria um personagem do zero: a ficha (o cérebro do Ignis completa o que faltar, coerente com a bíblia), a imagem de conceito (Ignis), o modelo 3D com o esqueleto padrão e 9 animações (parado, andar, correr, pular, atacar, defender, esquivar, dano, morrer), a arma na mão, prévia e folha de modelo, e a fala dublada com a curva da boca. Grava em Characters/<id>/ (ou Enemies/<id>/ se o papel for inimigo ou chefe), atualiza a bíblia e registra os recibos. Com testar_na_engine, monta o jogo e roda o teste (o inimigo novo aparece na frente do jogador). Também cria qualquer criatura ou monstro: mande `imagem` (um PNG que a pessoa já tem, do Gemini ou de onde for) e `corpo` (ou auto) — a imagem vira a malha pela IA sem ser refeita, e o esqueleto e as animações vêm da forma do corpo (humanoide, alado ou de patas, qualquer número). Pode levar alguns minutos (horas no 3D pela IA sem placa).",
             esquema: json!({
                 "type": "object",
                 "properties": {
@@ -213,7 +213,10 @@ pub fn lista() -> Vec<Ferramenta> {
                     "testar_na_engine": {"type": "boolean", "description": "Montar na engine e rodar o teste no fim."},
                     "seed": {"type": "integer", "minimum": 0},
                     "parar_no_conceito": {"type": "boolean", "description": "Por partes: para no conceito de corpo inteiro (o que vira 3D) e devolve a imagem para aceitar ou refazer; a chamada seguinte com o mesmo nome usa esse conceito."},
-                    "refazer_conceito": {"type": "boolean", "description": "Apaga o conceito de corpo inteiro guardado e faz outro (mande outra seed)."}
+                    "refazer_conceito": {"type": "boolean", "description": "Apaga o conceito de corpo inteiro guardado e faz outro (mande outra seed)."},
+                    "imagem": {"type": "string", "description": "Caminho de uma imagem PNG pronta (feita no Gemini, no ChatGPT, desenhada…): ela vira o 3D como está, sem ser refeita; esqueleto e animações vêm da malha."},
+                    "corpo": {"type": "string", "enum": ["auto", "humanoide", "alado", "quadrupede", "aranha", "inseto", "serpente", "criatura"],
+                              "description": "Tipo de corpo: decide o esqueleto e as animações. auto mede na malha (padrão quando há imagem). humanoide: esqueleto do humano com dedos e captura de movimento; alado: asas, pescoço e cauda; os outros: patas achadas na malha (qualquer número), passada com IK, coluna e cauda em onda, bote."}
                 }
             }),
             so_leitura: false,

@@ -173,6 +173,35 @@ async fn personagem_para_no_conceito_para_aceitar_ou_refazer() {
     assert_eq!(visto.lock().unwrap().fluxos.len(), antes + 1);
 }
 
+/// Imagem pronta (do Gemini, por exemplo): vira o conceito como está, sem gerar outra.
+#[tokio::test]
+async fn imagem_da_pessoa_vira_o_conceito_sem_ser_refeita() {
+    let (porta, visto) = comfy_falso(true).await;
+    let tmp = tempfile::tempdir().unwrap();
+    let f = Fornalha::para_testes(Paths::under(tmp.path()), comum::detection("rx580"));
+    f.definir_porta_comfyui(porta).unwrap();
+    f.chamar("create_project", json!({"nome": "Ordem"}), "claude-code").await.unwrap();
+    let minha = tmp.path().join("monstro_do_gemini.png");
+    let bytes = [&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a][..], b"desenho-da-pessoa"].concat();
+    std::fs::write(&minha, &bytes).unwrap();
+    let r = f
+        .chamar(
+            "create_character",
+            json!({"nome": "Gorath", "papel": "inimigo", "imagem": minha, "corpo": "quadrupede", "parar_no_conceito": true}),
+            "claude-code",
+        )
+        .await
+        .unwrap();
+    let img = std::path::PathBuf::from(r["arquivos"]["conceito_3d"].as_str().unwrap());
+    assert_eq!(std::fs::read(&img).unwrap(), bytes, "a imagem da pessoa é o conceito, sem retoque");
+    assert_eq!(visto.lock().unwrap().fluxos.len(), 0, "nenhuma imagem nova foi gerada");
+    // imagem que não é PNG: erro claro
+    let jpg = tmp.path().join("foto.jpg");
+    std::fs::write(&jpg, b"\xff\xd8\xff").unwrap();
+    let e = f.chamar("create_character", json!({"nome": "Outro", "imagem": jpg}), "claude-code").await.unwrap_err();
+    assert_eq!(e.codigo, "imagem_nao_png");
+}
+
 /// Numa placa de 8 GB, um modelo por vez: antes de gerar no ComfyUI a Fornalha pede ao Ignis para
 /// soltar a memória de vídeo (POST /motor/reservar) e devolve no fim (/motor/reservar/liberar).
 #[tokio::test]

@@ -321,6 +321,11 @@ pub struct ArgsPersonagem {
     pub parar_no_conceito: Option<bool>,
     /// Apaga o conceito de corpo inteiro guardado e faz outro (com outra semente).
     pub refazer_conceito: Option<bool>,
+    /// Imagem pronta (feita em outro lugar, como o Gemini) que vira o 3D sem ser refeita.
+    pub imagem: Option<String>,
+    /// Tipo de corpo: auto (medido na malha), humanoide, alado, quadrupede, aranha, inseto, serpente,
+    /// criatura. Decide o esqueleto e as animações.
+    pub corpo: Option<String>,
 }
 
 fn eh_inimigo(papel: &str) -> bool {
@@ -480,6 +485,18 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     if a.refazer_conceito.unwrap_or(false) {
         let _ = std::fs::remove_file(&img_3d);
     }
+    if let Some(origem) = a.imagem.as_deref().map(PathBuf::from) {
+        // a imagem que a pessoa trouxe é o conceito: não é refeita nem retocada
+        if !origem.is_file() {
+            return Err(Erro::novo("imagem_nao_existe", format!("A imagem {} não existe.", origem.display())));
+        }
+        let bytes = std::fs::read(&origem).map_err(|e| Erro::io(&origem, e))?;
+        if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+            return Err(Erro::novo("imagem_nao_png", "Mande a imagem em PNG (o 3D pela IA lê PNG)."));
+        }
+        std::fs::write(&img_3d, &bytes).map_err(|e| Erro::io(&img_3d, e))?;
+        arquivos.insert("imagem_da_pessoa".into(), json!(origem));
+    }
     if a.parar_no_conceito.unwrap_or(false) {
         if !img_3d.is_file() {
             gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img_3d, seed.wrapping_add(3), quem).await?;
@@ -515,7 +532,17 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let mut r = Value::Null;
     let conceito = arquivos.get("conceito").and_then(|v| v.as_str()).map(PathBuf::from);
     // criaturas (dragão…) têm esqueleto próprio: saem da Forja de criaturas, não do humano nem do TRELLIS.2
-    let criatura = ficha["tipo"] == "dragao";
+    // esqueleto pelo tipo de corpo: o pedido manda; com imagem pronta e sem pedido, mede na malha
+    let corpo = a.corpo.clone().unwrap_or_else(|| if a.imagem.is_some() { "auto".into() } else { String::new() });
+    let esqueleto = match corpo.as_str() {
+        "humanoide" => "jogo",
+        "alado" | "dragao" => "dragao",
+        "quadrupede" | "aranha" | "inseto" | "serpente" | "criatura" | "monstro" => "criatura",
+        "auto" => "auto",
+        _ if ficha["tipo"] == "dragao" => "dragao",
+        _ => "jogo",
+    };
+    let criatura = esqueleto != "jogo";
     // 3D pela IA no ComfyUI (TRELLIS.2) ou numa API ligada: conceito próprio de corpo inteiro → malha →
     // esqueleto (de jogo com a captura de movimento e a arma na mão; no dragão, o do dragão da Fornalha)
     if ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
@@ -571,15 +598,17 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                         Value::Null
                     };
                     let tarefa = if criatura {
-                        // a altura do dragão da IA conta as asas abertas
+                        // dragão: a altura conta as asas abertas; criatura de patas: pela ficha
+                        let altura = if esqueleto == "dragao" { altura_do_tipo("dragao") * 1.25 } else { 2.2 };
                         json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
-                               "altura_m": altura_do_tipo("dragao") * 1.25, "triangulos_max": 80000, "esqueleto": "dragao",
+                               "altura_m": altura, "triangulos_max": 80000, "esqueleto": esqueleto,
+                               "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"],
                                "materiais": base["materiais"], "ceu": base["ceu"], "folha": true, "video": a.video.unwrap_or(false),
-                               "video_animacoes": ["voar", "rugir", "andar", "atacar"], "amostras": 20})
+                               "video_animacoes": ["voar", "rugir", "andar", "correr", "atacar"], "amostras": 20})
                     } else {
                         json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
                                "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
-                               "esqueleto": "jogo", "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
+                               "esqueleto": "jogo", "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
                                "ceu": base["ceu"], "arma": ficha["arma"], "escudo": ficha["escudo"].as_bool().unwrap_or(false),
                                "cabeca": cabeca, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20})
                     };
@@ -597,7 +626,14 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
         }
     }
     // sem o 3D pela IA, o dragão sai da Forja de criaturas (esqueleto e malha procedurais)
-    if r.is_null() && criatura {
+    if r.is_null() && criatura && esqueleto != "dragao" {
+        return Err(Erro::novo(
+            "criatura_sem_3d_pela_ia",
+            "Criatura de qualquer corpo sai pelo 3D pela IA (imagem → malha → esqueleto medido): instale o 3D pela IA em \
+             Máquina → Motor de imagem (com o aceite do DINOv3) ou ligue uma API de 3D.",
+        ));
+    }
+    if r.is_null() && esqueleto == "dragao" {
         let cores = json!({"principal": ficha["cor_pele"].as_str().or(ficha["cor_roupa"].as_str()),
                            "secundaria": ficha["cor_roupa_secundaria"]});
         let tarefa = json!({"tarefa": "criatura", "saida": glb, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20,

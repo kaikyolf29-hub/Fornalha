@@ -53,20 +53,29 @@ def medir(obj):
         f = f[np.abs(f[:, 0]) < 0.06 * H] if len(f) else f
         return float(np.median(f[:, 1])) if len(f) else 0.0
 
-    # mãos: o ponto mais de fora de cada lado entre o quadril e a cintura (braços caídos ao lado)
-    maos = {}
+    # ponta da mão: o braço é seguido do peito para baixo, fatia por fatia, enquanto é um grupo de
+    # vértices separado do corpo (o grupo mais de fora, com vão para o resto); a última fatia é a ponta
+    # dos dedos. Só a metade da frente: a capa pendurada atrás pode ser mais larga que as mãos.
+    cab = faixa(0.88, 0.97)
+    y_meio = (float(cab[:, 1].min()) + float(cab[:, 1].max())) / 2 if len(cab) else 0.0
+    pontas = {}
     for lado, s in (("l", 1.0), ("r", -1.0)):
-        f = faixa(0.38, 0.62)
-        # só a metade da frente: a capa pendurada atrás pode ser mais larga que as mãos
-        cab = faixa(0.88, 0.97)
-        y_meio = (float(cab[:, 1].min()) + float(cab[:, 1].max())) / 2 if len(cab) else 0.0
-        f = f[(f[:, 0] * s > 0.08 * H) & (f[:, 1] < y_meio + 0.04 * H)]
-        if len(f):
-            ext = f[np.argmax(f[:, 0] * s)]
-            perto = f[np.abs(f[:, 0] - ext[0]) < 0.035 * H]
-            maos[lado] = np.array([ext[0] - s * 0.025 * H, float(np.median(perto[:, 1])), float(np.median(perto[:, 2]))])
-        else:
-            maos[lado] = np.array([s * 0.19 * H, 0.0, 0.48 * H])
+        trilha = []
+        for zf in np.arange(0.70, 0.28, -0.008):
+            f = co[(np.abs(co[:, 2] - zf * H) < 0.005 * H) & (co[:, 1] < y_meio + 0.06 * H) & (co[:, 0] * s > 0.04 * H)]
+            if len(f) < 4:
+                break
+            xs = np.sort(f[:, 0] * s)[::-1]
+            vaos = np.where(-np.diff(xs) > 0.012 * H)[0]
+            if not len(vaos):
+                break  # o braço encostou no corpo (ou acabou)
+            limite = xs[vaos[0]]
+            g = f[f[:, 0] * s >= limite - 1e-6]
+            c = g.mean(0)
+            if trilha and np.linalg.norm(c[:2] - trilha[-1][:2]) > 0.06 * H:
+                break
+            trilha.append(np.array([c[0], c[1], zf * H]))
+        pontas[lado] = trilha[-1] if trilha else None
     # ombros: metade da largura do tronco na altura do peito, sem passar da mão
     f = faixa(0.70, 0.76)
     largura = float(np.percentile(np.abs(f[:, 0]), 90)) if len(f) else 0.13 * H
@@ -97,14 +106,25 @@ def medir(obj):
     p["head"] = (p["neck_01"][1], (0, yc["cabeca"], 1.0 * H))
     for lado, s in (("l", 1.0), ("r", -1.0)):
         ombro = np.array([s * ombro_x, yc["s3"], 0.815 * H])
-        mao = maos[lado]
-        # cotovelo: no meio, um pouco para trás e para fora (braço relaxado)
-        cot = (ombro + mao) / 2 + np.array([s * 0.012 * H, 0.012 * H, 0.0])
-        dir_mao = (mao - cot) / max(np.linalg.norm(mao - cot), 1e-6)
+        # braço pelas proporções do corpo humano ao longo da linha ombro → ponta dos dedos
+        # (braço 0,186 H, antebraço 0,146 H, mão 0,108 H); se a ponta medida não cabe (a mão encostou
+        # no corpo e a trilha parou no pulso), a ponta vai para o comprimento do braço na mesma direção
+        ponta = pontas[lado]
+        if ponta is None:
+            ponta = ombro + np.array([s * 0.05 * H, 0.0, -0.44 * H])
+        v = ponta - ombro
+        comp = float(np.linalg.norm(v))
+        if not 0.36 * H < comp < 0.50 * H:
+            v = v / max(comp, 1e-6) * 0.44 * H
+            comp = 0.44 * H
+        u = v / comp
+        cot = ombro + u * comp * (0.186 / 0.44) + np.array([s * 0.006 * H, 0.012 * H, 0.0])
+        pulso = ombro + u * comp * (0.332 / 0.44)
+        fim = ombro + v
         p[f"clavicle_{lado}"] = ((s * 0.02 * H, yc["s3"] - 0.01 * H, 0.81 * H), tuple(ombro))
         p[f"upperarm_{lado}"] = (tuple(ombro), tuple(cot))
-        p[f"lowerarm_{lado}"] = (tuple(cot), tuple(mao))
-        p[f"hand_{lado}"] = (tuple(mao), tuple(mao + dir_mao * 0.055 * H))
+        p[f"lowerarm_{lado}"] = (tuple(cot), tuple(pulso))
+        p[f"hand_{lado}"] = (tuple(pulso), tuple(fim))
         px, ymin, ymax = pes[lado]
         tor_y = (ymin + ymax) / 2 + 0.2 * (ymax - ymin)
         quadril = (s * 0.055 * H, quadril_y, 0.5 * H)
@@ -194,7 +214,22 @@ def pesos_por_regioes(obj, arm, H, capa=False):
     d_tronco = D[:, [idx[n] for n in tronco]].min(1)
     for lado in "lr":
         d_braco = D[:, [idx[n] for n in braco[lado]]].min(1)
-        no_braco = (d_braco < 0.075 * H) & (d_braco < d_tronco + 0.01 * H)
+        # raio por osso: ombreira grande no braço, manopla justa na mão (a saia e a bainha ao lado da
+        # mão não podem ir junto com ela)
+        # antebraço e mão: só o que não está para dentro do eixo do braço (o pano da sobreveste ao lado
+        # do braço caído fica com o corpo; antes ele ia junto e virava uma aba quando o braço cruzava)
+        s_lado = 1.0 if lado == "l" else -1.0
+        dentro_ok = np.ones(len(co), dtype=bool)
+        for n in (f"lowerarm_{lado}", f"hand_{lado}"):
+            a, b = seg[n]
+            ab = b - a
+            t = np.clip(((co - a) @ ab) / max(float(ab @ ab), 1e-12), 0.0, 1.0)
+            prox = a + t[:, None] * ab
+            dentro_ok &= ~((D[:, idx[n]] < 0.06 * H) & (s_lado * (co[:, 0] - prox[:, 0]) < -0.028 * H))
+        perto_osso = ((D[:, idx[f"upperarm_{lado}"]] < 0.08 * H)
+                      | ((D[:, idx[f"lowerarm_{lado}"]] < 0.05 * H) & dentro_ok)
+                      | ((D[:, idx[f"hand_{lado}"]] < 0.045 * H) & dentro_ok))
+        no_braco = perto_osso & (d_braco < d_tronco + 0.01 * H)
         for n in braco[lado]:
             valido[:, idx[n]] = no_braco
         d_perna = D[:, [idx[n] for n in perna[lado]]].min(1)
@@ -204,7 +239,12 @@ def pesos_por_regioes(obj, arm, H, capa=False):
     # capa e saia: abaixo da cintura e longe das duas pernas → só quadril (e um pouco de spine_01);
     # perto da perna a mistura é gradual (sem "rasgo" entre o que segue a perna e o que fica no quadril)
     d_pernas = np.minimum(D[:, [idx[n] for n in perna["l"]]].min(1), D[:, [idx[n] for n in perna["r"]]].min(1))
-    baixo = co[:, 2] < 0.56 * H
+    # o braço (mão pendurada ao lado do quadril) fica fora da regra do pano: antes a mão ia para o
+    # quadril e a espada, presa no osso da mão, saía andando sozinha
+    no_bracos = np.zeros(len(co), dtype=bool)
+    for lado in "lr":
+        no_bracos |= valido[:, idx[f"hand_{lado}"]]
+    baixo = (co[:, 2] < 0.56 * H) & ~no_bracos
     pano = baixo & (d_pernas >= 0.07 * H)
     for n in nomes:
         if n not in ("pelvis", "spine_01"):
@@ -231,6 +271,9 @@ def pesos_por_regioes(obj, arm, H, capa=False):
     # a parte de baixo seguindo as coxas aos poucos (o meio, entre as pernas, segue a média das duas):
     # a frente da saia não sai junto com uma perna só nem deixa o joelho furar o pano.
     saia = _saia(co, H, arm, mw)
+    if saia is not None:
+        # a mão pendurada ao lado da saia não é saia
+        saia = (saia[0] & ~no_bracos,) + tuple(saia[1:])
     if saia is not None:
         print(f"[rig_ia] saia: barra a {saia[4]:.2f} m")
     for vi in range(len(co)):
@@ -345,6 +388,11 @@ def pesar_capa(obj, arm, H):
     perna_y = float(np.mean([(mw @ arm.data.bones[f"thigh_{lado}"].head_local).y for lado in "lr"]))
     dy = co[:, 1] - perna_y
     c = np.clip((dy - 0.06 * H) / (0.05 * H), 0.0, 1.0) * (co[:, 2] < 0.56 * H)
+    # quem já é do braço (mão, antebraço) continua do braço
+    nomes_idx0 = {g.index: g.name for g in obj.vertex_groups}
+    for vi in np.where(c > 0.01)[0]:
+        if any(nomes_idx0.get(g.group, "").startswith(("hand_", "lowerarm_")) and g.weight > 0.3 for g in obj.data.vertices[int(vi)].groups):
+            c[vi] = 0.0
     c = c * c * (3 - 2 * c)
     segs = [(np.array(mw @ arm.data.bones[n].head_local), np.array(mw @ arm.data.bones[n].tail_local)) for n in CAPA]
     d = np.stack([_seg(co, a, b) for a, b in segs], axis=1)

@@ -427,14 +427,18 @@ def cor_pelo_conceito(m, caminho, forca=0.75):
         xs = np.clip((uv[:, 0] % 1.0) * tw, 0, tw - 1).astype(int)
         ys = np.clip((uv[:, 1] % 1.0) * th, 0, th - 1).astype(int)
         tq = np.quantile(px[ys, xs, :3] @ pesos, qs)
-        # já parecida (o cavaleiro): não mexe
-        if float(np.abs(tq[25:76] - cq[25:76]).max()) < 0.06:
+        # já parecida (o cavaleiro: 0,52 contra 0,50): não mexe; a fera estava 0,49 contra 0,22
+        if abs(float(tq[50] - cq[50])) < 0.08:
             continue
         lum = px[..., :3] @ pesos
         alvo = np.interp(lum, np.maximum.accumulate(tq), cq)
         razao = (alvo + 1e-3) / (lum + 1e-3)
         novo = px[..., :3] * razao[..., None]
-        px[..., :3] = np.clip(px[..., :3] + forca * (novo - px[..., :3]), 0.0, 1.0)
+        # cores fortes (cinto vermelho, olhos âmbar) ficam como estão
+        mx, mn = px[..., :3].max(-1), px[..., :3].min(-1)
+        sat = (mx - mn) / np.maximum(mx, 1e-3)
+        f = forca * (1.0 - 0.85 * np.clip((sat - 0.25) / 0.35, 0.0, 1.0))
+        px[..., :3] = np.clip(px[..., :3] + f[..., None] * (novo - px[..., :3]), 0.0, 1.0)
         img.pixels.foreach_set(px.ravel())
         img.update()
         try:

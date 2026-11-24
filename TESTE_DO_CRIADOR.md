@@ -107,7 +107,13 @@ Provado no CI (no processador, horas) e com vídeos aqui; falta provar no seu PC
    conceito, refinada em close e encaixada no corpo (no processador ela passaria de 6 h, então fica de fora).
 4. **Dragão:** Personagem com tipo **dragao**. Com o 3D pela IA instalado, ele sai pela IA com o esqueleto
    medido na malha (anda, voa, ruge, dá o bote); sem, sai da Forja de criaturas como antes.
-5. **APIs pagas (opcional):** Máquina → APIs de 3D: Meshy, Tripo ou Rodin, com a sua chave e o liga/desliga.
+5. **Monstro de qualquer corpo pela sua imagem (24/11):** num chat (Claude Code, Codex, ChatGPT) com o MCP
+   da Fornalha, mande a imagem que você fez (do Gemini, por exemplo) e peça o personagem com `imagem` (o
+   caminho do PNG) e `corpo: "auto"`. **Esperado:** a malha sai da sua imagem sem ser refeita, o esqueleto
+   é achado sozinho (humanoide, alado ou de patas) e ele anda, corre e ataca. Provado no CI com uma
+   fera-lobo de quatro patas (4,7 h no processador); na RX 580 conte horas por malha. Me diga se a cor
+   ficou parecida com a sua imagem (a correção casa a textura com ela) e se alguma pata dobra errado.
+6. **APIs pagas (opcional):** Máquina → APIs de 3D: Meshy, Tripo ou Rodin, com a sua chave e o liga/desliga.
    Só plano pago tem uso comercial. Ligada, o Personagem sai por ela em minutos.
 
 ## 9c. No jogo (novo em 23/11)
@@ -115,6 +121,9 @@ Provado no CI (no processador, horas) e com vídeos aqui; falta provar no seu PC
    balançando ao vento. Me diga se os tufos pesam na RX 580 (FPS antes e depois de ir para o campo).
 2. **Capa com mola:** no templário feito pela IA, ande e pare: a capa fica para trás e volta, sem
    atravessar as pernas.
+3. **Cavaleiro da IA correndo e atacando (24/11):** os braços se movem como armadura (sem pano preso na
+   manopla), a espada fica no punho nos golpes e a barra da sobreveste fica de pé na corrida (antes abria
+   um "lençol" quando o joelho subia). Me diga se alguma placa do braço esquerdo, o da bainha, se solta.
 
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.

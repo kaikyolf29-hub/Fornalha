@@ -252,7 +252,14 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   (antes uma linha reta até a "ponta" das fatias, que no cavaleiro de referência caía na bainha
   pendurada: o osso da mão ficava 10 cm atrás da manopla e o pano ia junto). O volume é dividido entre
   os ossos por divisor de águas (a manopla e a sobreveste encostadas se separam no vale entre elas) e o
-  braço fica rígido por segmento, com transição curta no cotovelo e no pulso.
+  braço fica rígido por segmento, com transição curta no cotovelo e no pulso. Saia: a faixa abaixo da
+  barra (que seguia a canela e virava um "lençol" na corrida) entrou na saia, e um osso "saia" gravado em
+  cada ação segue o quadril mas fica de pé. **Fera de quatro patas pela IA** (CI, 4,7 h no processador):
+  esqueleto achado sozinho, anda, corre e morde (vídeo enviado). O TRELLIS marcou a fera toda como metal
+  (o pelo saía prata) e clareou o pelo: o mapa de metal todo em 1 é descartado e a luminância da textura
+  é casada com a do conceito (só quando destoa; cores fortes ficam). A aranha passou do tempo do CI no
+  processador (só com placa). Falta: projetar o conceito na malha (os tufos da juba ainda saem claros),
+  mola da saia na Godot, qualidade da passada da fera.
   Próximo: vídeos do cavaleiro, da fera, da aranha e do dragão; mapa; cabelo; luta.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);

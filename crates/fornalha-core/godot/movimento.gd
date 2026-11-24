@@ -974,20 +974,32 @@ var molas: SpringBoneSimulator3D
 ## Capa com os ossos capa_1..capa_3 (malha da IA): vira mola (SpringBoneSimulator3D) que balança com o
 ## movimento e não atravessa as pernas (esferas no quadril, no joelho e no tornozelo).
 func _criar_molas() -> void:
-	if esqueleto.find_bone("capa_1") < 0 or esqueleto.find_bone("capa_3") < 0:
+	# cadeias: [raiz, ponta, comprimento da ponta, rigidez, arrasto, gravidade, raio]
+	var cadeias := []
+	if esqueleto.find_bone("capa_1") >= 0 and esqueleto.find_bone("capa_3") >= 0:
+		cadeias.append(["capa_1", "capa_3", 0.12, 0.7, 0.45, 0.8, 0.05])
+	if esqueleto.find_bone("saia") >= 0:
+		# a barra da sobreveste: um osso do quadril até a barra, de pé, empurrado pelas coxas e canelas
+		cadeias.append(["saia", "saia", 0.5, 1.5, 0.5, 1.0, 0.06])
+	if cadeias.is_empty():
 		return
 	molas = SpringBoneSimulator3D.new()
 	molas.name = "Molas"
-	molas.setting_count = 1
-	molas.set_root_bone_name(0, "capa_1")
-	molas.set_end_bone_name(0, "capa_3")
-	molas.set_extend_end_bone(0, true)
-	molas.set_end_bone_length(0, 0.12)
-	molas.set_stiffness(0, 0.7)
-	molas.set_drag(0, 0.45)
-	molas.set_gravity(0, 0.8)
-	molas.set_radius(0, 0.05)
-	molas.set_enable_all_child_collisions(0, true)
+	molas.setting_count = cadeias.size()
+	for i in cadeias.size():
+		var c: Array = cadeias[i]
+		molas.set_root_bone_name(i, c[0])
+		molas.set_end_bone_name(i, c[1])
+		molas.set_extend_end_bone(i, true)
+		if c[0] == c[1]:
+			# osso sozinho: a ponta segue o eixo do próprio osso (o pai é a raiz, lá no chão)
+			molas.set_end_bone_direction(i, SpringBoneSimulator3D.BONE_DIRECTION_PLUS_Y)
+		molas.set_end_bone_length(i, c[2])
+		molas.set_stiffness(i, c[3])
+		molas.set_drag(i, c[4])
+		molas.set_gravity(i, c[5])
+		molas.set_radius(i, c[6])
+		molas.set_enable_all_child_collisions(i, true)
 	esqueleto.add_child(molas)
 	for lado in ["l", "r"]:
 		for par in [["thigh_", 0.13], ["calf_", 0.10], ["foot_", 0.08]]:

@@ -331,6 +331,123 @@ def tarefa_limpar(t):
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 
+def corrigir_metal_da_ia(m, limite=0.85):
+    """O 3D pela IA às vezes devolve o mapa de metal todo em 1 (o pelo da fera saía prata). Mede o metal
+    nos pontos da textura que a malha usa; se quase tudo é metal, o mapa é descartado (material não
+    metálico). Armadura de verdade tem metal e pano misturados e passa. Devolve a média medida (ou None)."""
+    import numpy as np
+
+    me = m.data
+    if not me.uv_layers or not me.materials:
+        return None
+    uv = np.empty(len(me.loops) * 2)
+    me.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    media = None
+    for mat in me.materials:
+        if not mat or not mat.use_nodes:
+            continue
+        b = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if b is None or not b.inputs["Metallic"].is_linked:
+            continue
+        lig = b.inputs["Metallic"].links[0]
+        no, canal = lig.from_node, lig.from_socket.name
+        img_no = no
+        while img_no is not None and img_no.type != "TEX_IMAGE":
+            ent = next((i for i in img_no.inputs if i.is_linked), None)
+            img_no = ent.links[0].from_node if ent else None
+        if img_no is None or img_no.image is None:
+            continue
+        img = img_no.image
+        w, h = img.size
+        if w * h == 0:
+            continue
+        px = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(h, w, 4)
+        k = {"Red": 0, "Green": 1, "Blue": 2}.get(canal, 0) if no.type in ("SEPARATE_COLOR", "SEPRGB", "SEPARATE_RGB") else 0
+        amostra = uv[:: max(1, len(uv) // 50000)]
+        xs = np.clip((amostra[:, 0] % 1.0) * w, 0, w - 1).astype(int)
+        ys = np.clip((amostra[:, 1] % 1.0) * h, 0, h - 1).astype(int)
+        media = float(px[ys, xs, k].mean())
+        if media > limite:
+            mat.node_tree.links.remove(lig)
+            b.inputs["Metallic"].default_value = 0.0
+            print(f"[rig] mapa de metal da IA descartado em {mat.name} (média {media:.2f}: tudo metal)")
+    return None if media is None else round(media, 3)
+
+
+def cor_pelo_conceito(m, caminho, forca=0.75):
+    """A textura da malha da IA sai mais clara que a imagem da pessoa (as pontas do pelo, que no conceito
+    são reflexo de luz, viram cor clara: a fera escura saía cinza-clara). Casa a distribuição de
+    luminância da textura com a do bicho no conceito (quantil por quantil, mantendo o matiz), com força
+    parcial: a luz pintada no conceito não vira cor. O fundo do conceito sai por linha (estúdio em
+    degradê). Devolve as medianas antes e depois, ou None."""
+    import numpy as np
+
+    me = m.data
+    if not os.path.isfile(caminho) or not me.uv_layers or not me.materials:
+        return None
+    try:
+        ic = bpy.data.images.load(caminho, check_existing=True)
+    except Exception as e:
+        print(f"[rig] conceito não abriu: {e}")
+        return None
+    w, h = ic.size
+    pc = np.empty(w * h * 4, dtype=np.float32)
+    ic.pixels.foreach_get(pc)
+    bpy.data.images.remove(ic)
+    pc = pc.reshape(h, w, 4)[..., :3]
+    lado = max(4, w // 64)
+    fundo = np.median(np.concatenate([pc[:, :lado], pc[:, -lado:]], axis=1), axis=1)
+    bicho = pc[np.abs(pc - fundo[:, None, :]).sum(-1) > 0.15]
+    if len(bicho) < 1000:
+        return None
+    pesos = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    qs = np.linspace(0.0, 1.0, 101)
+    cq = np.quantile(bicho @ pesos, qs)
+    uv = np.empty(len(me.loops) * 2)
+    me.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)[:: max(1, len(me.loops) // 60000)]
+    feito = None
+    for mat in me.materials:
+        if not mat or not mat.use_nodes:
+            continue
+        b = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if b is None or not b.inputs["Base Color"].is_linked:
+            continue
+        no = b.inputs["Base Color"].links[0].from_node
+        if no.type != "TEX_IMAGE" or no.image is None:
+            continue
+        img = no.image
+        tw, th = img.size
+        px = np.empty(tw * th * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(th, tw, 4)
+        xs = np.clip((uv[:, 0] % 1.0) * tw, 0, tw - 1).astype(int)
+        ys = np.clip((uv[:, 1] % 1.0) * th, 0, th - 1).astype(int)
+        tq = np.quantile(px[ys, xs, :3] @ pesos, qs)
+        # já parecida (o cavaleiro): não mexe
+        if float(np.abs(tq[25:76] - cq[25:76]).max()) < 0.06:
+            continue
+        lum = px[..., :3] @ pesos
+        alvo = np.interp(lum, np.maximum.accumulate(tq), cq)
+        razao = (alvo + 1e-3) / (lum + 1e-3)
+        novo = px[..., :3] * razao[..., None]
+        px[..., :3] = np.clip(px[..., :3] + forca * (novo - px[..., :3]), 0.0, 1.0)
+        img.pixels.foreach_set(px.ravel())
+        img.update()
+        try:
+            img.pack()
+        except Exception:
+            pass
+        depois = float(np.median(px[ys, xs, :3] @ pesos))
+        feito = {"mediana_antes": round(float(tq[50]), 3), "mediana_conceito": round(float(cq[50]), 3),
+                 "mediana_depois": round(depois, 3)}
+        print(f"[rig] cor casada com o conceito em {mat.name}: mediana {tq[50]:.2f} → {depois:.2f} (conceito {cq[50]:.2f})")
+    return feito
+
+
 def tarefa_rig(t):
     """Malha de fora (TRELLIS.2, Hunyuan3D, feita à mão) ganha o esqueleto padrão, pesos e animações."""
     import fc_animacoes
@@ -341,11 +458,18 @@ def tarefa_rig(t):
     # malha de jogo: a alta guarda o relevo para o mapa de normais da leve (só quando decima de verdade)
     alta = None
     alvo = int(t.get("triangulos_max") or 0)
-    if t.get("esqueleto") in ("jogo", "dragao") and t.get("normal_da_alta", True) and alvo and c.triangulos([m]) > 1.25 * alvo:
+    if t.get("esqueleto") in ("jogo", "dragao", "auto", "criatura") and t.get("normal_da_alta", True) and alvo and c.triangulos([m]) > 1.25 * alvo:
         alta = m.copy()
         alta.data = m.data.copy()
         bpy.context.scene.collection.objects.link(alta)
     info = limpar_malha(m, t)
+    metal = corrigir_metal_da_ia(m)
+    if metal is not None:
+        info["metal_da_ia"] = metal
+    if t.get("conceito"):
+        cor = cor_pelo_conceito(m, t["conceito"])
+        if cor:
+            info["cor_pelo_conceito"] = cor
     if alta is not None:
         import fc_placa
 
@@ -423,6 +547,10 @@ def _rig_de_jogo(t, m, info):
     if t.get("escudo"):
         clipes.update(fc_armas_pbr.CLIPES_DA_ARMA["escudo"])
     acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes) if t.get("animacoes_de") else []
+    if acoes and info_rig.get("osso_da_saia"):
+        import fc_molde
+
+        info_rig["acoes_com_saia"] = fc_molde.assar_saia(arm, acoes)
     objs = [m]
     arma = t.get("arma")
     if arma and arma != "nenhuma":

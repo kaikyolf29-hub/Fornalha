@@ -18,6 +18,10 @@ HIERARQUIA = [
 ]
 
 
+# o campo de distância da última malha medida (os pesos do braço usam o mesmo volume)
+ULTIMO = {"campo": None}
+
+
 def _vertices(obj):
     m = obj.matrix_world
     return np.array([(m @ v.co)[:] for v in obj.data.vertices])
@@ -59,6 +63,7 @@ def medir(obj):
     cab = faixa(0.88, 0.97)
     y_meio = (float(cab[:, 1].min()) + float(cab[:, 1].max())) / 2 if len(cab) else 0.0
     pontas = {}
+    trilhas = {}
     for lado, s in (("l", 1.0), ("r", -1.0)):
         trilha = []
         for zf in np.arange(0.70, 0.28, -0.008):
@@ -76,6 +81,16 @@ def medir(obj):
                 break
             trilha.append(np.array([c[0], c[1], zf * H]))
         pontas[lado] = trilha[-1] if trilha else None
+        trilhas[lado] = trilha
+    # o centro do braço pelo campo de distância da malha (segue o antebraço dobrado e a mão encostada no
+    # corpo, que as fatias perdem); a linha reta até a ponta das fatias fica de reserva
+    try:
+        import fc_eixo
+        campo = fc_eixo.Campo(obj, 0.008 * H)
+    except Exception as e:  # malha estranha: fica a medição pelas fatias
+        print(f"[rig] sem campo de distância: {e}")
+        campo = None
+    ULTIMO["campo"] = campo
     # ombros: metade da largura do tronco na altura do peito, sem passar da mão
     f = faixa(0.70, 0.76)
     largura = float(np.percentile(np.abs(f[:, 0]), 90)) if len(f) else 0.13 * H
@@ -106,6 +121,28 @@ def medir(obj):
     p["head"] = (p["neck_01"][1], (0, yc["cabeca"], 1.0 * H))
     for lado, s in (("l", 1.0), ("r", -1.0)):
         ombro = np.array([s * ombro_x, yc["s3"], 0.815 * H])
+        b = None
+        if campo is not None:
+            tr = trilhas[lado]
+            if len(tr) >= 3:
+                ini = np.asarray(tr[0])
+                u = np.asarray(tr[min(6, len(tr) - 1)]) - ini
+            else:
+                ini = np.array([s * (ombro_x + 0.02 * H), yc["s3"], 0.70 * H])
+                u = np.array([s * 0.15, 0.0, -1.0])
+            if np.linalg.norm(u) < 1e-6:
+                u = np.array([s * 0.15, 0.0, -1.0])
+            try:
+                b = fc_eixo.braco(campo, H, ombro, ini, u)
+            except Exception as e:
+                print(f"[rig] braço {lado} pelo campo falhou: {e}")
+        if b is not None:
+            print(f"[rig] braço {lado} pelo centro da malha: {b['comprimento'] / H:.2f} H, dobra {b['dobra']:.0f}°, "
+                  f"mão em z {b['ponta'][2]:.2f} m")
+            p[f"clavicle_{lado}"] = ((s * 0.02 * H, yc["s3"] - 0.01 * H, 0.81 * H), tuple(ombro))
+            p[f"upperarm_{lado}"] = (tuple(ombro), tuple(b["cotovelo"]))
+            p[f"lowerarm_{lado}"] = (tuple(b["cotovelo"]), tuple(b["pulso"]))
+            p[f"hand_{lado}"] = (tuple(b["pulso"]), tuple(b["ponta"]))
         # braço pelas proporções do corpo humano ao longo da linha ombro → ponta dos dedos
         # (braço 0,186 H, antebraço 0,146 H, mão 0,108 H); se a ponta medida não cabe (a mão encostou
         # no corpo e a trilha parou no pulso), a ponta vai para o comprimento do braço na mesma direção
@@ -121,10 +158,11 @@ def medir(obj):
         cot = ombro + u * comp * (0.186 / 0.44) + np.array([s * 0.006 * H, 0.012 * H, 0.0])
         pulso = ombro + u * comp * (0.332 / 0.44)
         fim = ombro + v
-        p[f"clavicle_{lado}"] = ((s * 0.02 * H, yc["s3"] - 0.01 * H, 0.81 * H), tuple(ombro))
-        p[f"upperarm_{lado}"] = (tuple(ombro), tuple(cot))
-        p[f"lowerarm_{lado}"] = (tuple(cot), tuple(pulso))
-        p[f"hand_{lado}"] = (tuple(pulso), tuple(fim))
+        if b is None:
+            p[f"clavicle_{lado}"] = ((s * 0.02 * H, yc["s3"] - 0.01 * H, 0.81 * H), tuple(ombro))
+            p[f"upperarm_{lado}"] = (tuple(ombro), tuple(cot))
+            p[f"lowerarm_{lado}"] = (tuple(cot), tuple(pulso))
+            p[f"hand_{lado}"] = (tuple(pulso), tuple(fim))
         px, ymin, ymax = pes[lado]
         tor_y = (ymin + ymax) / 2 + 0.2 * (ymax - ymin)
         quadril = (s * 0.055 * H, quadril_y, 0.5 * H)
@@ -181,14 +219,30 @@ def _saia(co, H, arm, mw):
             break
     if barra is None or barra > quadril - 0.06 * H:
         return None
-    m = (co[:, 2] > barra - 0.015 * H) & (co[:, 2] < quadril) & (np.abs(co[:, 1] - perna_y) < 0.12 * H)
+    dy = co[:, 1] - perna_y
+    # na frente o painel da sobreveste fica bem à frente das pernas (no cavaleiro de referência, 0,124 H):
+    # fora da janela ele seguia a coxa inteira e virava um lençol na corrida
+    m = (co[:, 2] > barra - 0.015 * H) & (co[:, 2] < quadril) & (dy > -0.18 * H) & (dy < 0.12 * H)
+    # abaixo da barra do meio da frente o pano continua (laterais e costas descem mais): é saia o que
+    # está longe das pernas (as grevas ficam justas no osso); antes essa faixa seguia a canela do molde e
+    # virava um lençol quando o joelho subia
+    d_perna = np.full(len(co), np.inf)
+    for lado in "lr":
+        for n in (f"thigh_{lado}", f"calf_{lado}"):
+            b = arm.data.bones.get(n)
+            if b is not None:
+                d_perna = np.minimum(d_perna, _seg(co, np.array(mw @ b.head_local), np.array(mw @ b.tail_local)))
+    m |= (co[:, 2] > 0.1 * H) & (co[:, 2] <= barra - 0.015 * H) & (d_perna > 0.065 * H) & (dy > -0.18 * H) & (dy < 0.12 * H)
     t = np.clip((co[:, 2] - barra) / max(quadril - 0.04 * H - barra, 1e-6), 0.0, 1.0)
     t = t * t * (3 - 2 * t)
-    # longe das pernas em profundidade (a capa atrás) vai sumindo a parte das pernas, sem degrau
-    f = np.clip((0.12 * H - np.abs(co[:, 1] - perna_y)) / (0.06 * H), 0.0, 1.0)
+    # longe das pernas em profundidade (a capa atrás) vai sumindo a parte das pernas, sem degrau; o painel
+    # da frente ainda acompanha um pouco as coxas (o joelho não fura o pano na passada)
+    f = np.clip((0.12 * H - np.abs(dy)) / (0.06 * H), 0.0, 1.0)
     f = f * f * (3 - 2 * f)
+    f = np.where(dy < 0, np.maximum(f, 0.5), f)
     p_quadril = 1.0 - (0.5 - 0.5 * t) * f
-    lado_l = 1.0 / (1.0 + np.exp(-co[:, 0] / (0.025 * H)))
+    # divisão esquerda/direita suave: o painel anda inteiro, sem rasgar no meio quando as coxas se cruzam
+    lado_l = 1.0 / (1.0 + np.exp(-co[:, 0] / (0.05 * H)))
     # abaixo do joelho a barra segue a canela; acima, a coxa
     canela = co[:, 2] < joelho
     return m, p_quadril, lado_l, canela, barra

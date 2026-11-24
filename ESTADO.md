@@ -236,7 +236,24 @@ está em andamento e a ordem. Régua técnica: [docs/BIBLIA_TECNICA_AAA.md](docs
   chão/rocha/casca guardam a cor da foto (tom leve). Chão com cor por vértice (terra batida nos
   caminhos e no largo, grama seca em manchas, baixadas mais escuras) e tufos de grama com vento ao abrir
   o jogo (MultiMesh por blocos de 18 m, some a 48 m). Testado na Godot 4.6.1 (capturas).
-  Próximo: resultado do CI da cabeça por partes, templário com capuz por cima do elmo (CI), mais mapa.
+  **Movimento para qualquer personagem (24/11, pedido do criador: "tem que funcionar para todos"):**
+  o personagem humanoide da IA agora usa o MESMO esqueleto do humano do vídeo aprovado (com dedos):
+  `fc_molde` encaixa um corpo-molde do MakeHuman nas juntas medidas na malha e passa os pesos pela
+  superfície (com regras de região: manopla justa, capa e saia fora dos braços e pernas, elmo inteiro na
+  cabeça). Achado e corrigido: a mão da malha da IA caía na regra da saia (ficava presa no quadril e a
+  espada "andava sozinha"). Criaturas de qualquer corpo (`fc_rig_generico`): patas achadas pelos pés e
+  seguidas na malha, passada com IK e fases pelo número de patas, coluna e cauda em onda, bote, dano e
+  morte; o dragão da IA anda com a mesma passada. create_character aceita `imagem` (PNG pronto, do
+  Gemini ou de onde for; vira o 3D sem ser refeito) e `corpo` (auto, humanoide, alado, quadrupede,
+  aranha, inseto, serpente). Em prova no CI: fera de quatro patas e aranha gigante pela IA.
+  **Braço pelo volume da malha (`fc_eixo`, 24/11):** a malha da IA vem partida nas costuras de textura
+  e com normais trocadas; agora ela vira voxels pela paridade dos raios (sem depender de normal), com
+  campo de distância até a superfície. O braço é seguido pelo cume desse campo do ombro à ponta da mão
+  (antes uma linha reta até a "ponta" das fatias, que no cavaleiro de referência caía na bainha
+  pendurada: o osso da mão ficava 10 cm atrás da manopla e o pano ia junto). O volume é dividido entre
+  os ossos por divisor de águas (a manopla e a sobreveste encostadas se separam no vale entre elas) e o
+  braço fica rígido por segmento, com transição curta no cotovelo e no pulso.
+  Próximo: vídeos do cavaleiro, da fera, da aranha e do dragão; mapa; cabelo; luta.
 - **Etapa 2** — depois do Teste de Fogo: mundo, combate, todos os estilos, placas fortes.
 Decisões do criador em 22/11: teto RE4 Remake / Elden Ring / Tales of Fantasy (pode levar horas);
 foco no Windows; o trabalho segue sozinho entre um limite de uso e outro.

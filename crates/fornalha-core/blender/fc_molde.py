@@ -54,7 +54,12 @@ def encaixar(arm, pontos, H_molde, H):
             continue
         giro = y0.rotation_difference(alvo.normalized()).to_matrix()
         s = alvo.length / max(b.length, 1e-6)
-        if nome in UNIFORMES:
+        if nome.startswith("hand_"):
+            # a mão da IA é medida até a ponta do punho fechado: os dedos do molde ficam no tamanho do
+            # corpo (escalados pelo comprimento da mão eles iam a 30 cm do pulso e a pegada saía da manopla)
+            u = H / max(H_molde, 1e-6)
+            esc = Matrix.Diagonal((u, u, u))
+        elif nome in UNIFORMES:
             esc = Matrix.Diagonal((s, s, s))
         else:
             esc = Matrix.Diagonal((1.0, s, 1.0))
@@ -107,7 +112,10 @@ def _mascara_por_regiao(obj, arm, nomes, H):
         atras = (((co[:, 1] - p_up[:, 1]) > 0.035 * H) & (d_up > 0.04 * H)) | \
                 (((co[:, 1] - p_lo[:, 1]) > 0.018 * H) & (d_lo > 0.025 * H)) | \
                 (((co[:, 1] - p_ha[:, 1]) > 0.018 * H) & (d_ha > 0.025 * H))
-        braco = ((d_up < 0.08 * H) & ~atras) | (((d_lo < 0.05 * H) | (d_ha < 0.05 * H)) & ~dentro & ~atras)
+        # o lado do tronco e da sobreveste embaixo do braço (para dentro do eixo do braço) é do tronco:
+        # antes ele subia junto quando o braço erguia a espada e virava uma cortina
+        dentro_up = (s_lado * (co[:, 0] - p_up[:, 0]) < -0.03 * H) & (d_up > 0.035 * H)
+        braco = ((d_up < 0.08 * H) & ~atras & ~dentro_up) | (((d_lo < 0.05 * H) | (d_ha < 0.05 * H)) & ~dentro & ~atras)
         # depois da ponta dos dedos é pano (a beirada da capa ou da saia logo abaixo da mão)
         a_h, b_h = seg[f"hand_{lado}"]
         ab_h = b_h - a_h
@@ -217,6 +225,159 @@ def transferir(molde, obj, nomes, H, pode=None, D=None):
     return W / s, conhecido
 
 
+DEDOS = ("thumb", "index", "middle", "ring", "pinky")
+
+
+def _ilhas(obj):
+    """Número da peça de cada vértice: as ilhas do mapa de textura (existem mesmo com a malha soldada);
+    sem UV, as partes ligadas por arestas."""
+    me = obj.data
+    n = len(me.vertices)
+    if me.uv_layers:
+        try:
+            from bpy_extras import mesh_utils
+
+            ilhas = np.full(n, -1, dtype=np.int64)
+            for k, polis in enumerate(mesh_utils.mesh_linked_uv_islands(me)):
+                for pi in polis:
+                    for vi in me.polygons[pi].vertices:
+                        if ilhas[vi] < 0:
+                            ilhas[vi] = k
+            sem = ilhas < 0
+            ilhas[sem] = ilhas.max() + 1 + np.arange(int(sem.sum()))
+            return ilhas
+        except Exception as e:
+            print(f"[molde] sem ilhas de UV: {e}")
+    pai = np.arange(n)
+
+    def raiz(x):
+        r = x
+        while pai[r] != r:
+            r = pai[r]
+        while pai[x] != r:
+            pai[x], x = r, pai[x]
+        return r
+    for e in me.edges:
+        a, b = raiz(e.vertices[0]), raiz(e.vertices[1])
+        if a != b:
+            pai[a] = b
+    r = np.array([raiz(i) for i in range(n)])
+    return np.unique(r, return_inverse=True)[1]
+
+
+def _por_ilha(ilhas, m, maximo=1500):
+    """A máscara vale para a peça inteira quando a maior parte dela está dentro (e some quando não).
+    Peça grande demais (a sobreveste inteira numa ilha só) fica vértice a vértice."""
+    tot = np.bincount(ilhas)
+    den = np.bincount(ilhas, weights=m.astype(float), minlength=len(tot))
+    voto = (den / np.maximum(tot, 1))[ilhas] > 0.5
+    grande = tot[ilhas] > maximo
+    return np.where(grande, m, voto)
+
+
+def bracos_pelo_volume(obj, arm, nomes, W, H, D=None):
+    """Braços pela divisão do volume da malha entre os ossos (fc_eixo.rotular): o que é do lobo do braço
+    fica rígido por segmento, com transição curta no cotovelo e no pulso (como se pesa armadura); o que
+    não é do braço não pega osso do braço — a sobreveste encostada na manopla deixa de ir junto com a
+    mão. Devolve (W, máscara dos vértices do braço) ou (W, None) sem o campo."""
+    import fc_eixo
+    campo = fc_rig_ia.ULTIMO.get("campo")
+    if campo is None:
+        return W, None
+    mw = arm.matrix_world
+    ossos = {}
+    for b in arm.data.bones:
+        n = b.name
+        if n == "Root" or n.split("_")[0] in DEDOS or n.startswith("capa"):
+            continue
+        ossos[n] = (np.array(mw @ b.head_local), np.array(mw @ b.tail_local))
+    lab, ln = fc_eixo.rotular(campo, ossos)
+    co = _co(obj)
+    rv = fc_eixo.rotulo_dos_vertices(campo, lab, co)
+    nome_v = np.array([ln[k] if k >= 0 else "" for k in rv])
+    ilhas = _ilhas(obj)
+    ii = {n: i for i, n in enumerate(nomes)}
+    W = W.copy()
+    do_braco = np.zeros(len(co), dtype=bool)
+    b = 0.022 * H
+    for lado in "lr":
+        cadeia = [f"upperarm_{lado}", f"lowerarm_{lado}", f"hand_{lado}"]
+        juntas = [ossos[cadeia[0]][0], ossos[cadeia[1]][0], ossos[cadeia[2]][0], ossos[cadeia[2]][1]]
+        m = np.isin(nome_v, cadeia)
+        # e perto da cadeia (ombreira larga, manopla justa); o que passa da ponta da mão é outra coisa
+        # (o punho da espada embainhada encostado na mão, a bainha, a beirada do pano)
+        s_all, d_all = fc_eixo.na_cadeia(co, juntas, distancia=True)
+        c_cot0 = float(np.linalg.norm(juntas[1] - juntas[0]))
+        c_pul0 = c_cot0 + float(np.linalg.norm(juntas[2] - juntas[1]))
+        c_fim0 = c_pul0 + float(np.linalg.norm(juntas[3] - juntas[2]))
+        raio = np.where(s_all < c_cot0, 0.085 * H, np.where(s_all < c_pul0, 0.06 * H, 0.05 * H))
+        ab = juntas[3] - juntas[2]
+        alem = ((co - juntas[3]) @ ab) / max(float(np.linalg.norm(ab)), 1e-9) > 0.02 * H
+        n_rot = int(m.sum())
+        m &= (d_all < raio) & ~alem
+        n_raio = int(m.sum())
+        # cada peça da malha (ilha) decide inteira: placa da armadura não rasga no meio, pano encostado
+        # não fica meio no braço e meio no corpo
+        m = _por_ilha(ilhas, m)
+        print(f"[molde] braço {lado}: rotulado {n_rot}, no raio {n_raio}, por peça {int(m.sum())}")
+        if not m.any():
+            continue
+        do_braco |= m
+        s = s_all[m]
+        c_cot = float(np.linalg.norm(juntas[1] - juntas[0]))
+        c_pul = c_cot + float(np.linalg.norm(juntas[2] - juntas[1]))
+        w_lo = fc_eixo.suave(c_cot - b, c_cot + b, s)
+        w_ha = fc_eixo.suave(c_pul - 0.7 * b, c_pul + 0.7 * b, s)
+        # o começo do braço divide com a clavícula (o ombro dobra macio)
+        w_cl = 1.0 - fc_eixo.suave(0.0, 1.5 * b, s)
+        linhas = np.zeros((int(m.sum()), len(nomes)), dtype=np.float32)
+        linhas[:, ii[f"clavicle_{lado}"]] = w_cl * 0.5
+        linhas[:, ii[cadeia[0]]] = (1 - w_lo) * (1 - w_cl * 0.5)
+        linhas[:, ii[cadeia[1]]] = w_lo * (1 - w_ha) * (1 - w_cl * 0.5)
+        linhas[:, ii[cadeia[2]]] = w_ha * (1 - w_cl * 0.5)
+        # dedos da malha: da metade da mão para a ponta, os pesos dos dedos do molde (do tamanho do
+        # corpo, encaixado no pulso): a manopla fecha na pegada da arma junto com a captura
+        dedos_i = [i for n, i in ii.items() if n.endswith(f"_{lado}") and n.split("_")[0] in DEDOS]
+        if dedos_i:
+            c_fim = c_pul + float(np.linalg.norm(juntas[3] - juntas[2]))
+            r_dedo = fc_eixo.suave(c_pul + 0.35 * (c_fim - c_pul), c_pul + 0.6 * (c_fim - c_pul), s)
+            Wt = W[m][:, dedos_i]
+            soma = Wt.sum(1)
+            tem = soma > 0.05
+            frac = np.where(tem, np.clip(soma, 0.0, 1.0), 0.0) * r_dedo
+            Wd = np.where(tem[:, None], Wt / np.maximum(soma, 1e-6)[:, None], 0.0) * frac[:, None]
+            linhas[:, dedos_i] = Wd
+            linhas[:, ii[cadeia[2]]] *= 1.0 - frac
+        W[m] = linhas
+        print(f"[molde] braço {lado} pelo volume: {int(m.sum())} vértices "
+              f"(mão {int(np.isin(nome_v[m], [cadeia[2]]).sum())})")
+    # fora do lobo do braço, nada de osso do braço (o ombro do tronco ainda divide com o braço perto da
+    # junta, para o deltoide não rasgar)
+    braco_ii = [i for n, i in ii.items() if n.split("_")[0] in ("upperarm", "lowerarm", "hand") + DEDOS]
+    fora = ~do_braco
+    if fora.any():
+        perto_ombro = np.zeros(len(co), dtype=bool)
+        for lado in "lr":
+            perto_ombro |= np.linalg.norm(co - ossos[f"upperarm_{lado}"][0], axis=1) < 0.07 * H
+        zerar = fora & ~perto_ombro
+        for i in braco_ii:
+            W[zerar, i] = 0.0
+        so_ombro = fora & perto_ombro
+        for i in braco_ii:
+            if not nomes[i].startswith("upperarm"):
+                W[so_ombro, i] = 0.0
+        vazio = fora & (W.sum(1) < 0.2)
+        if vazio.any() and D is not None:
+            ok = np.array([i not in braco_ii for i in range(len(nomes))])
+            Dv = np.where(ok[None, :], D[vazio], np.inf)
+            w = 1.0 / (Dv + 0.01 * H) ** 4
+            w[~np.isfinite(Dv)] = 0.0
+            W[vazio] = w
+    s = W.sum(1, keepdims=True)
+    s[s < 1e-6] = 1.0
+    return W / s, do_braco
+
+
 def gravar_pesos(obj, nomes, W, minimo=0.01):
     for g in list(obj.vertex_groups):
         obj.vertex_groups.remove(g)
@@ -232,6 +393,78 @@ def gravar_pesos(obj, nomes, W, minimo=0.01):
         for k, w in zip(ks, ws / t):
             if w > minimo:
                 grupos[k].add([vi], float(w), "REPLACE")
+
+
+SAIA = "saia"
+
+
+def _criar_osso_da_saia(arm, comprimento):
+    """Osso "saia" do quadril até a barra, apontando para baixo (pai: a raiz, se houver)."""
+    _ativo(arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb_p = arm.data.edit_bones["pelvis"]
+    eb = arm.data.edit_bones.new(SAIA)
+    eb.head = eb_p.head.copy()
+    eb.tail = eb_p.head - Vector((0.0, 0.0, max(comprimento, 0.05)))
+    eb.align_roll(Vector((0.0, -1.0, 0.0)))
+    raiz = arm.data.edit_bones.get("Root")
+    eb.parent = raiz
+    eb.use_deform = True
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return SAIA
+
+
+def assar_saia(arm, acoes, giro=0.25):
+    """Grava em cada ação o osso da barra: no lugar do quadril, com o giro dele em volta do eixo
+    vertical e só `giro` da inclinação (o pano pende de pé, como numa simulação parada)."""
+    from mathutils import Quaternion
+
+    if SAIA not in arm.pose.bones or not acoes:
+        return 0
+    cena = bpy.context.scene
+    ad = arm.animation_data or arm.animation_data_create()
+    antes = ad.action
+    pp = arm.pose.bones["pelvis"]
+    ps = arm.pose.bones[SAIA]
+    ps.rotation_mode = "QUATERNION"
+    rest_p = pp.bone.matrix_local.to_quaternion()
+    rest_s = ps.bone.matrix_local
+    # sem deformar a malha enquanto grava (só o esqueleto importa aqui)
+    mods = []
+    for o in bpy.data.objects:
+        for m in getattr(o, "modifiers", []):
+            if m.type == "ARMATURE" and m.object == arm and m.show_viewport:
+                m.show_viewport = False
+                mods.append(m)
+    n = 0
+    try:
+        for a in acoes:
+            ad.action = a
+            try:
+                if a.slots:
+                    ad.action_slot = a.slots[0]
+            except Exception:
+                pass
+            ini, fim = (int(round(x)) for x in a.frame_range)
+            for f in range(ini, fim + 1):
+                cena.frame_set(f)
+                mp = pp.matrix
+                q = mp.to_quaternion() @ rest_p.inverted()
+                # giro em volta do eixo vertical (pela frente do corpo girada)
+                frente = q @ Vector((0.0, -1.0, 0.0))
+                yaw = Quaternion((0.0, 0.0, 1.0), float(np.arctan2(frente.x, -frente.y))) if frente.xy.length > 1e-6 else Quaternion()
+                alvo = yaw.slerp(q, giro)
+                m4 = (alvo.to_matrix().to_4x4() @ rest_s.to_3x3().to_4x4())
+                m4.translation = mp.translation
+                ps.matrix = m4
+                ps.keyframe_insert("rotation_quaternion", frame=f, group=SAIA)
+                ps.keyframe_insert("location", frame=f, group=SAIA)
+            n += 1
+    finally:
+        for m in mods:
+            m.show_viewport = True
+        ad.action = antes
+    return n
 
 
 def rigar(obj, nome, altura, makehuman):
@@ -277,6 +510,7 @@ def rigar(obj, nome, altura, makehuman):
     nomes = [b.name for b in arm.data.bones if b.name != "Root"]
     pode, D = _mascara_por_regiao(obj, arm, nomes, H)
     W, conhecido = transferir(molde, obj, nomes, H, pode, D)
+    W, do_braco = bracos_pelo_volume(obj, arm, nomes, W, H, D)
     gravar_pesos(obj, nomes, W)
     bpy.data.objects.remove(molde, do_unlink=True)
     # saia e capa: as mesmas regras do esqueleto medido (barra pela malha; cadeia de molas na capa)
@@ -286,11 +520,20 @@ def rigar(obj, nome, altura, makehuman):
     saia = fc_rig_ia._saia(co, H, arm, mw)
     print(f"[molde] saia: {'barra a %.2f m, %d vértices' % (saia[4], int(saia[0].sum())) if saia is not None else 'não achada'}")
     paineis = []
+    saia_osso = None
     if saia is not None:
         # a mão pendurada ao lado da saia continua da mão
         ii = {n: i for i, n in enumerate(nomes)}
-        mao = pode[:, ii["hand_l"]] | pode[:, ii["hand_r"]] | pode[:, ii["lowerarm_l"]] | pode[:, ii["lowerarm_r"]]
-        mascara, p_quadril, lado_l, canela, _ = saia
+        if do_braco is not None:
+            mao = do_braco
+        else:
+            mao = pode[:, ii["hand_l"]] | pode[:, ii["hand_r"]] | pode[:, ii["lowerarm_l"]] | pode[:, ii["lowerarm_r"]]
+        mascara, p_quadril, lado_l, canela, barra = saia
+        # osso da barra: segue o quadril no lugar e no giro em volta do eixo vertical, mas fica de pé (a
+        # barra rígida no quadril subia para trás quando a corrida inclina o quadril); na engine ganha mola
+        quadril_z = float((mw @ arm.data.bones["pelvis"].head_local).z)
+        saia_osso = _criar_osso_da_saia(arm, quadril_z - barra)
+        tt = np.clip((co[:, 2] - barra) / max(quadril_z - barra, 1e-6), 0.0, 1.0)
         for vi in np.where(mascara & ~mao)[0]:
             v = obj.data.vertices[int(vi)]
             for gg in list(v.groups):
@@ -300,9 +543,12 @@ def rigar(obj, nome, altura, makehuman):
             p = 0.5 + 0.5 * float(p_quadril[vi])
             wl = float(lado_l[vi])
             osso = "thigh"
-            for n, w in (("pelvis", p), (f"{osso}_l", (1 - p) * wl), (f"{osso}_r", (1 - p) * (1 - wl))):
-                if w > 0.01:
-                    obj.vertex_groups[n].add([int(vi)], w, "REPLACE")
+            q = 0.7 * (1.0 - float(tt[vi])) ** 1.5 if saia_osso else 0.0
+            for n, w in (("pelvis", p * (1 - q)), (saia_osso, p * q), (f"{osso}_l", (1 - p) * wl),
+                         (f"{osso}_r", (1 - p) * (1 - wl))):
+                if n and w > 0.01:
+                    g = obj.vertex_groups.get(n) or obj.vertex_groups.new(name=n)
+                    g.add([int(vi)], w, "REPLACE")
     if capa:
         fc_rig_ia.pesar_capa(obj, arm, H)
     _ativo(obj)
@@ -320,4 +566,5 @@ def rigar(obj, nome, altura, makehuman):
     mod = obj.modifiers.new("esqueleto", "ARMATURE")
     mod.object = arm
     return arm, {"altura_m": round(H, 3), "pesos": "molde-makehuman", "ossos": len(arm.data.bones),
-                 "pesos_pela_superficie": round(float(conhecido.mean()), 3), "molas": capa, "paineis": paineis}
+                 "pesos_pela_superficie": round(float(conhecido.mean()), 3), "molas": capa, "paineis": paineis,
+                 "osso_da_saia": saia_osso}

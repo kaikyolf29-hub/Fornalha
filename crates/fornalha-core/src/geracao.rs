@@ -604,13 +604,13 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                                "altura_m": altura, "triangulos_max": 80000, "esqueleto": esqueleto,
                                "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"],
                                "materiais": base["materiais"], "ceu": base["ceu"], "folha": true, "video": a.video.unwrap_or(false),
-                               "video_animacoes": ["voar", "rugir", "andar", "correr", "atacar"], "amostras": 20})
+                               "video_animacoes": ["voar", "rugir", "andar", "correr", "atacar"], "amostras": 20, "conceito": img})
                     } else {
                         json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
                                "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
                                "esqueleto": "jogo", "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
                                "ceu": base["ceu"], "arma": ficha["arma"], "escudo": ficha["escudo"].as_bool().unwrap_or(false),
-                               "cabeca": cabeca, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20})
+                               "cabeca": cabeca, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20, "conceito": img})
                     };
                     match forjar(f, &tarefa).await {
                         Ok(mut rr) => {

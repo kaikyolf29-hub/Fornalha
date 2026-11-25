@@ -2,6 +2,15 @@
 
 > Toda retomada começa por aqui. Atualizado antes de cada pausa.
 
+## Rumo novo (25/11/2026, combinado com o criador)
+O trabalho segue o **[docs/PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md)**: a Fornalha 3D é a bancada
+da IA (Claude Code, Codex), e a **Erethea Engine é a principal**. A Fornalha continua fazendo tudo o
+que faz hoje (conceito, 3D, APIs, dublagem, boca e olhos, música, efeitos, organização do projeto) e
+ganha bancadas com imagens e medidas: 1) movimento para qualquer corpo e roupa por cima; 2) cabelo e
+mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo pequeno completo.
+Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
+de outra conta e não chegou ao repositório até 25/11.
+
 ## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI
 do Windows e do Linux.** Falta o teste do criador na máquina dele (TESTE_DO_CRIADOR.md) e falta
@@ -359,12 +368,28 @@ Turbo), reserva da placa, `uso_comercial` nos modelos, aceleradores em `/motor/e
    RX 9060 XT 16 GB pelo que for mais rápido, com o mesmo endpoint.
 
 ## Pedidos para a Erethea Engine (o criador leva para o chat da Erethea)
+Conferido no `HANDOFF.md` da Erethea em 25/11/2026 (main de 23/11, commit c4993bf).
+Já feitos na Erethea:
+- **Upscalers** AMD FSR 3.1/4, XeSS e DLSS (`modules/erethea_upscale/`), presets de qualidade e
+  pós-processo (LUT, lens flare, motion blur, grão).
+- **Raios de luz** (`EretheaLightShafts`, PR #32). A névoa de altura é a do `Environment` da Godot
+  (`fog_enabled` + `fog_height_density`), sem código novo.
+- Ponte com a Fornalha (importa o `game.project.json`, elo ao vivo, `--agent-test`), MCP do editor
+  (cena, `take_screenshot`, `run_test`, `get_errors`, `build_fornalha_scenes`) e som (WAV da
+  dublagem, eco por área, música no fim do compasso).
+
+Ainda na fila da Erethea (Fase 4 e 5 dela, não começados em 23/11):
 1. **Cabelo fio a fio nativo** (fitas viradas para a câmera ou curvas, com alfa por hash e brilho
-   anisotrópico), para a Fornalha mandar o penteado direto em vez de cards no nível Máximo.
-2. **SSS de pele melhor** (perfil de espalhamento por canal e mapa de espessura) e sombra de contato.
-3. **Geometria virtual / LOD contínuo** (estilo Nanite) para cenário denso (castelos, vilas).
-4. **Terreno nativo** compatível com Terrain3D (clipmap, 32 materiais, detiling, triplanar).
-5. **Upscaling (FSR) e efeitos de compositor** prontos (névoa de altura, raios de luz).
+   anisotrópico), para a bancada de cabelo da Fornalha mandar o penteado direto (Fase 4, item 5).
+2. **SSS de pele melhor** (perfil de espalhamento por canal e mapa de espessura) e sombra de contato
+   (Fase 4, item 5).
+3. **Terreno nativo** compatível com Terrain3D (clipmap, 32 materiais, detiling, triplanar) e
+   **vegetação** com LOD, impostores e vento (Fase 4, itens 6 e 7).
+4. **Geometria virtual / LOD contínuo** (estilo Nanite) para cenário denso (Fase 5).
+5. Prévia com LibGodot dentro da Fornalha (pedido 8; PR #31 da Erethea, quase pronto em 23/11).
+Divisão combinada em 25/11 (veja o PLANO_3_ETAPAS.md): o que roda no jogo é da Erethea; as bancadas
+que a IA usa para criar (movimento, roupa, cabelo, plano do mapa) são da Fornalha. O retarget e a
+locomoção previstos no item 8 da Fase 4 da Erethea podem usar o banco e o esqueleto da Fornalha.
 A Fornalha usa o que a Erethea tiver e cai para o caminho da Godot quando não houver.
 
 ## Notas para a Erethea Engine
@@ -374,6 +399,8 @@ A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.
 algum desses, avise aqui.
 
 ## Próximo passo
+0. Etapa 1 do [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): estação Movimento, banco ligado,
+   esqueleto montado pela IA, conferência que reprova e roupa por cima.
 1. Criador: rodar o TESTE_DO_CRIADOR.md no Windows (e, se quiser, no Linux).
 2. Com a placa NVIDIA nova: instalar os modelos de placa em Máquina e rodar a parte 9 do teste.
 3. Fase 5 só quando o criador pedir.

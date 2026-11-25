@@ -1,5 +1,8 @@
 # Plano em 2 etapas — Fornalha 3D completa
 
+> **25/11/2026:** o trabalho agora segue o [PLANO_3_ETAPAS.md](PLANO_3_ETAPAS.md). Este arquivo
+> fica como histórico do que foi feito e lista de ideias.
+
 > Pedido do criador (22/11/2026): juntar **tudo o que falta** — o Plano 1 original, o plano em 3
 > etapas, a [Bíblia técnica AAA](BIBLIA_TECNICA_AAA.md), o complemento técnico (corpo, rosto, cabelo,
 > criaturas e teste bruto) e os pedidos da Erethea Engine — em **duas etapas** para terminar a

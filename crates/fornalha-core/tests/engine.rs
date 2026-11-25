@@ -115,6 +115,75 @@ async fn do_zero_ao_jogo_rodando_na_engine() {
     assert_eq!(rel["passou"], Value::Bool(true));
 }
 
+/// O mapa da bancada de mapa substitui o blockout: o manifesto aponta para ele, com o início dele.
+#[test]
+fn manifesto_usa_o_mapa_quando_existe() {
+    let tmp = tempfile::tempdir().unwrap();
+    let p = projeto::criar(&NovoProjeto { nome: "Vale".into(), ..Default::default() }, tmp.path()).unwrap();
+    let mapa = p.raiz.join("World/mapa");
+    std::fs::create_dir_all(mapa.join("texturas")).unwrap();
+    std::fs::write(mapa.join("mapa.json"), r#"{"spawn_jogador": [1.0, 2.0, 3.0], "spawn_inimigos": [[4.0, 5.0, 6.0]]}"#).unwrap();
+    std::fs::write(mapa.join("texturas/grama_cor.jpg"), b"jpg").unwrap();
+    let m = engine::escrever_manifesto(&p.raiz, None, false).unwrap();
+    assert_eq!(m["mapa"]["pasta"], "res://World/mapa");
+    assert_eq!(m["mapa"]["texturas"]["grama"]["cor"], "res://World/mapa/texturas/grama_cor.jpg");
+    assert_eq!(m["spawn_jogador"], json!([1.0, 2.0, 3.0]));
+    assert_eq!(m["spawn_inimigos"], json!([[4.0, 5.0, 6.0]]));
+}
+
+/// Bancada de mapa na engine: terreno com colisão pelo mapa de altura (o jogador pisa nele), vegetação
+/// que sobrevive à montagem sem tela, água e construções, sem erro da engine.
+#[tokio::test]
+async fn mapa_da_bancada_na_engine_com_chao_de_verdade() {
+    let (Some(blender), Some(godot)) = (externas::achar_para_teste(Programa::Blender).await, achar_engine().await) else {
+        eprintln!("Blender ou Godot/Erethea não encontrados: teste pulado");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let p = projeto::criar(&NovoProjeto { nome: "Vale".into(), ..Default::default() }, tmp.path()).unwrap();
+    let raiz = p.raiz.clone();
+    let t = Duration::from_secs(600);
+    let arq = raiz.join("Characters/aren/aren.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "personagem", "saida": arq, "previa": false, "personagem": {"id": "aren", "tipo": "humano"}}),
+        t,
+    )
+    .await
+    .unwrap();
+    std::fs::write(arq.with_extension("forja.json"), serde_json::to_vec(&r).unwrap()).unwrap();
+    let plano = json!({"tamanho_m": 192, "seed": 4, "rio": true, "regioes": [{"id": "vila", "tipo": "vila"}, {"id": "mata", "tipo": "bosque", "posicao": "norte"}]});
+    let m =
+        forja::rodar(&blender, tmp.path(), &json!({"tarefa": "mapa", "saida": raiz.join("World/mapa"), "plano": plano, "fotos": false}), t)
+            .await
+            .unwrap();
+    assert_eq!(m["medidas"]["aprovado"], true, "{}", m["medidas"]);
+    engine::preparar_projeto(&p, godot.versao.as_deref().unwrap_or("")).unwrap();
+    let man = engine::escrever_manifesto(&raiz, None, false).unwrap();
+    assert_eq!(man["mapa"]["pasta"], "res://World/mapa");
+    let montado = engine::montar(&godot, &raiz).await.unwrap();
+    assert_eq!(montado["erros_da_engine"], json!([]), "{montado}");
+    let mundo = std::fs::read_to_string(raiz.join("World/mundo.tscn")).unwrap();
+    assert!(mundo.contains("transformacoes = PackedFloat32Array"), "as posições da vegetação ficaram na cena");
+    assert!(mundo.contains("Foto_vila"), "pontos de foto");
+    assert!(raiz.join("World/mapa/colisao.res").is_file(), "colisão pelo mapa de altura");
+    let tem_tela = std::env::var_os("DISPLAY").is_some() || cfg!(windows);
+    let op = OpcoesTeste {
+        segundos: 6.0,
+        sem_janela: !tem_tela,
+        sem_placa: std::env::var_os("FORNALHA_TESTE_COM_PLACA").is_none(),
+        video: false,
+    };
+    let pasta = std::env::var_os("FORNALHA_TESTE_SAIDA").map(std::path::PathBuf::from).unwrap_or_else(|| tmp.path().join("teste_mapa"));
+    let rel = engine::testar(&godot, &raiz, &pasta, &op).await.unwrap();
+    eprintln!("relatório do mapa: {}", serde_json::to_string_pretty(&rel).unwrap());
+    assert_eq!(rel["erros"], json!([]), "a engine não pode dar erro");
+    assert_eq!(rel["jogador"]["caiu_do_mapa"], false);
+    assert_eq!(rel["jogador"]["no_chao"], true, "o jogador pisa no terreno do mapa");
+    assert!(rel["jogador"]["andou_m"].as_f64().unwrap() > 2.0, "{}", rel["jogador"]);
+}
+
 async fn achar_engine() -> Option<externas::Achado> {
     match externas::achar_para_teste(Programa::Erethea).await {
         Some(e) => Some(e),

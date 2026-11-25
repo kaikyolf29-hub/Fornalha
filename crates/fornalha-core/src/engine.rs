@@ -21,7 +21,7 @@ use crate::projeto::Projeto;
 
 /// Scripts do jogo que a Fornalha escreve em `Scripts/fornalha/`.
 /// (caminho no projeto, conteúdo). A ponte é um plugin do editor (vale na Godot e na Erethea).
-const SCRIPTS: [(&str, &str); 13] = [
+const SCRIPTS: [(&str, &str); 16] = [
     ("Scripts/fornalha/jogador.gd", include_str!("../godot/jogador.gd")),
     ("Scripts/fornalha/inimigo.gd", include_str!("../godot/inimigo.gd")),
     ("Scripts/fornalha/movimento.gd", include_str!("../godot/movimento.gd")),
@@ -33,6 +33,9 @@ const SCRIPTS: [(&str, &str); 13] = [
     ("Scripts/fornalha/fisica.gd", include_str!("../godot/fisica.gd")),
     ("Scripts/fornalha/cabelo.gdshader", include_str!("../godot/cabelo.gdshader")),
     ("Scripts/fornalha/couro_cabeludo.gdshader", include_str!("../godot/couro_cabeludo.gdshader")),
+    ("Scripts/fornalha/terreno.gdshader", include_str!("../godot/terreno.gdshader")),
+    ("Scripts/fornalha/agua.gdshader", include_str!("../godot/agua.gdshader")),
+    ("Scripts/fornalha/vegetacao.gd", include_str!("../godot/vegetacao.gd")),
     ("addons/fornalha_ponte/plugin.cfg", include_str!("../godot/ponte_plugin.cfg")),
     ("addons/fornalha_ponte/ponte_plugin.gd", include_str!("../godot/ponte_plugin.gd")),
 ];
@@ -226,6 +229,28 @@ pub fn escrever_manifesto(raiz: &Path, jogador: Option<&str>, inimigo_perto: boo
     let mundo_glb = raiz.join("World/blockout.glb");
     let info: Value =
         std::fs::read(raiz.join("World/blockout.info.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({}));
+    // o mapa da bancada de mapa (World/mapa) passa na frente do blockout
+    let mapa: Option<Value> = std::fs::read(raiz.join("World/mapa/mapa.json")).ok().and_then(|b| serde_json::from_slice(&b).ok());
+    let info = match &mapa {
+        Some(m) => json!({"spawn_jogador": m["spawn_jogador"], "spawn_inimigos": m["spawn_inimigos"]}),
+        None => info,
+    };
+    let mut texturas = serde_json::Map::new();
+    for camada in ["grama", "terra", "rocha", "areia", "neve"] {
+        let cor = raiz.join(format!("World/mapa/texturas/{camada}_cor.jpg"));
+        if cor.is_file() {
+            let normal = raiz.join(format!("World/mapa/texturas/{camada}_normal.jpg"));
+            let mut t = json!({"cor": res(raiz, &cor)});
+            if normal.is_file() {
+                t["normal"] = json!(res(raiz, &normal));
+            }
+            texturas.insert(camada.into(), t);
+        }
+    }
+    let mapa_m = match &mapa {
+        Some(_) => json!({"pasta": "res://World/mapa", "cena": "res://World/mundo.tscn", "texturas": texturas}),
+        None => json!({}),
+    };
     let musica = ["exploracao", "vila", "floresta", "combate"]
         .iter()
         .map(|n| raiz.join(format!("Audio/musica/{n}.wav")))
@@ -240,6 +265,7 @@ pub fn escrever_manifesto(raiz: &Path, jogador: Option<&str>, inimigo_perto: boo
         "jogador": jogador,
         "inimigos": inimigos,
         "inimigo_perto": inimigo_perto,
+        "mapa": mapa_m,
         "mundo": if mundo_glb.is_file() { json!({"modelo": res(raiz, &mundo_glb), "cena": "res://World/mundo.tscn"}) } else { json!({}) },
         "spawn_jogador": info.get("spawn_jogador").cloned().unwrap_or(json!([0.0, 0.2, 0.0])),
         "spawn_inimigos": info.get("spawn_inimigos").cloned().unwrap_or(json!([])),

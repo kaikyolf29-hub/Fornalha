@@ -104,6 +104,41 @@ Cycles não usa a placa; avaliar EEVEE com placa); assinatura dos executáveis (
 App Control. **Resolvido:** QA do templário com 7 faces degeneradas e pés −2,7 cm (o `acabar_malhas` tira
 as faces de área zero e põe o personagem no chão antes do QA; conferido aqui: QA tudo ok).
 
+### Etapa 2 — bancada de mapa (25/11)
+- **`generate_map`** (MCP e CLI): a IA escreve o plano (tamanho, relevo, clima, hora, regiões com centro ou
+  posição, rio, estradas, início); sem plano usa o último (`World/mapa/plano.json`) ou as áreas da bíblia.
+  O Blender (`fc_mapa.py`, numpy) faz: relevo por ruído e cristas com borda irregular que fecha o mapa,
+  **erosão hidráulica** (gotas em paralelo), morro da montanha, masmorra cortando o pé de um morro,
+  patamar plano da vila/arena, **rio que só desce** (segue o terreno baixo, serpenteia, foge da vila e do
+  lago, margem sem degrau), **lago de margem torta**, **estradas por A\*** com rampa limitada (curvas para
+  subir), presas ao chão das regiões, com **ponte** de margem a margem (tabuleiro, postes, corrimão, pilares),
+  **chão pintado** (grama, terra, rocha, areia ou neve) por inclinação, altura e água, **vegetação por regras**
+  (nada em barranco, na água ou na estrada; floresta densa, bosques, mata ciliar; pinheiros no frio),
+  **vila com ruas** (casas dos dois lados, de frente para a rua, praça com poço), morros baixos no horizonte,
+  luz e névoa pela hora e pelo clima, e os pontos de foto de cada região (pela estrada, na altura dos olhos).
+- **Medidas** com aprovado/reprovado e onde está o problema: área andável, regiões sem ligação (busca a pé
+  a partir do início), estradas sem caminho, rampa máxima da estrada, árvores em barranco / na água / na
+  estrada, mais árvores perto da água (no chão livre), chão das construções, rio só desce. Devolve também
+  `mapa.png` (visto de cima) e duas vistas do Blender (alta e chegada).
+- **Engine** (`montar.gd`): terreno com `terreno.gdshader` (4 camadas pela `pintura.png`, texturas CC0 do
+  pacote de materiais copiadas com recibo, rocha triplanar, sem repetição aparente), colisão por
+  `HeightMapShape3D` (`colisao.res`), água com `agua.gdshader` (cor pela espessura, ondas), construções,
+  vegetação em MultiMesh por bloco de 128 m com distância de corte (as posições ficam no `vegetacao.gd`:
+  a Godot sem tela não guarda o MultiMesh), troncos com colisão, paredes invisíveis na borda, céu e névoa
+  da hora. O `run_test` tira uma **foto de cada região** com o FPS ali (`fotos_mapa`).
+- **Provado aqui** (Linux, sem placa): 4 planos × 3 sementes + 8 sementes do mapa pequeno — todos aprovados,
+  menos um plano feito à mão com a vila colada no rio (a medida da rampa reprova e diz onde); teste na
+  Godot: o jogador pisa no terreno, anda, não cai, sem erro da engine; fotos conferidas no modo
+  compatibilidade (software). **Falta provar:** FPS e aparência no Forward+ numa placa de verdade (RX 580 e
+  NVIDIA), as texturas do chão no Forward+, e mapas grandes (1–2 km).
+- **Masmorra por peças encaixadas** (`fc_masmorra.py`): grade de 4 m com 2 a 4 salas ligadas por corredores,
+  paredes com fiadas e coroa de ruína, pilar em cada canto, portal com arco e degraus virado para quem chega,
+  tochas, inimigos nas salas e baú na última; cabe no patamar do morro. Sem teto (câmera em terceira pessoa).
+- **Janela:** estação **Mapa** (muda tamanho, relevo, clima e hora do último plano, gera de novo ou com outra
+  semente, mostra o mapa, as vistas e as medidas). `generate_map` ganhou `mudar` (muda só alguns campos).
+- **Ainda não fiz:** grama em tufos, vento nas árvores, árvores melhores (as de hoje são low-poly da Forja),
+  masmorra subterrânea (o terreno por mapa de altura não tem buraco), ler mapas do Tilemap 3D do primo.
+
 ### Etapa 3 — guia para qualquer IA em cada projeto (25/11, adiantado)
 - Todo projeto novo nasce com o **AGENTS.md** (o padrão aberto que Codex, Cursor, Copilot, Gemini CLI,
   Windsurf e outros leem): Erethea principal + Fornalha ajudante, como conectar os dois MCP (Fornalha

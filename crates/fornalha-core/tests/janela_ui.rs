@@ -43,6 +43,8 @@ fn telas_novas_estao_na_janela() {
         "est-movimento",
         "mov-banco",
         "mov-resultado",
+        "est-mapa",
+        "mapa-resultado",
     ] {
         assert!(html.contains(&format!("id=\"{id}\"")), "falta #{id} na janela");
     }

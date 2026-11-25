@@ -20,6 +20,7 @@
       <button data-estacao="projeto" class="ativa">Projeto</button>
       <button data-estacao="forjar">Forjar</button>
       <button data-estacao="movimento">Movimento</button>
+      <button data-estacao="mapa">Mapa</button>
       <button data-estacao="galeria">Galeria</button>
       <button data-estacao="testar">Testar</button>
       <button data-estacao="licencas">Licenças</button>
@@ -128,6 +129,24 @@
         <div class="acoes"><button class="botao" id="mov-vestir">Escolher a roupa e vestir</button>
           <label class="campo" style="grid-auto-flow:column;align-items:center"><span>Placas rígidas</span><select id="mov-rigido"><option value="auto">automático</option><option value="sim">todas</option><option value="nao">nenhuma</option></select></label>
           <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mov-encaixar"> Encaixar no tamanho do corpo</label></div>
+      </section>
+    </section>
+
+    <!-- ===== Mapa ===== -->
+    <section id="est-mapa" class="estacao" hidden>
+      <h1>Mapa</h1>
+      <p class="lead">A IA escreve o plano do mapa (regiões, relevo, rio, estradas, clima e hora) e a Fornalha faz o resto: relevo com erosão, rio que só desce, estradas com ponte, chão pintado, vegetação por regras, vila com ruas e masmorra. As medidas reprovam o que não dá para jogar; olhe o mapa e as fotos antes de dar por pronto.</p>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Ajustes do último plano</h2></div>
+        <div class="lado-a-lado">
+          <label class="campo"><span>Tamanho</span><select id="mapa-tamanho"><option value="">o do plano</option><option value="256">256 m</option><option value="384">384 m</option><option value="512">512 m</option><option value="768">768 m</option></select></label>
+          <label class="campo"><span>Relevo</span><select id="mapa-relevo"><option value="">o do plano</option><option value="plano">plano</option><option value="colinas">colinas</option><option value="montanhoso">montanhoso</option><option value="vale">vale</option></select></label>
+          <label class="campo"><span>Clima</span><select id="mapa-clima"><option value="">o do plano</option><option value="temperado">temperado</option><option value="seco">seco</option><option value="frio">frio</option><option value="neve">neve</option><option value="chuvoso">chuvoso</option></select></label>
+          <label class="campo"><span>Hora</span><select id="mapa-hora"><option value="">a do plano</option><option value="amanhecer">amanhecer</option><option value="manha">manhã</option><option value="meio_dia">meio-dia</option><option value="tarde">tarde</option><option value="por_do_sol">pôr do sol</option><option value="noite">noite</option></select></label>
+        </div>
+        <div class="acoes"><button class="botao quente" id="mapa-gerar">Gerar o mapa</button>
+          <button class="botao" id="mapa-semente">Outra semente</button></div>
+        <div id="mapa-resultado"><p class="vazio">Sem mapa ainda. A IA usa generate_map; aqui você gera de novo com os ajustes acima.</p></div>
       </section>
     </section>
 

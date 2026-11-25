@@ -214,6 +214,7 @@ async function carregar(s) {
     if (s === "projeto") await pintarProjeto();
     else if (s === "forjar") pintarForjar();
     else if (s === "movimento") await pintarMovimento();
+    else if (s === "mapa") pintarMapa();
     else if (s === "galeria") await pintarGaleria();
     else if (s === "testar") pintarTestar();
     else if (s === "licencas") await pintarLicencas();
@@ -561,6 +562,41 @@ function personagensDoProjeto() {
   const vistos = new Set();
   return recibos.map((r) => r.arquivo).filter((a) => /^(Characters|Enemies)\/.+\.glb$/.test(a) && !vistos.has(a) && vistos.add(a));
 }
+// ===== Mapa =====
+let ultimoMapa = null;
+function pintarMapa() {
+  if (ultimoMapa) mostrarMapa(ultimoMapa);
+}
+async function mostrarMapa(r) {
+  const imgs = await Promise.all(["mapa", "vista_alta", "vista_chegada"].map((k) => dataUrl((r.arquivos || {})[k])));
+  const med = r.medidas || { itens: [] };
+  const linhas = med.itens.map((i) => `<div class="item"><div><strong>${esc(i.nome.replaceAll("_", " "))}</strong><small>${esc(i.explica)}</small></div>
+    <div class="lado"><span class="selo ${i.ok ? "venda" : "erro"}">${esc(typeof i.valor === "object" ? JSON.stringify(i.valor) : String(i.valor))}${i.ok ? "" : " · reprovado"}</span></div></div>`).join("");
+  const st = r.estatisticas || {};
+  $("mapa-resultado").innerHTML = `<p class="nota">${med.aprovado ? "Aprovado pelas medidas (a régua não achou o que mede; olhe as imagens)." : "Reprovado: veja os itens em vermelho."}
+    ${numero(st.arvores || 0, 0)} árvores · ${numero(st.arbustos || 0, 0)} arbustos · ${numero(st.pedras || 0, 0)} pedras · ${st.pontes || 0} ponte(s)</p>
+    <div class="capturas">${imgs.filter(Boolean).map((u) => `<img src="${u}" alt="Mapa">`).join("")}</div>
+    ${(r.avisos || []).length ? `<p class="nota">${r.avisos.map(esc).join("<br>")}</p>` : ""}
+    <div class="lista">${linhas}</div><p class="nota">${esc(r.proximo || "")}</p>`;
+}
+async function gerarMapa(botao, novaSemente) {
+  if (!biblia) return mensagem("Abra um projeto antes.", "alerta");
+  const mudar = {};
+  if ($("mapa-tamanho").value) mudar.tamanho_m = Number($("mapa-tamanho").value);
+  if ($("mapa-relevo").value) mudar.relevo = { estilo: $("mapa-relevo").value };
+  if ($("mapa-clima").value) mudar.clima = $("mapa-clima").value;
+  if ($("mapa-hora").value) mudar.hora = $("mapa-hora").value;
+  const args = { mudar };
+  if (novaSemente) args.seed = Math.floor(Math.random() * 100000);
+  const texto = botao.textContent;
+  botao.disabled = true; botao.textContent = "Gerando…"; calor(true);
+  try { ultimoMapa = await ferramenta("generate_map", args); await mostrarMapa(ultimoMapa); }
+  catch (err) { mensagem(err.message, "erro"); }
+  finally { botao.disabled = false; botao.textContent = texto; calor(false); }
+}
+$("mapa-gerar").addEventListener("click", () => gerarMapa($("mapa-gerar"), false));
+$("mapa-semente").addEventListener("click", () => gerarMapa($("mapa-semente"), true));
+
 async function pintarMovimento() {
   const sel = $("mov-personagem");
   const lista = biblia ? personagensDoProjeto() : [];

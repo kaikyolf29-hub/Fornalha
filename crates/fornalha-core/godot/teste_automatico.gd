@@ -132,8 +132,48 @@ func _capturar(n: int) -> void:
 		_capturas.append(caminho)
 
 
+## Uma foto de cada ponto do mapa (bancada de mapa), com o FPS ali: a IA olha e ajusta.
+func _fotos_do_mapa() -> Array:
+	var fotos := []
+	var pontos := get_tree().get_nodes_in_group("foto_mapa")
+	if pontos.is_empty() or DisplayServer.get_name() == "headless":
+		return fotos
+	var anterior := get_viewport().get_camera_3d()
+	var escondidas := []  # a foto do mapa sai sem a interface do jogo
+	for c in get_tree().current_scene.find_children("*", "CanvasLayer", true, false):
+		if (c as CanvasLayer).visible:
+			(c as CanvasLayer).visible = false
+			escondidas.append(c)
+	var cam := Camera3D.new()
+	cam.fov = 70.0
+	cam.far = 3000.0
+	get_tree().current_scene.add_child(cam)
+	for p in pontos:
+		cam.global_transform = (p as Node3D).global_transform
+		cam.make_current()
+		var soma := 0.0
+		var compat := RenderingServer.get_current_rendering_method() == "gl_compatibility"
+		var quadros := 8 if compat else 24  # no Forward+, a luz global (SDFGI) e a névoa precisam assentar
+		for i in quadros:
+			await get_tree().process_frame
+			if i >= quadros / 3:
+				soma += Engine.get_frames_per_second()
+		var img := get_viewport().get_texture().get_image()
+		var nome := String(p.name).trim_prefix("Foto_")
+		var caminho := pasta.path_join("mapa_%s.png" % nome)
+		if img and not img.is_empty() and img.save_png(caminho) == OK:
+			fotos.append({"id": nome, "imagem": caminho, "fps": snappedf(soma / float(quadros - quadros / 3), 0.1)})
+	cam.queue_free()
+	for c in escondidas:
+		c.visible = true
+	if anterior:
+		anterior.make_current()
+	return fotos
+
+
 func _terminar() -> void:
 	ativo = false
+	var fotos_mapa := await _fotos_do_mapa()
 	var media := 0.0
 	for f in _fps:
 		media += f
@@ -146,6 +186,7 @@ func _terminar() -> void:
 		"cena": get_tree().current_scene.scene_file_path if get_tree().current_scene else "",
 		"engine": Engine.get_version_info(),
 		"capturas": _capturas,
+		"fotos_mapa": fotos_mapa,
 		"jogador": {},
 		"inimigos": {"total": _total_inimigos, "vivos": 0, "perseguiram": _perseguiram.size()},
 	}

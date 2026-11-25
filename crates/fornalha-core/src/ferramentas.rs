@@ -376,6 +376,13 @@ pub fn lista() -> Vec<Ferramenta> {
             so_leitura: false,
         },
         Ferramenta {
+            nome: "generate_map",
+            titulo: "Bancada de mapa: gerar o mundo pelo plano",
+            descricao: "Você escreve o plano do mapa; a Fornalha faz o relevo com erosão, rio que só desce, lagos de margem torta, estradas por onde dá para andar (com ponte no rio), chão pintado por inclinação e altura (grama, terra, rocha, areia ou neve), árvores, arbustos e pedras por regras (nada em barranco nem na água, mais mato perto da água, florestas densas), vila com ruas e casas, masmorra na encosta, e a luz e a névoa da hora e do clima. Devolve as medidas (área andável, regiões sem ligação, rampa das estradas, árvores em barranco ou na água, chão das construções, rio) com aprovado/reprovado, o mapa visto de cima e duas vistas. Coordenadas como na engine: x leste, z sul, em metros a partir do centro. Plano: {\"tamanho_m\": 512, \"relevo\": {\"estilo\": \"plano|colinas|montanhoso|vale\", \"altura_m\": 40, \"erosao\": 0.6}, \"clima\": \"temperado|seco|frio|neve|chuvoso\", \"hora\": \"amanhecer|manha|meio_dia|tarde|por_do_sol|noite\", \"nevoa\": 0.35, \"regioes\": [{\"id\", \"tipo\": \"vila|cidade|aldeia|floresta|bosque|pantano|campo|lago|montanha|colina|vulcao|masmorra|caverna|castelo|ruinas|arena|coliseu\", \"centro\": [x, z] ou \"posicao\": \"norte|sul|leste|oeste|nordeste|...|centro\", \"raio_m\"}], \"rio\": true ou {\"pontos\": [[x, z], ...], \"largura_m\": 8}, \"estradas\": [{\"de\", \"para\"}] (padrão: do início a cada região), \"spawn\": \"id da região inicial\", \"seed\"}. Sem plano: o último (World/mapa/plano.json) ou as áreas da bíblia. Grava World/mapa/ (relevo.r32 e .r16, pintura.png, terreno.glb, agua.glb, estruturas.glb, vegetacao.glb, espalhamento.json, mapa.json). Depois: import_to_engine e run_test (uma foto de cada região, com o FPS).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "plano": {"type": "object"}, "mudar": {"type": "object", "description": "Muda só estes campos do último plano (ex.: {\"clima\": \"neve\"})."}, "seed": {"type": "integer", "minimum": 0}, "fotos": {"type": "boolean"}}}),
+            so_leitura: false,
+        },
+        Ferramenta {
             nome: "generate_code",
             titulo: "Gerar o código do jogo",
             descricao: "Escreve o código do jogo para a engine da bíblia (Godot ou Erethea Engine): jogador em terceira pessoa, inimigo com IA básica, HUD, sons, teste automático e o plugin da ponte com a Fornalha. Não sobrescreve script que você editou.",
@@ -787,6 +794,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "generate_music" => geracao::gerar_musica(f, args(a)?, quem).await,
         "generate_voice" => geracao::gerar_voz(f, args(a)?, quem).await,
         "generate_blockout" => geracao::gerar_blockout(f, args(a)?, quem).await,
+        "generate_map" => geracao::gerar_mapa(f, args(a)?, quem).await,
         "generate_code" => geracao::gerar_codigo(f, args(a)?).await,
         "import_to_engine" => geracao::importar_na_engine(f, args(a)?, quem).await,
         "run_test" => geracao::rodar_teste(f, args(a)?).await,

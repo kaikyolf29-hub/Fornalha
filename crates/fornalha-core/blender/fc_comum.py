@@ -233,7 +233,7 @@ def caixa_envolvente(objs):
     return mn, mx
 
 
-def exportar_glb(caminho, selecionados=None, animacoes=True):
+def exportar_glb(caminho, selecionados=None, animacoes=True, imagens=None):
     if PBR["ativo"]:
         uv_mundo(selecionados if selecionados is not None else list(bpy.context.scene.objects))
     os.makedirs(os.path.dirname(os.path.abspath(caminho)), exist_ok=True)
@@ -254,6 +254,8 @@ def exportar_glb(caminho, selecionados=None, animacoes=True):
         export_force_sampling=True,
         export_optimize_animation_size=False,
     )
+    if imagens:
+        opcoes["export_image_format"] = imagens  # "JPEG": arquivo bem menor (mundo, vegetação)
     # Algumas opções mudam de nome entre versões: tira a que o exportador não conhece e tenta de novo.
     for _ in range(len(opcoes)):
         try:

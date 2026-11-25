@@ -11,8 +11,10 @@
   e o que ele achou foi corrigido (ver ESTADO.md).
   Lembrete: "aprovado pela régua" não é "pronto"; pronto só depois do vídeo e do teste do criador.
 - **Visual da janela:** refeito (clássico/premium) com tema preto e branco.
-- **Etapa 2:** cabelo começou (assentamento com gravidade e colisão, ainda feio: ver ESTADO.md); mapa não
-  começou.
+- **Etapa 2:** cabelo começou (assentamento com gravidade e colisão, ainda feio: ver ESTADO.md). **Bancada
+  de mapa feita** (`generate_map`: plano da IA → relevo com erosão, rio, lago, estradas com ponte, chão
+  pintado, vegetação por regras, vila com ruas, medidas e fotos de cada região na engine); falta a prova
+  numa placa de verdade e a masmorra por peças.
 - **Etapa 3 (adiantada):** o guia para qualquer IA nasce em cada projeto (AGENTS.md + ponteiros para
   Claude, Gemini, Copilot, Cursor, Windsurf e os arquivos de MCP); o Codex lê o AGENTS.md direto.
 

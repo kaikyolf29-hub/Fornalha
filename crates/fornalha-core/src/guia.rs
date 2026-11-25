@@ -62,7 +62,9 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos com `import_motion`); `show_skeleton` / `edit_skeleton`
    para qualquer corpo (ossos `mola_<grupo>_1..N` viram mola no jogo).
 4. **Roupa por cima**: `dress_character` (placas rígidas no osso, pano dobra).
-5. **Armas e objetos**: `generate_3d`. **Mundo**: `generate_blockout`.
+5. **Armas e objetos**: `generate_3d`. **Mundo**: escreva o plano do mapa e use `generate_map` (relevo,
+   rio, estradas, vila, masmorra, vegetação, luz da hora; olhe o `mapa.png`, as medidas e as fotos de cada
+   região no `run_test`); `generate_blockout` só para um teste rápido.
 6. **Som**: `generate_sfx`, `generate_music`, `generate_voice` (dublagem com a boca mexendo).
 7. **Montar e testar**: `import_to_engine` e `run_test` (na Erethea roda também o teste de agente dela);
    veja as capturas e o vídeo.

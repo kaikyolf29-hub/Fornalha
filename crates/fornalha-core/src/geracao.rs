@@ -1565,9 +1565,98 @@ pub async fn gerar_blockout(f: &Fornalha, a: ArgsMundo, quem: &str) -> Resultado
     Ok(json!({"arquivos": r["arquivos"], "estatisticas": r["estatisticas"], "info": r["info"]}))
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsMapa {
+    pub projeto: Option<String>,
+    /// O plano do mapa (regiões, relevo, rio, estradas, clima, hora). Sem ele: o último plano
+    /// (World/mapa/plano.json) ou um plano feito das áreas da bíblia.
+    pub plano: Option<Value>,
+    pub seed: Option<u64>,
+    /// Fotos do Blender (vista alta e chegada). Padrão: sim.
+    pub fotos: Option<bool>,
+    /// Muda só alguns campos do último plano (ex.: {"clima": "neve", "relevo": {"estilo": "vale"}}).
+    pub mudar: Option<Value>,
+}
+
+/// Texturas CC0 do pacote de materiais (ambientCG) para cada camada do chão do mapa.
+const TEXTURAS_DO_MAPA: [(&str, &str); 3] = [("grama", "Grass004"), ("terra", "Ground037"), ("rocha", "Rock051")];
+
+fn achar_mapa(pasta: &Path, sufixo: &str) -> Option<PathBuf> {
+    std::fs::read_dir(pasta).ok()?.flatten().map(|e| e.path()).find(|p| p.to_string_lossy().ends_with(sufixo))
+}
+
+/// Bancada de mapa: o plano da IA vira relevo com erosão, rio, lago, estradas com ponte, chão pintado,
+/// vegetação por regras, vila e masmorra, luz pela hora; volta com as medidas e as imagens.
+pub async fn gerar_mapa(f: &Fornalha, a: ArgsMapa, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let pasta = p.raiz.join("World/mapa");
+    std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
+    let arq_plano = pasta.join("plano.json");
+    let mut plano = match a.plano {
+        Some(v) if v.is_object() => v,
+        Some(_) => return Err(Erro::argumento("O plano do mapa precisa ser um objeto JSON (veja a descrição de generate_map).")),
+        None => std::fs::read(&arq_plano).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({})),
+    };
+    if let Some(Value::Object(m)) = a.mudar {
+        for (k, v) in m {
+            match (plano.get_mut(&k), v) {
+                (Some(Value::Object(dentro)), Value::Object(novo)) => dentro.extend(novo),
+                (_, v) => plano[&k] = v,
+            }
+        }
+    }
+    if let Some(s) = a.seed {
+        plano["seed"] = json!(s);
+    }
+    let areas: Vec<Value> = p.biblia.mundo.areas.iter().map(|x| json!({"id": x.id, "tipo": x.tipo, "nome": x.nome})).collect();
+    let r = forjar(
+        f,
+        &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "areas": areas, "paleta": paleta(&p),
+                "fotos": a.fotos.unwrap_or(true), "amostras": 12}),
+    )
+    .await?;
+    // o plano completo (com o que a Fornalha preencheu) fica para a IA editar e mandar de novo
+    crate::paths::write_json(&arq_plano, &r["plano"]).map_err(|e| Erro::io(&arq_plano, e))?;
+    let seed = r["plano"]["seed"].as_u64();
+    let gerados: Vec<PathBuf> =
+        r["arquivos"].as_object().map(|o| o.values().filter_map(|v| v.as_str()).map(PathBuf::from).collect()).unwrap_or_default();
+    for arq in gerados.iter().filter(|c| c.extension().is_some_and(|e| e == "glb" || e == "png")) {
+        recibo(f, &p, arq, "forja-3d", Some("mapa (bancada de mapa)".into()), seed, json!({"plano": r["plano"]}), quem).await?;
+    }
+    // texturas do chão (CC0) quando o pacote de materiais está instalado
+    let mut texturas = Vec::new();
+    if let Some(dir) = crate::pacotes::materiais_da_forja(&f.paths).and_then(|m| m["materiais"].as_str().map(PathBuf::from)) {
+        let destino = pasta.join("texturas");
+        for (camada, id) in TEXTURAS_DO_MAPA {
+            for (sufixo, nome) in [("_Color.jpg", "cor"), ("_NormalGL.jpg", "normal")] {
+                let Some(origem) = achar_mapa(&dir.join(id), sufixo) else { continue };
+                std::fs::create_dir_all(&destino).map_err(|e| Erro::io(&destino, e))?;
+                let alvo = destino.join(format!("{camada}_{nome}.jpg"));
+                if !alvo.is_file() {
+                    std::fs::copy(&origem, &alvo).map_err(|e| Erro::io(&alvo, e))?;
+                    recibo(f, &p, &alvo, "materiais-ambientcg", None, None, json!({"fonte": id}), quem).await?;
+                }
+                texturas.push(rel(&p.raiz, &alvo));
+            }
+        }
+    }
+    f.avisar_ponte(vec![rel(&p.raiz, &pasta.join("mapa.json"))]);
+    let aprovado = r["medidas"]["aprovado"].as_bool().unwrap_or(false);
+    Ok(json!({
+        "arquivos": r["arquivos"], "medidas": r["medidas"], "estatisticas": r["estatisticas"], "avisos": r["avisos"],
+        "plano": r["plano"], "regioes": r["regioes"], "fotos": r["fotos"], "texturas": texturas,
+        "proximo": if aprovado {
+            "Olhe o mapa.png e as vistas; ajuste o plano (World/mapa/plano.json) se quiser e gere de novo. Depois: import_to_engine e run_test (tira uma foto de cada região, com o FPS)."
+        } else {
+            "As medidas reprovaram algo (veja medidas.reprovado e o explica de cada item): mude o plano e gere de novo."
+        },
+    }))
+}
+
 /// Antes do teste na engine: o jogo precisa de chão e de sons.
 async fn garantir_mundo_e_sons(f: &Fornalha, p: &Projeto, quem: &str) -> Resultado<()> {
-    if !p.raiz.join("World/blockout.glb").is_file() {
+    if !p.raiz.join("World/blockout.glb").is_file() && !p.raiz.join("World/mapa/mapa.json").is_file() {
         gerar_blockout(f, ArgsMundo { projeto: Some(p.raiz.to_string_lossy().into_owned()), ..Default::default() }, quem).await?;
     }
     if !p.raiz.join("Audio/efeitos").is_dir() {

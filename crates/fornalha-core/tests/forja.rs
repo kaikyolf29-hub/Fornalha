@@ -153,6 +153,51 @@ async fn malha_de_fora_ganha_limpeza_esqueleto_e_animacoes() {
     assert!(st["animacoes"].as_array().unwrap().len() >= 9);
 }
 
+/// Bancada de mapa: o plano vira relevo, rio, estradas, vegetação e construções, e as medidas aprovam.
+#[tokio::test]
+async fn mapa_pelo_plano_com_medidas() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let pasta = tmp.path().join("World/mapa");
+    let plano = json!({"tamanho_m": 256, "seed": 3, "rio": true, "hora": "por_do_sol",
+        "regioes": [{"id": "vila", "tipo": "vila"}, {"id": "mata", "tipo": "floresta", "posicao": "norte"},
+                    {"id": "cripta", "tipo": "masmorra", "posicao": "leste"}, {"id": "x", "tipo": "nave_espacial"}]});
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "fotos": false}), TEMPO)
+        .await
+        .unwrap();
+    let med = &r["medidas"];
+    assert_eq!(med["aprovado"], true, "{med}");
+    assert!(r["avisos"].as_array().unwrap().iter().any(|a| a.as_str().unwrap().contains("nave_espacial")), "tipo errado vira aviso");
+    for arq in [
+        "relevo.r32",
+        "relevo.r16",
+        "pintura.png",
+        "terreno.glb",
+        "agua.glb",
+        "estruturas.glb",
+        "vegetacao.glb",
+        "espalhamento.json",
+        "mapa.json",
+        "mapa.png",
+    ] {
+        assert!(pasta.join(arq).is_file(), "falta {arq}");
+    }
+    let info: serde_json::Value = serde_json::from_slice(&std::fs::read(pasta.join("mapa.json")).unwrap()).unwrap();
+    let n = info["pontos_por_lado"].as_u64().unwrap();
+    assert_eq!(std::fs::metadata(pasta.join("relevo.r32")).unwrap().len(), n * n * 4);
+    assert_eq!(info["regioes"].as_array().unwrap().len(), 4);
+    assert!(info["fotos"].as_array().unwrap().len() >= 4);
+    assert_eq!(info["luz"]["sol_elevacao"], 7);
+    assert!(!info["spawn_inimigos"].as_array().unwrap().is_empty(), "a masmorra tem inimigos");
+    let st = &r["estatisticas"];
+    assert!(st["arvores"].as_u64().unwrap() > 100 && st["pedras"].as_u64().unwrap() > 10, "{st}");
+    let itens = med["itens"].as_array().unwrap();
+    let valor = |nome: &str| itens.iter().find(|i| i["nome"] == nome).map(|i| i["valor"].clone()).unwrap();
+    assert_eq!(valor("arvores_em_barranco"), 0);
+    assert_eq!(valor("regioes_sem_ligacao"), json!([]));
+    assert!(valor("estrada_rampa_max_graus").as_f64().unwrap() <= 12.0);
+}
+
 #[test]
 fn todo_script_do_blender_vai_dentro_da_fornalha() {
     let tmp = tempfile::tempdir().unwrap();

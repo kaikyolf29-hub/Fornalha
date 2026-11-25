@@ -300,6 +300,12 @@ def tarefa_mundo(t):
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st, "info": info}
 
 
+def tarefa_mapa(t):
+    import fc_mapa
+
+    return fc_mapa.tarefa(t)
+
+
 def _importar(caminho):
     antes = set(bpy.data.objects)
     ext = os.path.splitext(caminho)[1].lower()
@@ -1155,6 +1161,7 @@ TAREFAS = {
     "arma": tarefa_arma,
     "objeto": tarefa_objeto,
     "mundo": tarefa_mundo,
+    "mapa": tarefa_mapa,
     "limpar": tarefa_limpar,
     "rig": tarefa_rig,
     "retarget": tarefa_retarget,

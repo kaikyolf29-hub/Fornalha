@@ -55,7 +55,8 @@ pub struct Biblia {
     /// Nível de qualidade preferido do projeto (`None` = o da máquina).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nivel: Option<String>,
-    /// Engine de destino. Até a Erethea Engine ficar pronta, a Godot.
+    /// Engine de destino: a Erethea Engine (a principal, decisão do criador em 25/11/2026). Sem ela
+    /// instalada, a Fornalha monta e testa na Godot e avisa (o projeto abre igual nas duas).
     #[serde(default = "engine_padrao")]
     pub engine: String,
     #[serde(default)]
@@ -71,7 +72,7 @@ pub struct Biblia {
 }
 
 fn engine_padrao() -> String {
-    "godot".into()
+    "erethea".into()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -21,7 +21,7 @@ fn criar_projeto_faz_as_pastas_padrao_e_a_biblia() {
     assert_eq!(p.biblia.nome, "Reino de Cinzas");
     assert_eq!(p.biblia.formato, 1);
     assert!(p.biblia.comercial, "projeto nasce comercial: só modelo que deixa vender");
-    assert_eq!(p.biblia.engine, "godot");
+    assert_eq!(p.biblia.engine, "erethea");
     assert_eq!(p.biblia.id.len(), 16);
     assert!(p.biblia.criado_em.ends_with('Z'));
 }

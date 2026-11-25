@@ -275,7 +275,15 @@ impl Pendencias {
     }
 }
 
+/// Imagens e vídeos de conferência das bancadas (movimento, esqueleto, roupa): servem para a IA e a
+/// pessoa olharem, não vão para o jogo e não precisam de recibo.
+pub const MARCAS_DE_CONFERENCIA: [&str; 4] = [".movimento.", ".conferencia.", ".esqueleto.", ".vestido."];
+
 fn eh_asset(p: &Path) -> bool {
+    let nome = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if MARCAS_DE_CONFERENCIA.iter().any(|m| nome.contains(m)) {
+        return false;
+    }
     p.extension().and_then(|e| e.to_str()).is_some_and(|e| EXTENSOES_DE_ASSETS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
@@ -474,4 +482,19 @@ pub fn relatorio(projeto: &Projeto, cat: &Catalogo, ctx: &ContextoRota) -> Resul
     let arquivo = projeto.raiz.join(ARQUIVO_RELATORIO);
     crate::paths::write_atomic(&arquivo, md.as_bytes()).map_err(|e| Erro::io(&arquivo, e))?;
     Ok(Relatorio { markdown: md, arquivo, assets_com_ia: com_ia.len(), assets_autorais: autorais.len(), modelos, pendencias: pend })
+}
+
+#[cfg(test)]
+mod testes_conferencia {
+    use super::*;
+
+    #[test]
+    fn imagens_das_bancadas_nao_sao_asset() {
+        for n in
+            ["Characters/a/a.movimento.mp4", "Characters/a/a.conferencia.png", "Characters/a/a.esqueleto.png", "Characters/a/a.vestido.png"]
+        {
+            assert!(!eh_asset(Path::new(n)), "{n}");
+        }
+        assert!(eh_asset(Path::new("Characters/a/a.glb")));
+    }
 }

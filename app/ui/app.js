@@ -961,7 +961,14 @@ async function pintarAgentes() {
 }
 
 // ---------- Ajustes ----------
+function temaAtual() { try { return localStorage.getItem("fornalha.tema") || "auto"; } catch (_) { return "auto"; } }
+$("tema").addEventListener("change", (e) => {
+  const t = e.target.value;
+  try { localStorage.setItem("fornalha.tema", t); } catch (_) { /* sem armazenamento: vale só agora */ }
+  if (t === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
+});
 function pintarAjustes() {
+  $("tema").value = temaAtual();
   if (!info) { $("versao").textContent = "Fora do aplicativo (modo navegador)."; return; }
   $("estilo-janela").value = info.estilo_janela || "auto";
   $("ajuste-pasta").textContent = info.pasta_projetos;

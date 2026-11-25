@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fornalha 3D</title>
+  <script src="tema.js"></script>
   <link rel="stylesheet" href="fornalha.css">
 </head>
 <body>
@@ -230,6 +231,8 @@
     <section id="est-ajustes" class="estacao" hidden>
       <h1>Ajustes</h1>
       <section class="painel lista">
+        <div class="item"><div><strong>Visual</strong><small>Forja (escuro), pergaminho (claro) ou preto e branco. Automático segue o sistema.</small></div>
+          <select id="tema"><option value="auto">Automático</option><option value="escuro">Forja (escuro)</option><option value="claro">Pergaminho (claro)</option><option value="pb">Preto e branco</option></select></div>
         <div class="item"><div><strong>Botões da janela</strong><small>Minimizar, maximizar e fechar no jeito do seu sistema.</small></div>
           <select id="estilo-janela"><option value="auto">Automático</option><option value="windows">Windows</option><option value="gnome">GNOME</option><option value="kde">KDE</option><option value="mac">Mac</option></select></div>
         <div class="item"><div><strong>Fila da noite</strong><small>As tarefas "para a noite" rodam só neste horário (hora do computador).</small></div>

@@ -311,6 +311,9 @@ pub struct ArgsPersonagem {
     pub fala: Option<String>,
     /// Gerar a imagem de conceito (padrão: sim, se o Ignis tiver imagem).
     pub conceito: Option<bool>,
+    /// Folha de modelo (frente, perfil, costas). Padrão: só quando o 3D sai pela IA (ela guia a malha);
+    /// no 3D da Forja ela não muda nada e custa minutos de placa.
+    pub folha_de_modelo: Option<bool>,
     /// Vídeo curto das animações.
     pub video: Option<bool>,
     /// Montar na engine e rodar o teste depois (o pronto da Fase 4).
@@ -506,6 +509,10 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                          "proximo": "chame de novo com o mesmo nome (sem parar_no_conceito) para fazer o 3D deste conceito, ou com refazer_conceito para outro"}));
     }
 
+    // 3D pela IA de verdade (API ligada, ou ComfyUI com o TRELLIS.2 e o aceite do DINOv3): só então
+    // a folha de modelo e o conceito de corpo inteiro para a malha valem as imagens. O motor de imagem
+    // pelo Vulkan (RX 580 e outras AMD/Intel) gera imagem, não malha: lá o 3D é da Forja.
+    let ia_3d = pode_3d_pela_ia(f).await;
     // conceito (imagem pelo Ignis)
     if a.conceito.unwrap_or(true) {
         match gerar_imagem_conceito(f, &p, &descrever_para_imagem(&p, &ficha), &pasta.join("conceito.png"), seed, quem).await {
@@ -514,12 +521,14 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             }
             Err(e) => avisos.push(format!("Conceito sem imagem: {}", e.mensagem)),
         }
-        match gerar_folha_de_modelo(f, &p, &ficha, &pasta.join("folha_de_modelo.png"), seed, quem).await {
-            Ok(Some(arq)) => {
-                arquivos.insert("folha_de_modelo".into(), json!(arq));
+        if a.folha_de_modelo.unwrap_or(ia_3d) {
+            match gerar_folha_de_modelo(f, &p, &ficha, &pasta.join("folha_de_modelo.png"), seed, quem).await {
+                Ok(Some(arq)) => {
+                    arquivos.insert("folha_de_modelo".into(), json!(arq));
+                }
+                Ok(None) => {}
+                Err(e) => avisos.push(format!("Folha de modelo sem imagem: {}", e.mensagem)),
             }
-            Ok(None) => {}
-            Err(e) => avisos.push(format!("Folha de modelo sem imagem: {}", e.mensagem)),
         }
     }
 
@@ -545,82 +554,75 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let criatura = esqueleto != "jogo";
     // 3D pela IA no ComfyUI (TRELLIS.2) ou numa API ligada: conceito próprio de corpo inteiro → malha →
     // esqueleto (de jogo com a captura de movimento e a arma na mão; no dragão, o do dragão da Fornalha)
-    if ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) {
-        let disponivel = crate::apis::ligada_3d(&f.paths).is_some()
-            || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
-            || crate::comfyui::instalacao(&f.paths).is_some();
-        if disponivel {
-            let img = img_3d.clone();
-            let pronto = img.is_file()
-                || gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img, seed.wrapping_add(3), quem).await.is_ok();
-            let alta = pasta.join(format!("{id}_ia_alta.glb"));
-            if pronto {
-                if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
-                    let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
-                    // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
-                    // feita malha própria, entra no lugar da cabeça do corpo
-                    // só com placa (CUDA/ROCm): no processador do CI a cabeça em close passou de 6 h só na
-                    // textura (a grade fica cheia), fora as 3,4 h do corpo
-                    let no_processador = info["processador"].as_bool().unwrap_or(false);
-                    let cabeca = if !criatura
-                        && !no_processador
-                        && info["modelo"] == "trellis2-comfyui"
-                        && matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo)
-                    {
-                        let descricao =
-                            format!("{} ({})", ficha["descricao"].as_str().unwrap_or(""), ficha["armadura"].as_str().unwrap_or(""));
-                        match std::fs::read(&img) {
-                            Ok(b) => match com_placa(
-                                f,
-                                12_000,
-                                360,
-                                crate::partes::cabeca_no_comfyui(
-                                    f.porta_comfyui(),
-                                    &b,
-                                    &descricao,
-                                    &pasta.join(format!("{id}_cabeca")),
-                                    seed,
-                                    8 * 3600,
-                                ),
-                            )
-                            .await
-                            {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    avisos
-                                        .push(format!("A cabeça por partes não saiu ({}): ficou a cabeça da malha do corpo.", e.mensagem));
-                                    Value::Null
-                                }
-                            },
-                            Err(_) => Value::Null,
-                        }
-                    } else {
-                        Value::Null
-                    };
-                    let tarefa = if criatura {
-                        // dragão: a altura conta as asas abertas; criatura de patas: pela ficha
-                        let altura = if esqueleto == "dragao" { altura_do_tipo("dragao") * 1.25 } else { 2.2 };
-                        json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
+    if ficha["tipo"] != "esqueleto" && a.conceito.unwrap_or(true) && ia_3d {
+        let img = img_3d.clone();
+        let pronto =
+            img.is_file() || gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img, seed.wrapping_add(3), quem).await.is_ok();
+        let alta = pasta.join(format!("{id}_ia_alta.glb"));
+        if pronto {
+            if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
+                let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
+                // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
+                // feita malha própria, entra no lugar da cabeça do corpo
+                // só com placa (CUDA/ROCm): no processador do CI a cabeça em close passou de 6 h só na
+                // textura (a grade fica cheia), fora as 3,4 h do corpo
+                let no_processador = info["processador"].as_bool().unwrap_or(false);
+                let cabeca = if !criatura
+                    && !no_processador
+                    && info["modelo"] == "trellis2-comfyui"
+                    && matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo)
+                {
+                    let descricao = format!("{} ({})", ficha["descricao"].as_str().unwrap_or(""), ficha["armadura"].as_str().unwrap_or(""));
+                    match std::fs::read(&img) {
+                        Ok(b) => match com_placa(
+                            f,
+                            12_000,
+                            360,
+                            crate::partes::cabeca_no_comfyui(
+                                f.porta_comfyui(),
+                                &b,
+                                &descricao,
+                                &pasta.join(format!("{id}_cabeca")),
+                                seed,
+                                8 * 3600,
+                            ),
+                        )
+                        .await
+                        {
+                            Ok(v) => v,
+                            Err(e) => {
+                                avisos.push(format!("A cabeça por partes não saiu ({}): ficou a cabeça da malha do corpo.", e.mensagem));
+                                Value::Null
+                            }
+                        },
+                        Err(_) => Value::Null,
+                    }
+                } else {
+                    Value::Null
+                };
+                let tarefa = if criatura {
+                    // dragão: a altura conta as asas abertas; criatura de patas: pela ficha
+                    let altura = if esqueleto == "dragao" { altura_do_tipo("dragao") * 1.25 } else { 2.2 };
+                    json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
                                "altura_m": altura, "triangulos_max": 80000, "esqueleto": esqueleto,
                                "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"],
                                "materiais": base["materiais"], "ceu": base["ceu"], "folha": true, "video": a.video.unwrap_or(false),
                                "video_animacoes": ["voar", "rugir", "andar", "correr", "atacar"], "amostras": 20, "conceito": img})
-                    } else {
-                        json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
+                } else {
+                    json!({"tarefa": "rig", "entrada": alta, "saida": glb, "nome": id,
                                "altura_m": altura_do_tipo(ficha["tipo"].as_str().unwrap_or("")), "triangulos_max": 60000,
                                "esqueleto": "jogo", "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
                                "ceu": base["ceu"], "arma": ficha["arma"], "escudo": ficha["escudo"].as_bool().unwrap_or(false),
                                "cabeca": cabeca, "folha": true, "video": a.video.unwrap_or(false), "amostras": 20, "conceito": img})
-                    };
-                    match forjar(f, &tarefa).await {
-                        Ok(mut rr) => {
-                            modelo_3d = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
-                            rr["ia"] = info;
-                            arquivos.insert("conceito_3d".into(), json!(img));
-                            r = rr;
-                        }
-                        Err(e) => avisos.push(format!("O esqueleto na malha da IA falhou ({}): segui pelo caminho seguinte.", e.mensagem)),
+                };
+                match forjar(f, &tarefa).await {
+                    Ok(mut rr) => {
+                        modelo_3d = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
+                        rr["ia"] = info;
+                        arquivos.insert("conceito_3d".into(), json!(img));
+                        r = rr;
                     }
+                    Err(e) => avisos.push(format!("O esqueleto na malha da IA falhou ({}): segui pelo caminho seguinte.", e.mensagem)),
                 }
             }
         }
@@ -739,12 +741,36 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     Ok(resposta)
 }
 
-fn descrever_para_imagem(p: &Projeto, ficha: &Value) -> String {
-    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
-        "arte de jogo 3D estilizada, low poly".to_string()
+/// O estilo das imagens: o texto do guia visual; sem ele, o estilo do projeto (conceito.estilo, ex.
+/// "realista"); sem nenhum, o `padrao`. Antes caía sempre em "estilizada", mesmo em projeto realista.
+fn estilo_das_imagens(p: &Projeto, padrao: &str) -> String {
+    let g = p.biblia.guia_visual.texto_de_estilo.trim();
+    if !g.is_empty() {
+        return g.to_string();
+    }
+    let e = p.biblia.conceito.estilo.trim();
+    if e.is_empty() {
+        return padrao.to_string();
+    }
+    let baixo = e.to_lowercase();
+    if baixo.contains("realis") {
+        format!("arte de jogo 3D realista ({e}), materiais realistas, iluminação natural")
     } else {
-        p.biblia.guia_visual.texto_de_estilo.clone()
-    };
+        format!("arte de jogo 3D, estilo {e}")
+    }
+}
+
+fn paleta_no_prompt(p: &Projeto) -> String {
+    let pal = paleta(p);
+    if pal.is_empty() {
+        String::new()
+    } else {
+        format!(" Paleta: {}.", pal.join(", "))
+    }
+}
+
+fn descrever_para_imagem(p: &Projeto, ficha: &Value) -> String {
+    let estilo = estilo_das_imagens(p, "arte de jogo 3D");
     let evitar = p.biblia.guia_visual.evitar.join(", ");
     format!(
         "{estilo}. Personagem de corpo inteiro, de frente, em pé, fundo neutro claro. {} ({}), {}. Roupa nas cores {} e {}. Arma: {}. Armadura {}.{}",
@@ -762,11 +788,7 @@ fn descrever_para_imagem(p: &Projeto, ficha: &Value) -> String {
 /// Conceito para o 3D pela IA: corpo inteiro de frente, fundo liso, braços um pouco afastados e mãos
 /// livres (a arma sai como peça própria e vai para a mão no esqueleto).
 fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
-    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
-        "realista, muito detalhado, personagem de jogo AAA".to_string()
-    } else {
-        p.biblia.guia_visual.texto_de_estilo.clone()
-    };
+    let estilo = estilo_das_imagens(p, "realista, muito detalhado, personagem de jogo AAA");
     if ficha["tipo"] == "dragao" {
         return format!(
             "{estilo}. Corpo inteiro de um dragão em pé no chão, asas abertas, cauda longa apoiada no chão, cabeça com chifres \
@@ -792,6 +814,19 @@ fn descrever_para_3d(p: &Projeto, ficha: &Value) -> String {
 
 /// 3D pela IA: com o TRELLIS.2 instalado no ComfyUI (e o aceite do DINOv3), a imagem vira malha
 /// texturizada. Devolve o .glb da malha alta, ou None se o caminho não está disponível.
+/// O 3D pela IA pode rodar aqui? API de 3D ligada, ou ComfyUI de verdade (não só o motor de imagem
+/// pelo Vulkan) com o aceite do DINOv3 dado pela pessoa.
+async fn pode_3d_pela_ia(f: &Fornalha) -> bool {
+    if crate::apis::ligada_3d(&f.paths).is_some() {
+        return true;
+    }
+    if !f.estudio().licencas_aceitas.iter().any(|a| a == "meta-dinov3") {
+        return false;
+    }
+    (crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none())
+        || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
+}
+
 async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, seed: u64, avisos: &mut Vec<String>) -> Option<Value> {
     // 1º a API paga, se a pessoa ligou (minutos em vez de horas)
     if let Some(p) = crate::apis::ligada_3d(&f.paths) {
@@ -835,11 +870,7 @@ async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, 
 /// Folha de modelo (frente, perfil e costas) para guiar a malha: pose A com os braços afastados do
 /// tronco, pernas um pouco abertas, dedos separados, simetria e proporções reais (plano 1.2).
 fn descrever_folha(p: &Projeto, ficha: &Value) -> String {
-    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
-        "arte de jogo 3D".to_string()
-    } else {
-        p.biblia.guia_visual.texto_de_estilo.clone()
-    };
+    let estilo = estilo_das_imagens(p, "arte de jogo 3D");
     let criatura = ficha["tipo"] == "dragao";
     let pose = if criatura {
         "vista de frente, vista de lado e vista de trás do mesmo corpo, asas abertas, de pé nas quatro patas"
@@ -920,12 +951,39 @@ impl MotorImagem {
                 Ok((png, m.id, json!({"comfyui": info, "dispositivos": e.dispositivos})))
             }
             MotorImagem::Vulkan(m, d) => {
-                let (png, info) =
-                    com_placa(f, 7_000, minutos, crate::comfyui::gerar_imagem_vulkan(m, prompt, largura, altura, seed, 8)).await?;
-                Ok((png, m.id(), json!({"vulkan": info, "dispositivos": d})))
+                // sem memória de vídeo (outro programa segurando a placa, como o Ignis reabrindo): espera,
+                // reserva de novo e tenta outra vez; na última, em 768 px. As tentativas vão no recibo.
+                let mut tentativas = Vec::new();
+                let mut lado = (largura, altura);
+                for k in 0..3 {
+                    if k > 0 {
+                        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+                    }
+                    if k == 2 {
+                        lado = ((largura * 3 / 4).max(512), (altura * 3 / 4).max(512));
+                    }
+                    match com_placa(f, 7_000, minutos, crate::comfyui::gerar_imagem_vulkan(m, prompt, lado.0, lado.1, seed, 8)).await {
+                        Ok((png, info)) => {
+                            return Ok((
+                                png,
+                                m.id(),
+                                json!({"vulkan": info, "dispositivos": d, "tentativas_antes": tentativas, "lado": lado.0}),
+                            ))
+                        }
+                        Err(e) if falta_memoria_de_video(&e.mensagem) && k < 2 => tentativas.push(e.mensagem.clone()),
+                        Err(e) => return Err(e),
+                    }
+                }
+                Err(Erro::novo("sem_memoria_de_video", "a placa ficou sem memória de vídeo três vezes seguidas"))
             }
         }
     }
+}
+
+/// O motor de imagem caiu por falta de memória de vídeo (Vulkan: ErrorOutOfDeviceMemory)?
+fn falta_memoria_de_video(msg: &str) -> bool {
+    let m = msg.to_lowercase();
+    m.contains("outofdevicememory") || m.contains("out of device memory") || m.contains("out_of_device_memory")
 }
 
 async fn motor_de_imagem(f: &Fornalha, abrir: bool) -> Option<MotorImagem> {
@@ -949,12 +1007,36 @@ async fn motor_de_imagem(f: &Fornalha, abrir: bool) -> Option<MotorImagem> {
 
 /// generate_concept: imagem avulsa com o guia visual junto.
 pub async fn conceito_avulso(f: &Fornalha, p: &Projeto, descricao: &str, destino: &Path, seed: u64, quem: &str) -> Resultado<Value> {
-    let estilo = if p.biblia.guia_visual.texto_de_estilo.is_empty() {
-        "arte de jogo 3D estilizada".to_string()
-    } else {
-        p.biblia.guia_visual.texto_de_estilo.clone()
-    };
-    let prompt = format!("{estilo}. {descricao}. Paleta: {}.", paleta(p).join(", "));
+    let estilo = estilo_das_imagens(p, "arte de jogo 3D");
+    // pedido de personagem (não de cena): um só, de corpo inteiro (o "templário medieval" saía com seis
+    // cavaleiros em volta de uma mesa)
+    let baixo = descricao.to_lowercase();
+    let cena = [
+        "cena",
+        "paisagem",
+        "cenário",
+        "cenario",
+        "castelo",
+        "vila",
+        "cidade",
+        "mapa",
+        "floresta",
+        "interior",
+        "grupo",
+        "exército",
+        "exercito",
+        "batalha",
+        "taverna",
+        "masmorra",
+        "ambiente",
+        "sala",
+        "ruína",
+        "ruina",
+    ]
+    .iter()
+    .any(|k| baixo.contains(k));
+    let sujeito = if cena { String::new() } else { " Um único personagem, de corpo inteiro, de frente, fundo neutro.".to_string() };
+    let prompt = format!("{estilo}. {descricao}.{sujeito}{}", paleta_no_prompt(p));
     let arq = gerar_imagem_conceito(f, p, &prompt, destino, seed, quem).await?;
     f.avisar_ponte(vec![rel(&p.raiz, destino)]);
     Ok(json!({"arquivo": arq, "prompt": prompt}))
@@ -1618,4 +1700,13 @@ pub async fn rodar_teste(f: &Fornalha, a: ArgsTeste) -> Resultado<Value> {
     rel["avisos"] = json!(avisos);
     rel["pasta"] = json!(pasta);
     Ok(rel)
+}
+
+#[cfg(test)]
+mod testes_memoria {
+    #[test]
+    fn reconhece_falta_de_memoria_de_video() {
+        assert!(super::falta_memoria_de_video("z_image graph execution failed on Vulkan0: vk::Queue::submit: ErrorOutOfDeviceMemory"));
+        assert!(!super::falta_memoria_de_video("modelo não encontrado"));
+    }
 }

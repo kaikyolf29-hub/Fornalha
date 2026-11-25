@@ -93,7 +93,8 @@ async fn do_zero_ao_jogo_rodando_na_engine() {
     let op = OpcoesTeste {
         segundos: 9.0,
         sem_janela: !tem_tela,
-        sem_placa: true,
+        // FORNALHA_TESTE_COM_PLACA=1: roda com a placa (Forward+), não no modo de compatibilidade
+        sem_placa: std::env::var_os("FORNALHA_TESTE_COM_PLACA").is_none(),
         video: tem_tela && std::env::var_os("FORNALHA_TESTE_VIDEO").is_some(),
     };
     let pasta = std::env::var_os("FORNALHA_TESTE_SAIDA").map(std::path::PathBuf::from).unwrap_or_else(|| tmp.path().join("teste"));

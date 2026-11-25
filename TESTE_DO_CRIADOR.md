@@ -9,6 +9,12 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
 2. Clique na execução mais recente com ✓ verde e, em *Artifacts*, baixe **fornalha-windows**.
 3. Extraia o zip e rode o `Fornalha_0.1.0_x64-setup.exe`.
    - Se aparecer "O Windows protegeu o computador": **Mais informações → Executar assim mesmo** (ainda sem assinatura digital).
+   - **Windows 11 com o Controle Inteligente de Aplicativos (Smart App Control) ligado** (teste de 25/11 na
+     RX 580): ele não tem o botão "Executar assim mesmo"; decide arquivo por arquivo se o programa sem
+     assinatura pode rodar. O instalador, a Fornalha, o `fornalha-cli` e o motor de imagem rodaram, mas os
+     binários de teste do `cargo test` foram barrados (`os error 4551`). Não desligue a proteção por causa
+     da Fornalha: a assinatura digital dos executáveis está prevista para a Fase 5. Para testar o jogo com a
+     placa sem o `cargo test`, use `fornalha-cli chamar run_test` (ou o botão Testar da janela).
    - **Esperado:** não pede administrador; ao terminar, a Fornalha abre.
 4. Para gerar 3D e testar o jogo, a Fornalha usa programas de fora (grátis): o **Blender** e a **Godot**
    (ou a sua **Erethea Engine**). Em **Máquina → Programas**, clique em **Baixar 5.2.4 (≈ 420 MB)** no

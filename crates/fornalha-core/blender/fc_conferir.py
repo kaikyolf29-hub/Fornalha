@@ -567,7 +567,7 @@ def folha(caminho, conf, resultados, acoes, largura=300, altura=380, amostras=8,
     objs = conf.malhas or [arm]
     partes = []
     tmp = caminho + ".tmp"
-    for i, (r, a) in enumerate(escolhidas[:12]):
+    for i, (r, a) in enumerate(escolhidas[:24]):
         arm.animation_data.action = a
         q = r["problemas"][0]["quadro"] if r["problemas"] else int((a.frame_range[0] + a.frame_range[1]) / 2)
         bpy.context.scene.frame_set(q)
@@ -585,7 +585,7 @@ def folha(caminho, conf, resultados, acoes, largura=300, altura=380, amostras=8,
         partes.append(px)
         bpy.data.images.remove(img)
         os.remove(arq)
-    colunas = min(4, len(partes))
+    colunas = min(5, len(partes))
     linhas = int(math.ceil(len(partes) / colunas))
     vazio = np.zeros((altura, largura, 4), dtype=np.float32)
     vazio[..., 3] = 1
@@ -598,7 +598,8 @@ def folha(caminho, conf, resultados, acoes, largura=300, altura=380, amostras=8,
     final.filepath_raw = caminho
     final.file_format = "PNG"
     final.save()
-    return {"arquivo": caminho, "ordem": [r["nome"] for r, _ in escolhidas[:12]], "colunas": colunas}
+    return {"arquivo": caminho, "ordem": [r["nome"] for r, _ in escolhidas[:24]], "colunas": colunas,
+            "fora_da_imagem": [r["nome"] for r, _ in escolhidas[24:]]}
 
 
 def conferir(arm, acoes, H=None):

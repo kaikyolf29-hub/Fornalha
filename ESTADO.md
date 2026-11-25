@@ -75,6 +75,34 @@ de outra conta e não chegou ao repositório até 25/11.
   O CI da Fornalha continua na Godot 4.6.1 (sem build da Erethea para baixar): a prova na Erethea é daqui.
 Falta na Etapa 1: o CI das gerações verde no Windows e no Linux, e o teste no PC do criador.
 
+### Teste no PC do criador (RX 580 2048SP, Windows 11, 25/11) — relatório da sessão local
+**Provado na placa de verdade:** detecção (8170 MB, nível Leve, Vulkan sim); motor de imagem pelo Vulkan
+instalado pela Fornalha sem Python/Git (149 s) e gerando **na placa** (13 imagens de 1024 px, 353–467 s
+cada; GPU Compute 60–106%, VRAM até ~7,5 GB); bancada de movimento (templário humano com espada, 15 de 15
+aprovadas com 9 corrigidas sozinhas; `apply_motion` do chute do ACCAD aprovado sem correção, com vídeo); o
+jogo na Godot 4.6.1 em **modo normal a 74,4 FPS** sem vídeo (0 erros; IK dos pés ≤ 0,08 cm); **Teste
+Bruto nível Qualidade passou** (72 min). Não testado lá: `cargo test` (o Smart App Control do Windows 11
+barra os binários de teste sem reputação), Erethea (não instalada no PC), Teste Bruto Máximo.
+**Corrigido depois do relatório (25/11):**
+- 3 imagens por personagem (~20 min na RX 580) sem guiar o 3D: o motor Vulkan contava como "3D pela IA
+  disponível". Agora a folha de modelo e o conceito para a malha só saem quando o 3D pela IA roda de verdade
+  (API ligada, ou ComfyUI com o aceite do DINOv3); no 3D da Forja sai só o conceito (`folha_de_modelo`
+  força).
+- Prompt do conceito: o estilo vem do guia visual, senão do estilo do projeto ("realista" deixa de virar
+  "estilizada"); sem "Paleta: ." vazio; conceito avulso de personagem pede um único personagem de corpo
+  inteiro (saíam seis cavaleiros numa mesa).
+- Vulkan sem memória de vídeo (`ErrorOutOfDeviceMemory`, 2 imagens do caso inimigo com o Ignis reabrindo):
+  espera, reserva de novo e tenta mais duas vezes (a última em 768 px); o Teste Bruto passa a reprovar o
+  caso quando o motor existe e a imagem falhou ("imagens do motor sem falha").
+- `check_motion` "todas" mostra até 24 animações (mostrava 12); `list_motions` acha pela etiqueta em
+  português ("chute" achava 0).
+- `run_test` avisa quando nenhum inimigo reage; `FORNALHA_TESTE_COM_PLACA=1` roda o teste de engine com a
+  placa (era sempre o modo de compatibilidade); TESTE_DO_CRIADOR com o aviso do Smart App Control.
+**Ainda aberto do relatório:** a VRAM do sd.cpp esvazia e enche ~5 vezes por imagem com pouca RAM livre
+(medir com mais RAM ou deixar o `sd-server` aberto); vídeo e imagens do Blender no processador (na RX 580 o
+Cycles não usa a placa; avaliar EEVEE com placa); QA do templário com 7 faces degeneradas e pés −2,7 cm;
+assinatura dos executáveis (Fase 5) por causa do Smart App Control.
+
 ### Etapa 2 — começo (25/11)
 - **Cabelo médio e comprido:** experimento com o caminho fio a fio + cards (opção `cabelo_em_cards` na
   ficha; o padrão continua o cabelo do pacote MakeHuman). Feito: assentamento dos fios que pendem

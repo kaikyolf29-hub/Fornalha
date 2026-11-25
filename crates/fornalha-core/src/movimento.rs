@@ -188,6 +188,21 @@ async fn catalogo_da_fonte(f: &Fornalha, fonte: &Fonte) -> Resultado<Vec<Value>>
     Ok(clipes)
 }
 
+fn sem_acento(t: &str) -> String {
+    t.to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' => 'a',
+            'é' | 'ê' => 'e',
+            'í' => 'i',
+            'ó' | 'ô' | 'õ' => 'o',
+            'ú' => 'u',
+            'ç' => 'c',
+            x => x,
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct ArgsListar {
@@ -222,7 +237,7 @@ pub async fn listar(f: &Fornalha, a: ArgsListar) -> Resultado<Value> {
         .filter(|c| {
             let nome = c["nome"].as_str().unwrap_or("").to_lowercase();
             let et: Vec<&str> = c["etiquetas"].as_array().map(|v| v.iter().filter_map(|x| x.as_str()).collect()).unwrap_or_default();
-            busca.as_ref().is_none_or(|b| nome.contains(b.as_str()))
+            busca.as_ref().is_none_or(|b| nome.contains(b.as_str()) || et.iter().any(|e| sem_acento(e).contains(&sem_acento(b))))
                 && a.etiquetas.iter().all(|e| et.contains(&e.as_str()))
                 && a.laco.is_none_or(|l| c["laco"].as_bool() == Some(l))
         })

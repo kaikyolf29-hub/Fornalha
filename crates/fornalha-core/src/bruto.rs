@@ -214,6 +214,23 @@ fn conferir_personagem(c: &Caso, r: &Value, raiz: &Path) -> Vec<Value> {
             .collect();
         v.push(conf("QA da bíblia técnica", qa["passou"] == true, if falhas.is_empty() { "tudo ok".into() } else { falhas.join("; ") }));
     }
+    // o motor de imagem existe e falhou (ex.: sem memória de vídeo na placa): o caso não passa calado.
+    // Sem motor nenhum (CI sem placa) a imagem só fica de fora.
+    let falhas_de_imagem: Vec<String> = r["avisos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|a| a.as_str())
+        .filter(|a| {
+            (a.starts_with("Conceito sem imagem") || a.starts_with("Folha de modelo sem imagem")) && !a.contains("nem o motor de imagem")
+        })
+        .map(String::from)
+        .collect();
+    v.push(conf(
+        "imagens do motor sem falha",
+        falhas_de_imagem.is_empty(),
+        if falhas_de_imagem.is_empty() { "ok".into() } else { falhas_de_imagem.join("; ") },
+    ));
     if c.cabelo {
         let pecas: Vec<String> =
             forja["estatisticas"]["pecas"].as_array().into_iter().flatten().filter_map(|p| p.as_str().map(String::from)).collect();

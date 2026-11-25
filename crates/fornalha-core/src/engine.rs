@@ -455,6 +455,13 @@ async fn testar_uma_vez(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &O
     rel["engine_caminho"] = json!(caminho_str(&engine.caminho));
     rel["engine_versao"] = json!(engine.versao);
     rel["passou"] = json!(erros.is_empty() && rel["jogador"]["caiu_do_mapa"] != Value::Bool(true));
+    // não reprova (o inimigo pode estar longe do caminho do jogador automático), mas não passa calado
+    let mut avisos = Vec::new();
+    let total = rel["inimigos"]["total"].as_u64().unwrap_or(0);
+    if total > 0 && rel["inimigos"]["perseguiram"].as_u64().unwrap_or(0) == 0 {
+        avisos.push(format!("nenhum dos {total} inimigos reagiu ao jogador no teste (longe do caminho ou sem ver o jogador)"));
+    }
+    rel["avisos"] = json!(avisos);
     Ok(rel)
 }
 

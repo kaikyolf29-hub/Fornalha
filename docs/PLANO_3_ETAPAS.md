@@ -5,16 +5,19 @@
 > Meta: menos de uma semana de trabalho (sem contar as pausas de limite de uso).
 
 ## Onde estamos (25/11/2026)
-- **Etapa 1:** feita no código e provada aqui (Linux, sem placa): conferência, correção automática,
-  banco (Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos), esqueleto editado pela IA, roupa por cima,
-  estação Movimento. Falta: prova na Erethea, CI verde no Windows e Linux, teste no PC do criador.
+- **Etapa 1:** feita no código e provada aqui (Linux, sem placa) e na Erethea compilada aqui: conferência,
+  correção automática, banco (Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos), esqueleto editado pela
+  IA, roupa por cima, estação Movimento. CI verde no Windows e Linux; teste no PC do criador (RX 580) feito
+  e o que ele achou foi corrigido (ver ESTADO.md).
   Lembrete: "aprovado pela régua" não é "pronto"; pronto só depois do vídeo e do teste do criador.
 - **Visual da janela:** refeito (clássico/premium) com tema preto e branco.
 - **Etapa 2:** cabelo começou (assentamento com gravidade e colisão, ainda feio: ver ESTADO.md); mapa não
   começou.
+- **Etapa 3 (adiantada):** o guia para qualquer IA nasce em cada projeto (AGENTS.md + ponteiros para
+  Claude, Gemini, Copilot, Cursor, Windsurf e os arquivos de MCP); o Codex lê o AGENTS.md direto.
 
 ## A ideia em uma frase
-Quem faz o jogo é a **IA** (Claude Code, Codex) junto com a **Erethea Engine** (a principal) e a
+Quem faz o jogo é a **IA** (Claude Code, Codex, Gemini, Cursor, Copilot ou outra) junto com a **Erethea Engine** (a principal) e a
 **Fornalha 3D** (a ajudante). A Fornalha não tem jogo, mapa ou monstro pronto: ela dá à IA
 **mãos** (ferramentas), **olhos** (imagens de cada resultado) e **medidas** (números que dizem o que
 está errado), para a IA fazer mais, mais rápido e com mais qualidade. O limite é a IA e a conta dela.

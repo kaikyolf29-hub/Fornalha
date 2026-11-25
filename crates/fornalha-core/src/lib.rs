@@ -23,6 +23,7 @@ pub mod fila;
 pub mod forja;
 pub mod geracao;
 pub mod gpu;
+pub mod guia;
 pub mod ignis;
 pub mod janela;
 pub mod licencas;

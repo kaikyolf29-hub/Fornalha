@@ -356,7 +356,10 @@ pub fn criar(novo: &NovoProjeto, pasta_padrao: &Path) -> Resultado<Projeto> {
     std::fs::write(&recibos, b"").map_err(|e| Erro::io(&recibos, e))?;
     let arquivo = raiz.join(ARQUIVO_BIBLIA);
     write_json(&arquivo, &biblia).map_err(|e| Erro::io(&arquivo, e))?;
-    Ok(Projeto { raiz, biblia })
+    let p = Projeto { raiz, biblia };
+    // o guia para qualquer agente de IA (AGENTS.md e os arquivos de cada um) nasce com o projeto
+    crate::guia::escrever(&p)?;
+    Ok(p)
 }
 
 /// Abre um projeto pela pasta ou pelo próprio `game.project.json`.

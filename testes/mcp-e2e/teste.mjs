@@ -66,6 +66,8 @@ async function roteiro(client, nomeCliente, quemEsperado, home) {
   const biblia = JSON.parse(fs.readFileSync(path.join(raiz, "game.project.json"), "utf8"));
   confere(biblia.conceito?.genero === "action RPG" && biblia.comercial === true, "bíblia com o conceito e comercial");
   confere(criado.content?.[0]?.type === "text", "resultado também vem em texto (compatível)");
+  const guias = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".github/copilot-instructions.md", ".mcp.json", ".vscode/mcp.json"];
+  confere(raiz && guias.every((g) => fs.existsSync(path.join(raiz, g))), "o guia para qualquer IA nasce com o projeto");
 
   const atualizado = await client.callTool({
     name: "update_project",

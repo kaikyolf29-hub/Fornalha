@@ -49,6 +49,39 @@ def previas(t, objs, saida, arm=None, acoes=()):
     return arquivos
 
 
+def acabar_malhas(arm, pecas):
+    """Acabamento antes do QA: faces de área zero (invisíveis, mas quebram normal e tangente na engine)
+    saem, e o personagem pisa no chão: a sola mais baixa vai para z = 0 subindo o esqueleto (as peças e
+    as animações vão juntas). O templário saía com 7 faces degeneradas e a bota 2,7 cm abaixo do chão."""
+    import bmesh
+
+    tiradas = 0
+    for o in pecas:
+        if o.type != "MESH" or not o.data.polygons:
+            continue
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        zero = [f for f in bm.faces if f.calc_area() < 1e-10]
+        if zero:
+            bmesh.ops.delete(bm, geom=zero, context="FACES_ONLY")
+            bm.to_mesh(o.data)
+            o.data.update()
+            tiradas += len(zero)
+        bm.free()
+    pose = arm.data.pose_position
+    arm.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    zmin = min((min((o.matrix_world @ v.co).z for v in o.data.vertices) for o in pecas if o.type == "MESH" and o.data.vertices), default=0.0)
+    subiu = 0.0
+    if -0.08 < zmin < -0.002:
+        arm.location.z -= zmin
+        subiu = -zmin
+        bpy.context.view_layer.update()
+    arm.data.pose_position = pose
+    bpy.context.view_layer.update()
+    return {"faces_degeneradas_tiradas": tiradas, "subiu_para_o_chao_cm": round(subiu * 100, 1)}
+
+
 def movimento_conferido(t, arm, acoes):
     """Conferência e correção automática das animações recém-feitas (bancada de movimento). O resumo
     vai nas estatísticas; o que não deu para corrigir fica listado para a IA trocar o clipe."""
@@ -144,6 +177,7 @@ def tarefa_humano(t):
         acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes)
     movimento = movimento_conferido(t, arm, acoes)
     saida = t["saida"]
+    acabamento = acabar_malhas(arm, pecas)
     # QA automático (bíblia técnica 9.3): o resultado vai junto, para a janela e o agente verem
     import fc_lookdev
 
@@ -165,6 +199,7 @@ def tarefa_humano(t):
     st["pecas"] = [o.name for o in pecas]
     st["qa"] = qa
     st["movimento"] = movimento
+    st["acabamento"] = acabamento
     r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
     if arm is not None and "jaw" in arm.data.bones:
         # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do

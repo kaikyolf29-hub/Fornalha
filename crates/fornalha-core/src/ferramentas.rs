@@ -621,7 +621,9 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
             let p = projeto::abrir(&f.resolver_caminho(&a.caminho))?;
             f.usar_projeto(&p.raiz)?;
             let n = recibos::listar(&p.raiz)?.len();
-            Ok(json!({"raiz": p.raiz, "biblia": p.biblia, "recibos": n}))
+            // projeto antigo ganha o guia para a IA; o bloco da Fornalha no AGENTS.md é atualizado
+            let guia = crate::guia::escrever(&p)?;
+            Ok(json!({"raiz": p.raiz, "biblia": p.biblia, "recibos": n, "guia_para_ia": guia}))
         }
         "list_projects" => {
             let recentes: Vec<Value> = f

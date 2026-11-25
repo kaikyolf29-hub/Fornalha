@@ -100,8 +100,24 @@ barra os binários de teste sem reputação), Erethea (não instalada no PC), Te
   placa (era sempre o modo de compatibilidade); TESTE_DO_CRIADOR com o aviso do Smart App Control.
 **Ainda aberto do relatório:** a VRAM do sd.cpp esvazia e enche ~5 vezes por imagem com pouca RAM livre
 (medir com mais RAM ou deixar o `sd-server` aberto); vídeo e imagens do Blender no processador (na RX 580 o
-Cycles não usa a placa; avaliar EEVEE com placa); QA do templário com 7 faces degeneradas e pés −2,7 cm;
-assinatura dos executáveis (Fase 5) por causa do Smart App Control.
+Cycles não usa a placa; avaliar EEVEE com placa); assinatura dos executáveis (Fase 5) por causa do Smart
+App Control. **Resolvido:** QA do templário com 7 faces degeneradas e pés −2,7 cm (o `acabar_malhas` tira
+as faces de área zero e põe o personagem no chão antes do QA; conferido aqui: QA tudo ok).
+
+### Etapa 3 — guia para qualquer IA em cada projeto (25/11, adiantado)
+- Todo projeto novo nasce com o **AGENTS.md** (o padrão aberto que Codex, Cursor, Copilot, Gemini CLI,
+  Windsurf e outros leem): Erethea principal + Fornalha ajudante, como conectar os dois MCP (Fornalha
+  `127.0.0.1:11480/mcp`, Erethea `127.0.0.1:11481/mcp`), ordem das receitas (bíblia → personagem →
+  movimento → roupa → armas/mundo → som/dublagem → montar/testar → licenças) e as regras (licença
+  comercial, aceite só pela janela, "aprovado pela régua" ≠ pronto, placa só com prova).
+- Ponteiros para quem lê outro arquivo: `CLAUDE.md` (`@AGENTS.md`), `GEMINI.md`,
+  `.github/copilot-instructions.md`, `.cursor/rules/fornalha.mdc`, `.windsurfrules`; MCP pronto em
+  `.mcp.json` (Claude Code), `.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`; o trecho do
+  Codex (`~/.codex/config.toml`) está no guia.
+- O bloco da Fornalha no AGENTS.md é marcado e atualizado a cada `open_project` (projeto antigo ganha o
+  guia); o que a pessoa escreve fora do bloco e os ponteiros que ela já tinha não são tocados.
+- Testado: teste de unidade (`guia::testes`) e o MCP de ponta a ponta (stdio e HTTP). Falta provar com
+  cada agente de verdade abrindo a pasta (Codex, Gemini, Cursor) — não dá para rodar aqui.
 
 ### Etapa 2 — começo (25/11)
 - **Cabelo médio e comprido:** experimento com o caminho fio a fio + cards (opção `cabelo_em_cards` na
@@ -510,8 +526,8 @@ A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.
 algum desses, avise aqui.
 
 ## Próximo passo
-0. Etapa 1 do [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): estação Movimento, banco ligado,
-   esqueleto montado pela IA, conferência que reprova e roupa por cima.
+0. [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): Etapa 1 feita; guia para qualquer IA feito. Agora:
+   bancada de mapa (Etapa 2), cabelo comprido aceitável, depois cutscene e o jogo de prova (Etapa 3).
 1. Criador: rodar o TESTE_DO_CRIADOR.md no Windows (e, se quiser, no Linux).
 2. Com a placa NVIDIA nova: instalar os modelos de placa em Máquina e rodar a parte 9 do teste.
 3. Fase 5 só quando o criador pedir.

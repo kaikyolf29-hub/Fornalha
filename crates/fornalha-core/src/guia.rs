@@ -66,6 +66,8 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    rio, estradas, vila, masmorra, vegetação, luz da hora; olhe o `mapa.png`, as medidas e as fotos de cada
    região no `run_test`); `generate_blockout` só para um teste rápido.
 6. **Som**: `generate_sfx`, `generate_music`, `generate_voice` (dublagem com a boca mexendo).
+   **Cena curta**: `create_cutscene` com o roteiro (quem fala, o texto, enquadramento close/medio/aberto/
+   ombro/dois, animação, para quem olha); no jogo, `CenasCurtas.tocar("id")`.
 7. **Montar e testar**: `import_to_engine` e `run_test` (na Erethea roda também o teste de agente dela);
    veja as capturas e o vídeo.
 8. **Antes de vender**: `check_licenses` e `export_credits` (créditos obrigatórios, como ACCAD e 100STYLE).

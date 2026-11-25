@@ -139,6 +139,20 @@ as faces de área zero e põe o personagem no chão antes do QA; conferido aqui:
 - **Ainda não fiz:** grama em tufos, vento nas árvores, árvores melhores (as de hoje são low-poly da Forja),
   masmorra subterrânea (o terreno por mapa de altura não tem buraco), ler mapas do Tilemap 3D do primo.
 
+### Etapa 3 — cena curta como receita (25/11)
+- **`create_cutscene`** (MCP e CLI): o roteiro (quem, fala, enquadramento close/medio/aberto/ombro/dois,
+  animação, para quem olhar, duração) vira `Cutscenes/<id>.cena.json`; cada fala é dublada pelo Ignis com
+  a curva da boca (ou só legenda com `sem_voz`, para rascunho). Quem ainda não é personagem vira aviso.
+- **Na engine:** autoload `CenasCurtas` (`cena_curta.gd`): `tocar("id")` põe a câmera no enquadramento
+  de cada linha pela cabeça de quem fala, vira os dois um para o outro, toca a animação e a fala (boca pela
+  curva, olhos piscando e olhando para quem escuta), mostra a legenda; jogador e inimigos esperam
+  (`em_cena`) e o controle volta no fim (sinal `terminou`). O `run_test` toca a primeira cena do projeto e
+  tira uma foto de cada linha (`cena_curta` no relatório).
+- **Provado aqui:** a cena toca até o fim e devolve o controle (Godot, mapa); no humano realista
+  (MakeHuman) a boca acompanha a fala na cena. O personagem procedural da Forja não tem ossos de rosto
+  (lá a boca não mexe, e o relatório diz `tem_rosto: false`). **Falta provar:** com a voz do Ignis de
+  verdade numa cena completa no PC, e olhar as fotos dos enquadramentos com dois personagens.
+
 ### Etapa 3 — guia para qualquer IA em cada projeto (25/11, adiantado)
 - Todo projeto novo nasce com o **AGENTS.md** (o padrão aberto que Codex, Cursor, Copilot, Gemini CLI,
   Windsurf e outros leem): Erethea principal + Fornalha ajudante, como conectar os dois MCP (Fornalha

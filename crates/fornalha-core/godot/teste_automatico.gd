@@ -171,8 +171,46 @@ func _fotos_do_mapa() -> Array:
 	return fotos
 
 
+## A primeira cena curta do projeto (res://Cutscenes), com uma foto de cada linha.
+func _cena_curta() -> Dictionary:
+	var cenas := get_node_or_null("/root/CenasCurtas")
+	var dir := DirAccess.open("res://Cutscenes")
+	if cenas == null or dir == null:
+		return {}
+	var achada := ""
+	for arq in dir.get_files():
+		if arq.ends_with(".cena.json"):
+			achada = arq.trim_suffix(".cena.json")
+			break
+	if achada == "":
+		return {}
+	var fotos := []
+	var tela := DisplayServer.get_name() != "headless"
+	cenas.tocar(achada)
+	var n := 0
+	var limite := 0.0
+	while cenas.tocando and limite < 40.0:
+		await get_tree().process_frame
+		limite += get_process_delta_time()
+		var linhas: Array = cenas.relatorio.get("linhas", [])
+		if tela and linhas.size() > n:
+			n = linhas.size()
+			for i in 6:
+				await get_tree().process_frame
+			var img := get_viewport().get_texture().get_image()
+			var caminho := pasta.path_join("cena_%s_%02d.png" % [achada, n])
+			if img and not img.is_empty() and img.save_png(caminho) == OK:
+				fotos.append(caminho)
+	var r: Dictionary = cenas.relatorio.duplicate(true)
+	r["terminou"] = not cenas.tocando
+	r["fotos"] = fotos
+	r["jogador_voltou"] = _jogador == null or not _jogador.get("em_cena")
+	return r
+
+
 func _terminar() -> void:
 	ativo = false
+	var cena_curta := await _cena_curta()
 	var fotos_mapa := await _fotos_do_mapa()
 	var media := 0.0
 	for f in _fps:
@@ -187,6 +225,7 @@ func _terminar() -> void:
 		"engine": Engine.get_version_info(),
 		"capturas": _capturas,
 		"fotos_mapa": fotos_mapa,
+		"cena_curta": cena_curta,
 		"jogador": {},
 		"inimigos": {"total": _total_inimigos, "vivos": 0, "perseguiram": _perseguiram.size()},
 	}

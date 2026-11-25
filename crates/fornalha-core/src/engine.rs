@@ -21,7 +21,7 @@ use crate::projeto::Projeto;
 
 /// Scripts do jogo que a Fornalha escreve em `Scripts/fornalha/`.
 /// (caminho no projeto, conteúdo). A ponte é um plugin do editor (vale na Godot e na Erethea).
-const SCRIPTS: [(&str, &str); 16] = [
+const SCRIPTS: [(&str, &str); 17] = [
     ("Scripts/fornalha/jogador.gd", include_str!("../godot/jogador.gd")),
     ("Scripts/fornalha/inimigo.gd", include_str!("../godot/inimigo.gd")),
     ("Scripts/fornalha/movimento.gd", include_str!("../godot/movimento.gd")),
@@ -36,6 +36,7 @@ const SCRIPTS: [(&str, &str); 16] = [
     ("Scripts/fornalha/terreno.gdshader", include_str!("../godot/terreno.gdshader")),
     ("Scripts/fornalha/agua.gdshader", include_str!("../godot/agua.gdshader")),
     ("Scripts/fornalha/vegetacao.gd", include_str!("../godot/vegetacao.gd")),
+    ("Scripts/fornalha/cena_curta.gd", include_str!("../godot/cena_curta.gd")),
     ("addons/fornalha_ponte/plugin.cfg", include_str!("../godot/ponte_plugin.cfg")),
     ("addons/fornalha_ponte/ponte_plugin.gd", include_str!("../godot/ponte_plugin.gd")),
 ];
@@ -69,6 +70,7 @@ config/features=PackedStringArray("{recurso}", "Forward Plus")
 
 TesteFornalha="*res://Scripts/fornalha/teste_automatico.gd"
 Sons="*res://Scripts/fornalha/sons.gd"
+CenasCurtas="*res://Scripts/fornalha/cena_curta.gd"
 
 [editor_plugins]
 
@@ -133,7 +135,7 @@ pub fn preparar_projeto(projeto: &Projeto, versao_engine: &str) -> Resultado<Pre
         // acrescenta os autoloads que faltarem, sem mexer no resto
         let mut texto = std::fs::read_to_string(&pg).map_err(|e| Erro::io(&pg, e))?;
         let mut mudou = false;
-        for (nome, script) in [("TesteFornalha", "teste_automatico.gd"), ("Sons", "sons.gd")] {
+        for (nome, script) in [("TesteFornalha", "teste_automatico.gd"), ("Sons", "sons.gd"), ("CenasCurtas", "cena_curta.gd")] {
             if !texto.contains(&format!("{nome}=")) {
                 let linha = format!("{nome}=\"*res://{PASTA_SCRIPTS}/{script}\"\n");
                 if let Some(i) = texto.find("[autoload]\n") {

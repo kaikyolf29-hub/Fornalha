@@ -15,8 +15,9 @@
   de mapa feita** (`generate_map`: plano da IA → relevo com erosão, rio, lago, estradas com ponte, chão
   pintado, vegetação por regras, vila com ruas, medidas e fotos de cada região na engine); falta a prova
   numa placa de verdade e a masmorra por peças.
-- **Etapa 3 (adiantada):** o guia para qualquer IA nasce em cada projeto (AGENTS.md + ponteiros para
-  Claude, Gemini, Copilot, Cursor, Windsurf e os arquivos de MCP); o Codex lê o AGENTS.md direto.
+- **Etapa 3:** o guia para qualquer IA nasce em cada projeto (AGENTS.md + ponteiros para Claude, Gemini,
+  Copilot, Cursor, Windsurf e os arquivos de MCP); a **cena curta** virou receita (`create_cutscene` +
+  `CenasCurtas.tocar`). Falta o jogo de prova feito pela IA e o teste do criador.
 
 ## A ideia em uma frase
 Quem faz o jogo é a **IA** (Claude Code, Codex, Gemini, Cursor, Copilot ou outra) junto com a **Erethea Engine** (a principal) e a

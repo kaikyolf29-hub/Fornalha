@@ -13,6 +13,8 @@ extends CharacterBody3D
 
 enum Estado { PARADO, PERSEGUINDO, ATACANDO, MORTO }
 var estado := Estado.PARADO
+## Numa cena curta o inimigo espera (não persegue nem ataca).
+var em_cena := false
 var vida := 100
 var gravidade: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var anim: AnimationPlayer
@@ -50,7 +52,7 @@ func _physics_process(dt: float) -> void:
 		velocity.y -= gravidade * dt
 	_espera = max(_espera - dt, 0.0)
 	var jogador := get_tree().get_first_node_in_group("jogador") as Node3D
-	if estado == Estado.MORTO or jogador == null or jogador.get("morto"):
+	if estado == Estado.MORTO or jogador == null or jogador.get("morto") or em_cena:
 		_andar(Vector3.ZERO, dt)
 		if estado != Estado.MORTO:
 			_tocar("parado")

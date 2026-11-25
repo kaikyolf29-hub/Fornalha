@@ -159,6 +159,17 @@ async fn mapa_da_bancada_na_engine_com_chao_de_verdade() {
             .await
             .unwrap();
     assert_eq!(m["medidas"]["aprovado"], true, "{}", m["medidas"]);
+    // cena curta: uma fala (WAV de teste com a curva da boca, sem o Ignis) e um plano aberto
+    let dub = raiz.join("Audio/dublagem");
+    std::fs::create_dir_all(&dub).unwrap();
+    std::fs::write(dub.join("aren_01.wav"), comum::wav_de_teste(1.0)).unwrap();
+    let curva: Vec<f64> = (0..30).map(|i| ((i as f64) * 0.7).sin().abs()).collect();
+    std::fs::write(dub.join("aren_01.boca.json"), json!({"quadros_por_segundo": 30, "abertura": curva}).to_string()).unwrap();
+    std::fs::create_dir_all(raiz.join("Cutscenes")).unwrap();
+    let cena = json!({"id": "abertura", "linhas": [
+        {"quem": "aren", "texto": "A vila precisa de ajuda.", "audio": "res://Audio/dublagem/aren_01.wav", "segundos": 1.0, "camera": "close", "duracao": 1.3},
+        {"quem": "aren", "texto": "", "camera": "aberto", "duracao": 1.0}]});
+    std::fs::write(raiz.join("Cutscenes/abertura.cena.json"), cena.to_string()).unwrap();
     engine::preparar_projeto(&p, godot.versao.as_deref().unwrap_or("")).unwrap();
     let man = engine::escrever_manifesto(&raiz, None, false).unwrap();
     assert_eq!(man["mapa"]["pasta"], "res://World/mapa");
@@ -182,6 +193,14 @@ async fn mapa_da_bancada_na_engine_com_chao_de_verdade() {
     assert_eq!(rel["jogador"]["caiu_do_mapa"], false);
     assert_eq!(rel["jogador"]["no_chao"], true, "o jogador pisa no terreno do mapa");
     assert!(rel["jogador"]["andou_m"].as_f64().unwrap() > 2.0, "{}", rel["jogador"]);
+    let cc = &rel["cena_curta"];
+    assert_eq!(cc["terminou"], true, "a cena curta tocou até o fim: {cc}");
+    assert_eq!(cc["linhas"].as_array().unwrap().len(), 2);
+    assert!(cc["linhas"].as_array().unwrap().iter().all(|l| l["achou_quem"] == true), "{cc}");
+    // a boca só mexe em quem tem rosto (o humano MakeHuman tem; o procedural da Forja, não)
+    let com_rosto = cc["linhas"].as_array().unwrap().iter().any(|l| l["fala"] == true && l["tem_rosto"] == true);
+    assert_eq!(cc["boca_mexeu"], com_rosto, "a boca acompanha a fala de quem tem rosto: {cc}");
+    assert_eq!(cc["jogador_voltou"], true, "o controle volta ao jogador");
 }
 
 async fn achar_engine() -> Option<externas::Achado> {

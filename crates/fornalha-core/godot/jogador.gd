@@ -5,6 +5,8 @@ extends CharacterBody3D
 ## fica em movimento.gd.
 
 signal vida_mudou(vida: int, vida_max: int)
+## Numa cena curta (CenasCurtas.tocar) o jogador fica parado e sem controle.
+var em_cena := false
 
 @export var velocidade := 4.0
 @export var velocidade_corrida := 7.5
@@ -86,6 +88,8 @@ static func _achar_animacoes(no: Node) -> AnimationPlayer:
 
 
 func _unhandled_input(evento: InputEvent) -> void:
+	if em_cena:
+		return
 	if evento is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		braco.rotation.y -= evento.relative.x * sensibilidade
 		braco.rotation.x = clamp(braco.rotation.x - evento.relative.y * sensibilidade, -1.2, 0.5)
@@ -100,6 +104,13 @@ func _physics_process(dt: float) -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		move_and_slide()
+		return
+	if em_cena:  # cena curta: parado, sem controle (a cena manda)
+		var parado := Vector3(velocity.x, 0.0, velocity.z).move_toward(Vector3.ZERO, frenagem * dt)
+		velocity.x = parado.x
+		velocity.z = parado.z
+		move_and_slide()
+		_animar(Vector3.ZERO, false, dt)
 		return
 	var entrada := Input.get_vector("esquerda", "direita", "frente", "tras") + entrada_teste
 	var direcao := braco.global_transform.basis * Vector3(entrada.x, 0.0, entrada.y)

@@ -217,3 +217,37 @@ async fn musica_grava_os_dados_do_laco_para_a_erethea() {
     assert!(info["bpm"].as_u64().unwrap() > 0);
     assert!(!info["tonica"].as_str().unwrap().is_empty());
 }
+
+/// Cena curta: o roteiro vira Cutscenes/<id>.cena.json (aqui só com legenda, sem o Ignis), com aviso
+/// para quem ainda não é personagem e recusa de enquadramento que não existe.
+#[tokio::test]
+async fn cena_curta_pelo_roteiro() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = fornalha(tmp.path(), "nenhuma");
+    chamar(&f, "create_project", json!({"nome": "Cena"})).await;
+    let r = chamar(
+        &f,
+        "create_cutscene",
+        json!({"id": "Abertura da Vila", "sem_voz": true, "roteiro": [
+            {"quem": "aren", "fala": "A vila precisa de ajuda.", "camera": "close", "olhar_para": "mira"},
+            {"quem": "mira", "fala": "Então vamos.", "camera": "ombro", "olhar_para": "aren", "animacao": "acenar"},
+            {"quem": "aren", "camera": "aberto", "duracao": 2.5}]}),
+    )
+    .await;
+    let arq = std::path::PathBuf::from(r["arquivo"].as_str().unwrap());
+    assert!(arq.ends_with("Cutscenes/abertura-da-vila.cena.json"), "{arq:?}");
+    let cena: Value = serde_json::from_slice(&std::fs::read(&arq).unwrap()).unwrap();
+    let linhas = cena["linhas"].as_array().unwrap();
+    assert_eq!(linhas.len(), 3);
+    assert_eq!(linhas[1]["camera"], "ombro");
+    assert_eq!(linhas[1]["animacao"], "acenar");
+    assert_eq!(linhas[0]["audio"], "", "sem_voz: só legenda");
+    assert!(linhas[0]["duracao"].as_f64().unwrap() > 2.0, "tempo de leitura da legenda");
+    assert_eq!(linhas[2]["duracao"], 2.5);
+    assert!(r["avisos"].as_array().unwrap().iter().any(|a| a.as_str().unwrap().contains("aren")), "personagem que não existe vira aviso");
+    let e = f
+        .chamar("create_cutscene", json!({"id": "x", "sem_voz": true, "roteiro": [{"quem": "aren", "camera": "drone"}]}), "claude-code")
+        .await
+        .unwrap_err();
+    assert!(e.mensagem.contains("drone"), "{}", e.mensagem);
+}

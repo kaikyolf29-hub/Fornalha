@@ -1515,6 +1515,85 @@ pub async fn gerar_voz(f: &Fornalha, a: ArgsVoz, quem: &str) -> Resultado<Value>
     Ok(r)
 }
 
+// ---------------------------------------------------------------- cena curta
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct LinhaDaCena {
+    /// Quem fala ou age (id do personagem, como em Characters/<id> ou Enemies/<id>).
+    pub quem: String,
+    pub fala: Option<String>,
+    /// Animação do personagem nessa linha (ex.: "acenar", "ataque_1").
+    pub animacao: Option<String>,
+    /// close, medio, aberto, ombro ou dois.
+    pub camera: Option<String>,
+    /// Para quem olhar (id de outro personagem): os dois se viram um para o outro.
+    pub olhar_para: Option<String>,
+    pub duracao: Option<f64>,
+    pub idioma: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsCena {
+    pub projeto: Option<String>,
+    pub id: String,
+    pub roteiro: Vec<LinhaDaCena>,
+    /// Sem dublar (só legenda): rascunho rápido, sem o Ignis.
+    pub sem_voz: Option<bool>,
+    pub idioma: Option<String>,
+    pub seed: Option<u64>,
+}
+
+const ENQUADRAMENTOS: [&str; 5] = ["close", "medio", "aberto", "ombro", "dois"];
+
+/// Cena curta: cada fala do roteiro é dublada (com a curva da boca) e vira uma linha do
+/// Cutscenes/<id>.cena.json, que o autoload CenasCurtas toca no jogo (câmera, animação, olhar, legenda).
+pub async fn criar_cena(f: &Fornalha, a: ArgsCena, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let id = projeto::nome_de_pasta(&a.id);
+    if a.id.trim().is_empty() || a.roteiro.is_empty() {
+        return Err(Erro::argumento("Diga o id da cena e o roteiro (uma linha por fala ou ação)."));
+    }
+    let conhecidos: Vec<String> = engine::achar_personagens(&p.raiz).into_iter().map(|x| x.id).collect();
+    let mut avisos = Vec::new();
+    let mut linhas = Vec::new();
+    let mut total = 0.0;
+    for (i, l) in a.roteiro.iter().enumerate() {
+        let camera = l.camera.clone().unwrap_or_else(|| "medio".into());
+        if !ENQUADRAMENTOS.contains(&camera.as_str()) {
+            return Err(Erro::argumento(format!("Enquadramento \"{camera}\" não existe. Use: {}.", ENQUADRAMENTOS.join(", "))));
+        }
+        for nome in std::iter::once(&l.quem).chain(l.olhar_para.as_ref()) {
+            if !conhecidos.contains(nome) {
+                avisos.push(format!("Linha {}: \"{nome}\" ainda não é personagem do projeto (crie com create_character).", i + 1));
+            }
+        }
+        let texto = l.fala.clone().unwrap_or_default();
+        let (mut audio, mut segundos) = (String::new(), 0.0);
+        if !texto.trim().is_empty() && !a.sem_voz.unwrap_or(false) {
+            let idioma = l.idioma.as_deref().or(a.idioma.as_deref()).unwrap_or("pt");
+            let r = gerar_fala(f, &p, &projeto::nome_de_pasta(&l.quem), &texto, idioma, a.seed.unwrap_or(1) + i as u64, quem).await?;
+            audio = format!("res://{}", rel(&p.raiz, Path::new(r["arquivo"].as_str().unwrap_or(""))));
+            segundos = r["segundos"].as_f64().unwrap_or(0.0);
+        }
+        let leitura = if audio.is_empty() && !texto.is_empty() { 1.5 + texto.chars().count() as f64 * 0.06 } else { 0.0 };
+        let dur = l.duracao.unwrap_or(0.0).max(segundos + if audio.is_empty() { 0.0 } else { 0.3 }).max(leitura).max(1.0);
+        total += dur;
+        linhas.push(json!({
+            "quem": l.quem, "texto": texto, "audio": audio, "segundos": segundos, "animacao": l.animacao.clone().unwrap_or_default(),
+            "camera": camera, "olhar_para": l.olhar_para.clone().unwrap_or_default(), "duracao": dur,
+        }));
+    }
+    let arq = p.raiz.join(format!("Cutscenes/{id}.cena.json"));
+    crate::paths::write_json(&arq, &json!({"id": id, "linhas": linhas})).map_err(|e| Erro::io(&arq, e))?;
+    f.avisar_ponte(vec![rel(&p.raiz, &arq)]);
+    Ok(json!({
+        "arquivo": arq, "linhas": linhas, "segundos": (total * 10.0_f64).round() / 10.0, "avisos": avisos,
+        "como_tocar": format!("No jogo: CenasCurtas.tocar(\"{id}\") (o jogador e os inimigos esperam; o sinal terminou avisa o fim). O run_test toca a primeira cena e tira uma foto de cada linha (cena_curta no relatório)."),
+    }))
+}
+
 // ---------------------------------------------------------------- mundo e engine
 
 #[derive(Debug, Clone, Deserialize, Default)]

@@ -196,6 +196,21 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
     let pecas: Vec<&str> = heroi["estatisticas"]["pecas"].as_array().unwrap().iter().filter_map(|p| p.as_str()).collect();
     assert!(pecas.iter().any(|p| p.ends_with("_armadura")), "{pecas:?}");
     assert!(pecas.iter().any(|p| p.ends_with("_sobreveste")), "{pecas:?}");
+    // cena curta com uma fala do herói (WAV de teste com a curva da boca): o run_test toca e a boca mexe
+    let id_heroi = heroi["id"].as_str().unwrap_or("godofredo").to_string();
+    let dub = raiz.join("Audio/dublagem");
+    std::fs::create_dir_all(&dub).unwrap();
+    std::fs::write(dub.join(format!("{id_heroi}_teste.wav")), comum::wav_de_teste(1.0)).unwrap();
+    let curva: Vec<f64> = (0..30).map(|i| ((i as f64) * 0.7).sin().abs()).collect();
+    std::fs::write(dub.join(format!("{id_heroi}_teste.boca.json")), json!({"quadros_por_segundo": 30, "abertura": curva}).to_string())
+        .unwrap();
+    std::fs::create_dir_all(raiz.join("Cutscenes")).unwrap();
+    let cena = json!({"id": "juramento", "linhas": [{"quem": id_heroi, "texto": "Pela ordem.", "audio": format!("res://Audio/dublagem/{id_heroi}_teste.wav"),
+        "segundos": 1.0, "camera": "close", "duracao": 1.3}]});
+    std::fs::write(raiz.join("Cutscenes/juramento.cena.json"), cena.to_string()).unwrap();
+    f.chamar("record_receipt", json!({"arquivo": format!("Audio/dublagem/{id_heroi}_teste.wav"), "modelo": "autoral"}), "claude-code")
+        .await
+        .unwrap();
     let inimigo = f
         .chamar("create_character", json!({"papel": "inimigo", "descricao": "mercenário com espada", "armadura": "leve", "arma": "espada", "testar_na_engine": true, "conceito": false}), "claude-code")
         .await
@@ -207,6 +222,9 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
     assert_eq!(teste["erros"], json!([]));
     // movimento no humano realista (esqueleto de jogo): árvore, pés no chão, olhar e golpe andando
     comum::conferir_movimento(teste);
+    let cc = &teste["cena_curta"];
+    assert_eq!(cc["terminou"], true, "{cc}");
+    assert_eq!(cc["boca_mexeu"], true, "a boca do humano realista acompanha a fala: {cc}");
     let pend = f.chamar("check_licenses", json!({}), "claude-code").await.unwrap();
     assert_eq!(pend["pode_vender"], true, "{pend}");
     if let Ok(d) = std::env::var("FORNALHA_TESTE_SAIDA") {

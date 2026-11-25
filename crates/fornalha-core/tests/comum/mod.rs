@@ -69,3 +69,26 @@ pub fn conferir_movimento(rel: &serde_json::Value) {
     let ciclos = &mov["velocidade_dos_ciclos"];
     assert!(ciclos["andar"].as_f64().unwrap_or(0.0) > 0.3, "velocidade do ciclo de andar medida nos pés: {mov}");
 }
+
+/// WAV mono de 16 bits (22 050 Hz) com um tom, para a fala de teste.
+pub fn wav_de_teste(segundos: f64) -> Vec<u8> {
+    let taxa = 22_050u32;
+    let n = (taxa as f64 * segundos) as usize;
+    let dados: Vec<u8> =
+        (0..n).flat_map(|i| ((((i as f64) * 220.0 * std::f64::consts::TAU / taxa as f64).sin() * 8000.0) as i16).to_le_bytes()).collect();
+    let mut w = Vec::new();
+    w.extend(b"RIFF");
+    w.extend((36 + dados.len() as u32).to_le_bytes());
+    w.extend(b"WAVEfmt ");
+    w.extend(16u32.to_le_bytes());
+    w.extend(1u16.to_le_bytes());
+    w.extend(1u16.to_le_bytes());
+    w.extend(taxa.to_le_bytes());
+    w.extend((taxa * 2).to_le_bytes());
+    w.extend(2u16.to_le_bytes());
+    w.extend(16u16.to_le_bytes());
+    w.extend(b"data");
+    w.extend((dados.len() as u32).to_le_bytes());
+    w.extend(dados);
+    w
+}

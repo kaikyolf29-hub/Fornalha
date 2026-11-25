@@ -146,46 +146,39 @@ class CampoDistancia:
         return dist, grad
 
 
-def assentar_fios(P, livre, campo_corpo, s, iteracoes=90, folga=0.004):
-    """Cabelo que pende (médio, comprido): a parte penteada sobre o crânio fica; o resto cai com a
-    gravidade, guarda o comprimento de cada trecho (cada ponto segue o anterior), fica liso (sem
-    quinas) e não entra na cabeça, no pescoço nem nos ombros (campo de distância do tronco de cima).
+def assentar_fios(P, livre, campo_corpo, s, folga=0.006, perto=0.04, peso_queda=0.45, z_corte=None):
+    """Cabelo que pende (médio, comprido): a parte penteada sobre o crânio fica; daí em diante cada ponto
+    segue o anterior no mesmo comprimento, virando aos poucos para baixo (gravidade), e se encostar na
+    pele contorna por fora (cabeça, pescoço, ombros, costas). Uma passada só, da raiz para a ponta: com
+    várias rodadas o ruído do campo virava fio crespo, e colidir fora da passada fazia laços.
+    "Dentro" só vale perto da pele (`perto`): longe dela o sinal do campo não é confiável.
     livre: índice do primeiro ponto solto de cada fio (o fio inteiro preso: npts)."""
     nf, npts, _ = P.shape
     X = P.astype(np.float64).copy()
-    L = np.linalg.norm(np.diff(X, axis=1), axis=-1)  # comprimento de cada trecho
-    j = np.arange(npts)[None, :]
-    move = j >= livre[:, None]
-    if not move.any():
-        return X
-    peso = move.astype(np.float64)[..., None]
-    queda = np.array([0.0, 0.0, -0.006 * s])
-    for it in range(iteracoes):
-        # gravidade (passo constante: o que importa é onde o fio assenta, não a velocidade)
-        X = X + queda * peso
-        # cada ponto segue o anterior no comprimento certo (da raiz para a ponta)
-        for k in range(1, npts):
-            m = move[:, k]
-            if not m.any():
-                continue
-            d = X[m, k] - X[m, k - 1]
-            d /= np.linalg.norm(d, axis=-1, keepdims=True) + 1e-12
-            X[m, k] = X[m, k - 1] + d * L[m, k - 1][:, None]
-        # liso: puxa cada ponto do meio para a média dos vizinhos (mais firme perto da raiz)
-        if npts > 2:
-            meio = (X[:, :-2] + X[:, 2:]) * 0.5
-            rig = 0.35 * peso[:, 1:-1]
-            X[:, 1:-1] = X[:, 1:-1] * (1 - rig) + meio * rig
-        # colisão com o corpo
-        dist, nrm = campo_corpo(X)
-        entra = np.maximum(folga * s - dist, 0.0)[..., None] * peso
-        X = X + nrm * entra
-    # o comprimento de novo no fim (a colisão e o alisado mexem um pouco)
+    L = np.linalg.norm(np.diff(X, axis=1), axis=-1)
+    baixo = np.array([0.0, 0.0, -1.0])
+    dirs = np.diff(X, axis=1)
+    dirs /= np.linalg.norm(dirs, axis=-1, keepdims=True) + 1e-12
+    ant = dirs[np.arange(nf), np.clip(livre - 1, 0, npts - 2)].copy()
+    # quem sai do crânio subindo (coroa) começa na horizontal: cabelo não sobe sozinho
+    ant[:, 2] = np.minimum(ant[:, 2], 0.0)
+    ant /= np.linalg.norm(ant, axis=-1, keepdims=True) + 1e-12
     for k in range(1, npts):
-        m = move[:, k]
-        d = X[m, k] - X[m, k - 1]
+        m = livre <= k
+        if not m.any():
+            continue
+        dd = ant[m] * (1 - peso_queda) + baixo * peso_queda
+        dd /= np.linalg.norm(dd, axis=-1, keepdims=True) + 1e-12
+        q = X[m, k - 1] + dd * L[m, k - 1][:, None]
+        dist, n = campo_corpo(q)
+        pen = np.where(dist > -perto * s, np.maximum(folga * s - dist, 0.0), 0.0)
+        if z_corte is not None:
+            pen = pen * (q[:, 2] > z_corte)
+        q = q + n * pen[:, None]
+        d = q - X[m, k - 1]
         d /= np.linalg.norm(d, axis=-1, keepdims=True) + 1e-12
         X[m, k] = X[m, k - 1] + d * L[m, k - 1][:, None]
+        ant[m] = d
     return X
 
 
@@ -278,6 +271,12 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
     for j in range(segs + 1):
         t = j / segs
         dist, nrm = campo(Q)
+        if longo:
+            # fora da grade da cabeça o campo devolve lixo: o fio que sai dela solta (não é puxado)
+            fora = np.any((Q <= campo.o + campo.h) | (Q >= campo.o + (campo.n - 2) * campo.h), axis=-1) | (np.abs(dist) > 0.03 * s)
+            novos = fora & ~solto
+            livre[novos] = j
+            solto |= fora
         Q = np.where(solto[:, None], Q, Q - nrm * dist[:, None])
         h = (0.0007 * s + (h_pico - 0.0007 * s) * _sstep(0.0, 0.22, t)) * (1.0 - 0.25 * t)
         P[:, j] = np.where(solto[:, None], Q, Q + nrm * h[:, None])
@@ -285,7 +284,7 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
             break
         F = pente(Q, nrm)
         if longo:
-            abaixo = (Q[:, 2] < qz + 0.03 * s) & ~solto
+            abaixo = (Q[:, 2] < oz - 0.02 * s) & ~solto
             livre[abaixo] = j + 1
             d_livre[abaixo] = F[abaixo]
             solto |= abaixo
@@ -297,10 +296,24 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
     campo_corpo = None
     if longo:
         # o tronco de cima (cabeça, pescoço, ombros, peito e costas) para o cabelo assentar em cima
-        sel = co[:, 2] > qz - 0.42 * s
+        # só o tronco (sem os braços, abertos na pose de descanso: o cabelo enroscava neles)
+        z_corte = qz - 0.85 * s
+        sel = co[:, 2] > z_corte
+        z_colisao = qz - 0.45 * s
         nrm_v = normais.reshape(-1, 3)
         campo_corpo = CampoDistancia(co, nrm_v, sel, passo=0.012 * s, margem=max(0.12 * s, float(np.max(comp)) * 0.6))
-        P = assentar_fios(P, livre, campo_corpo, s)
+        import os as _os
+
+        _dbg = _os.environ.get("FORNALHA_DEBUG_FIOS")
+        if _dbg:
+            np.save(_dbg + "_antes.npy", P[::40].astype(np.float32))
+            np.save(_dbg + "_corpo_co.npy", co[sel].astype(np.float32))
+            np.save(_dbg + "_corpo_n.npy", nrm_v[sel].astype(np.float32))
+            np.save(_dbg + "_params.npy", np.array([s, qz, z_colisao], dtype=np.float64))
+            np.save(_dbg + "_livre.npy", livre[::40])
+        P = assentar_fios(P, livre, campo_corpo, s, z_corte=z_colisao)
+        if _dbg:
+            np.save(_dbg + "_depois.npy", P[::40].astype(np.float32))
         campo = CampoCombinado(campo, campo_corpo)
     # mechas: puxa cada fio um pouco para o fio-guia mais perto (mais na ponta)
     nc = max(400, nf // 15)
@@ -511,7 +524,7 @@ def _caminho_medio(P, membros):
     return P[membros].mean(0)
 
 
-def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None):
+def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None, longo=False):
     """Monta os cards das camadas 1-3 a partir dos fios. Devolve listas de vértices/faces/uvs."""
     rng = np.random.default_rng(semente)
     s = pontos["s"]
@@ -530,6 +543,16 @@ def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None):
         (int(860 * escala_n), (0.006, 0.012), 0.0011, (2, 3, 4, 5), False),
         (int(220 * escala_n), (0.0022, 0.0045), 0.0018, (6, 7), True),
     ]
+    if longo:
+        # comprido: fitas longas cobrem com menos cards, mais largos, em camadas (base larga, meio e
+        # algumas mechas soltas na borda); muitas fitas estreitas se cruzavam e viravam moita
+        camadas = [
+            (int(300 * escala_n), (0.022, 0.040), 0.0, (0, 1, 2), False),
+            (int(480 * escala_n), (0.010, 0.020), 0.0015, (2, 3, 4, 5), False),
+            (int(140 * escala_n), (0.003, 0.006), 0.0025, (6, 7), True),
+        ]
+    oy = (pontos["olho_l"][1] + pontos["olho_r"][1]) / 2
+    eixo = np.array([0.0, oy + 0.085 * s, 0.0])
     V, F, UV = [], [], []
     for n, (lmin, lmax), extra, variantes, so_borda in camadas:
         pesos = np.where(liso, 1.0, 0.0)
@@ -537,24 +560,42 @@ def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None):
             pesos = pesos * np.where((borda > 0.45) & (borda < 0.9), 6.0, 1.0)
         pesos = pesos / pesos.sum()
         centros = rng.choice(nf, n, replace=False, p=pesos)
-        # agrupa os fios pelo centro mais perto (pela raiz) e tira o caminho médio da mecha
+        # agrupa os fios pelo centro mais perto: pela raiz no curto; no comprido pelo caminho inteiro
+        # (fios de raízes vizinhas caem por lados diferentes do ombro, e a média virava zigue-zague)
         dono = np.empty(nf, dtype=np.int64)
+        if longo:
+            amostra = np.linspace(0, npts - 1, 7).astype(int)
+            D = P[:, amostra].reshape(nf, -1)
+            Dc = D[centros]
         for a in range(0, nf, 5000):
             b = min(nf, a + 5000)
-            dd = np.linalg.norm(R[a:b, None, :] - R[None, centros, :], axis=-1)
+            if longo:
+                dd = np.linalg.norm(D[a:b, None, :] - Dc[None, :, :], axis=-1)
+            else:
+                dd = np.linalg.norm(R[a:b, None, :] - R[None, centros, :], axis=-1)
             dono[a:b] = np.argmin(dd, axis=1)
         for k, ci in enumerate(centros):
             membros = np.nonzero(dono == k)[0]
             if len(membros) < 3:
                 continue
             lisos = membros[liso[membros]]
-            if so_borda or len(lisos) < 3:
+            if so_borda or len(lisos) < 3 or longo:
                 caminho = P[ci].copy()
             else:
                 # caminho da mecha: média dos fios lisos, puxada para o fio central (não encolhe)
                 caminho = 0.6 * P[lisos].mean(0) + 0.4 * P[ci]
             caminho = _alisar_fios(caminho[None], 4)[0]
             dist, nrm = campo(caminho)
+            if longo:
+                # longe da pele a normal do campo não diz onde é "fora" do cabelo: lá a face do card
+                # olha para fora a partir do eixo da cabeça (o cabelo que pende é uma casca em volta)
+                radial = caminho - eixo
+                radial[:, 2] = 0.0
+                radial /= np.linalg.norm(radial, axis=-1, keepdims=True) + 1e-9
+                w = np.clip((dist - 0.012 * s) / (0.02 * s), 0.0, 1.0)[:, None]
+                nrm = nrm * (1 - w) + radial * w
+                nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True) + 1e-9
+                dist = np.where(w[:, 0] > 0, 1.0, dist)
             caminho = caminho + nrm * (extra + max(0.0, 0.0008 * s - float(dist.min())))
             tang = np.gradient(caminho, axis=0)
             tang /= np.linalg.norm(tang, axis=-1, keepdims=True) + 1e-9
@@ -564,7 +605,7 @@ def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None):
             larg = np.clip(2.2 * float(np.percentile(espalho, 80)) if len(espalho) else lmin, lmin, lmax) * s
             if so_borda:
                 larg = rng.uniform(lmin, lmax) * s
-            torcao = rng.normal(0, 0.25 if so_borda else 0.12)
+            torcao = rng.normal(0, 0.25 if so_borda else 0.12) * (0.4 if longo else 1.0)
             var = int(rng.choice(variantes))
             u0, u1 = var / VARIANTES, (var + 1) / VARIANTES
             base_i = len(V)
@@ -721,7 +762,7 @@ def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n
     if P is None:
         return []
     img_cor, img_dados = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
-    V, F, UV = cards_do_penteado(P, campo, pontos, escala_n=escala_n)
+    V, F, UV = cards_do_penteado(P, campo, pontos, escala_n=escala_n, longo=estilo != "curto")
     malha = bpy.data.meshes.new(f"{nome}_hair")
     malha.from_pydata(V.tolist(), [], F)
     uv = malha.uv_layers.new(name="UVMap")

@@ -54,11 +54,27 @@ def movimento_conferido(t, arm, acoes):
     vai nas estatísticas; o que não deu para corrigir fica listado para a IA trocar o clipe."""
     if not acoes or not t.get("conferir_movimento", True):
         return None
+    # a conferência passa por todas as animações e quadros: no fim volta tudo como estava (o QA, as
+    # prévias e o retrato que vêm depois medem e mostram a mesma pose de antes)
+    cena = bpy.context.scene
+    ad = arm.animation_data
+    acao0 = ad.action if ad else None
+    slot0 = getattr(ad, "action_slot", None) if ad else None
+    quadro0 = cena.frame_current
     try:
         _, res, corr, antes = _conferir_e_corrigir(t, None, arm, list(acoes), True)
     except Exception as e:  # a conferência nunca impede o personagem de sair
         print(f"[movimento] conferência falhou: {e}")
         return {"erro": f"{type(e).__name__}: {e}"}
+    finally:
+        if ad is not None:
+            ad.action = acao0
+            if slot0 is not None and hasattr(ad, "action_slot"):
+                try:
+                    ad.action_slot = slot0
+                except Exception:
+                    pass
+        cena.frame_set(quadro0)
     return {
         "aprovado": all(r["aprovado"] for r in res),
         "reprovados": [r["nome"] for r in res if not r["aprovado"]],

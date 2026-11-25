@@ -339,3 +339,68 @@ async fn esqueleto_visto_e_editado_pela_ia() {
     assert_eq!(antes("RightUpperLeg", ossos).unwrap(), perna, "longe do que mudou, os pesos ficam");
     assert!(editado.is_file());
 }
+
+/// Caixa (8 vértices, 6 faces) em OBJ, do canto `a` ao canto `b`, com os índices a partir de `base`.
+fn caixa_obj(a: [f64; 3], b: [f64; 3], base: usize) -> String {
+    let mut s = String::new();
+    for &x in &[a[0], b[0]] {
+        for &y in &[a[1], b[1]] {
+            for &z in &[a[2], b[2]] {
+                s += &format!("v {x} {z} {}\n", -y); // OBJ em Y para cima; o Blender importa para Z para cima
+            }
+        }
+    }
+    for f in [[1, 2, 4, 3], [5, 7, 8, 6], [1, 5, 6, 2], [3, 4, 8, 7], [1, 3, 7, 5], [2, 6, 8, 4]] {
+        s += &format!("f {} {} {} {}\n", f[0] + base, f[1] + base, f[2] + base, f[3] + base);
+    }
+    s
+}
+
+/// Roupa por cima: uma placa no peito e uma braçadeira no antebraço esquerdo ficam rígidas no osso certo
+/// e a roupa acompanha as animações que o personagem já tinha.
+#[tokio::test]
+async fn roupa_por_cima_com_placas_rigidas() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("aren.glb");
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "personagem", "saida": saida, "previa": false, "personagem": {"id": "aren", "tipo": "humano"}}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    // o esqueleto diz onde ficam o peito e o antebraço
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "esqueleto_ver", "entrada": saida}), TEMPO).await.unwrap();
+    let osso = |n: &str| r["ossos"].as_array().unwrap().iter().find(|o| o["nome"] == n).unwrap().clone();
+    let (peito, ante) = (osso("Chest"), osso("LeftLowerArm"));
+    let p = |o: &serde_json::Value, k: &str, i: usize| o[k][i].as_f64().unwrap();
+    let zc = (p(&peito, "cabeca", 2) + p(&peito, "ponta", 2)) / 2.0;
+    let mut obj = caixa_obj([-0.16, -0.16, zc - 0.07], [0.16, -0.10, zc + 0.07], 0);
+    let (xa, xb, za) = (p(&ante, "cabeca", 0), p(&ante, "ponta", 0), p(&ante, "cabeca", 2));
+    let (x0, x1) = (xa.min(xb) + 0.03, xa.max(xb) - 0.03);
+    obj += &caixa_obj([x0, -0.05, za - 0.05], [x1, 0.05, za + 0.05], 8);
+    let roupa = tmp.path().join("armadura.obj");
+    std::fs::write(&roupa, obj).unwrap();
+    let vestido = tmp.path().join("aren_vestido.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "vestir", "entrada": saida, "roupa": roupa, "saida": vestido, "imagens": "nenhuma"}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert_eq!(r["roupa"]["ilhas_rigidas"], 2, "as duas placas rígidas: {}", r["roupa"]);
+    let mut donos: Vec<&str> = r["roupa"]["placas"].as_array().unwrap().iter().map(|x| x["osso"].as_str().unwrap()).collect();
+    donos.sort();
+    assert_eq!(donos, ["Chest", "LeftLowerArm"], "cada placa no osso de baixo dela: {}", r["roupa"]);
+    assert!(vestido.is_file());
+    assert!(r["clipes"].as_array().unwrap().len() >= 9, "a roupa entra nas animações que já existiam");
+    // os ossos donos: confere no esqueleto do glb vestido
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "esqueleto_ver", "entrada": vestido}), TEMPO).await.unwrap();
+    let carrega =
+        |n: &str| r["ossos"].as_array().unwrap().iter().find(|o| o["nome"] == n).unwrap()["vertices_que_carrega"].as_u64().unwrap();
+    assert!(carrega("LeftLowerArm") > 0 && carrega("Chest") > 0);
+}

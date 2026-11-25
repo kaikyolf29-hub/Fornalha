@@ -213,6 +213,7 @@ async function carregar(s) {
     await carregarBase();
     if (s === "projeto") await pintarProjeto();
     else if (s === "forjar") pintarForjar();
+    else if (s === "movimento") await pintarMovimento();
     else if (s === "galeria") await pintarGaleria();
     else if (s === "testar") pintarTestar();
     else if (s === "licencas") await pintarLicencas();
@@ -551,6 +552,92 @@ $("conferir-estilo").addEventListener("click", async () => {
 });
 $("galeria").addEventListener("click", (e) => { const b = e.target.closest("[data-ver3d]"); if (b) abrirVisualizador(b.dataset.ver3d); });
 $("filtros-galeria").addEventListener("click", (e) => { const b = e.target.closest("[data-filtro]"); if (b) { filtroGaleria = b.dataset.filtro; pintarGaleria(); } });
+
+// ---------- Movimento ----------
+const ETIQUETAS_MOV = ["andar", "correr", "ataque", "espada", "soco", "chute", "defesa", "esquiva", "dano", "morte", "zumbi", "agachado", "de_costas", "de_lado", "pular", "gesto"];
+let etiquetaMov = "";
+let buscaMov = "";
+function personagensDoProjeto() {
+  const vistos = new Set();
+  return recibos.map((r) => r.arquivo).filter((a) => /^(Characters|Enemies)\/.+\.glb$/.test(a) && !vistos.has(a) && vistos.add(a));
+}
+async function pintarMovimento() {
+  const sel = $("mov-personagem");
+  const lista = biblia ? personagensDoProjeto() : [];
+  const atual = sel.value;
+  pinta(sel, lista.length ? lista.map((a) => `<option value="${esc(a)}" ${a === atual ? "selected" : ""}>${esc(a)}</option>`).join("") : `<option value="">Nenhum personagem com esqueleto</option>`);
+  pinta($("mov-etiquetas"), [["", "Tudo"], ...ETIQUETAS_MOV.map((e) => [e, e.replace("_", " ")])].map(([v, n]) => `<button data-etiqueta="${esc(v)}" class="${v === etiquetaMov ? "ativo" : ""}">${esc(n)}</button>`).join(""));
+  if (biblia) await pintarBanco();
+}
+async function pintarBanco() {
+  pinta($("mov-banco"), `<p class="vazio">Lendo o banco (a primeira vez cataloga as capturas no Blender)…</p>`);
+  try {
+    const r = await ferramenta("list_motions", { busca: buscaMov || undefined, etiquetas: etiquetaMov ? [etiquetaMov] : [], limite: 40 });
+    pinta($("mov-fontes"), r.fontes.map((f) => `<strong>${esc(f.nome)}</strong> · ${esc(f.licenca)} · ${f.clipes} clipes${f.credito ? ` · crédito: ${esc(f.credito)}` : ""}`).join("<br>")
+      + ((r.pacotes_que_faltam || []).length ? `<br>Para ter mais: Máquina → Pacotes (${r.pacotes_que_faltam.map(esc).join(", ")}).` : ""));
+    if (!r.clipes.length) { pinta($("mov-banco"), `<p class="vazio">Nada no banco com esse filtro.</p>`); return; }
+    $("mov-banco")._html = null;
+    $("mov-banco").innerHTML = r.clipes.map((c) => `<div class="item"><div><strong>${esc(c.nome)}</strong>
+        <small>${esc(c.fonte)} · ${numero(c.segundos || 0, 1)} s${c.laco ? " · laço" : ""} · ${esc((c.etiquetas || []).join(", "))}</small></div>
+      <div class="lado"><input type="text" value="${esc((c.etiquetas || [])[0] || "")}" data-como="${esc(c.id)}" style="width:130px" title="Nome da animação no jogo">
+        <button class="botao" data-aplicar="${esc(c.id)}" data-ciclo="${(c.etiquetas || []).some((e) => e === "andar" || e === "correr") && !c.laco ? "1" : ""}">Pôr no personagem</button></div></div>`).join("")
+      + `<p class="nota">${esc(r.total)} clipes no total. ${esc(r.dica)}</p>`;
+  } catch (e) { pinta($("mov-banco"), `<p class="vazio">${esc(e.message)}</p>`); }
+}
+async function mostrarConferencia(r, titulo) {
+  const anims = r.animacoes || [];
+  const ok = anims.filter((a) => a.aprovado).length;
+  const img = r.arquivos && r.arquivos.imagem ? await dataUrl(r.arquivos.imagem) : null;
+  const linhas = anims.map((a) => `<div class="item"><div><strong>${esc(a.nome)}</strong>
+      <small>${a.problemas.length ? a.problemas.slice(0, 3).map((p) => esc(p.explicacao)).join("<br>") : "Nada que a régua mede passou do limite."}</small></div>
+    <div class="lado"><span class="selo ${a.aprovado ? "venda" : "erro"}">${a.aprovado ? "Aprovada pela régua" : "Reprovada"}</span></div></div>`).join("");
+  const corrigidas = r.correcoes ? Object.keys(r.correcoes) : [];
+  $("mov-resultado").innerHTML = `
+    <div class="veredito ${r.aprovado ? "passou" : "falhou"}"><strong>${esc(titulo)}: ${ok} de ${anims.length} sem defeito medido</strong>
+      <span>${corrigidas.length ? "Corrigidas sozinhas: " + corrigidas.map(esc).join(", ") : ""}</span>
+      ${r.arquivos && r.arquivos.video ? `<button class="botao" data-abrir="${esc(r.arquivos.video)}" style="margin-left:auto">Abrir vídeo</button>` : ""}</div>
+    ${(r.creditos_obrigatorios || []).length ? `<p class="nota">Créditos obrigatórios: ${r.creditos_obrigatorios.map(esc).join("; ")}</p>` : ""}
+    ${img ? `<div class="capturas"><img src="${img}" alt="Conferência: o pior quadro de cada animação, ossos ruins em vermelho"></div>` : ""}
+    <div class="lista">${linhas}</div><p class="nota">${esc(r.dica || "")}</p>`;
+}
+async function acaoMovimento(botao, nome, args, titulo) {
+  if (!biblia) return mensagem("Abra um projeto antes.", "alerta");
+  const arquivo = $("mov-personagem").value;
+  if (!arquivo) return mensagem("Crie um personagem antes (Forjar).", "alerta");
+  const texto = botao.textContent;
+  botao.disabled = true; botao.textContent = "Trabalhando…"; calor(true);
+  try {
+    const r = await ferramenta(nome, { arquivo, ...args });
+    if (nome === "show_skeleton") {
+      const img = await dataUrl(r.imagem);
+      $("mov-resultado").innerHTML = `${img ? `<div class="capturas"><img src="${img}" alt="Esqueleto com os ossos numerados"></div>` : ""}
+        ${(r.avisos || []).length ? `<p class="nota">${r.avisos.map(esc).join("<br>")}</p>` : `<p class="nota">Nenhum aviso no esqueleto.</p>`}
+        <div class="lista">${r.ossos.map((o) => `<div class="item"><div><strong>${o.n}. ${esc(o.nome)}</strong><small>pai: ${esc(o.pai || "—")} · ${numero(o.comprimento_cm, 1)} cm${o.mola ? " · mola" : ""}</small></div>
+          <div class="lado"><span class="selo">${o.vertices_que_carrega} vértices</span></div></div>`).join("")}</div>`;
+    } else await mostrarConferencia(r, titulo);
+    return r;
+  } catch (err) { mensagem(err.message, err.codigo === "precisa_aceite" ? "alerta" : "erro"); return null; }
+  finally { botao.disabled = false; botao.textContent = texto; calor(false); }
+}
+$("mov-conferir").addEventListener("click", () => acaoMovimento($("mov-conferir"), "check_motion", { imagens: "todas" }, "Conferência"));
+$("mov-corrigir").addEventListener("click", () => acaoMovimento($("mov-corrigir"), "check_motion", { imagens: "todas", corrigir: true }, "Conferência com correção"));
+$("mov-esqueleto").addEventListener("click", () => acaoMovimento($("mov-esqueleto"), "show_skeleton", {}, "Esqueleto"));
+$("mov-vestir").addEventListener("click", async () => {
+  const roupa = await escolherArquivo("Roupa ou armadura (glb, obj, fbx)");
+  if (!roupa) return;
+  const r = await acaoMovimento($("mov-vestir"), "dress_character", { roupa, rigido: $("mov-rigido").value, encaixar: $("mov-encaixar").checked }, "Roupa vestida");
+  if (r && r.roupa) mensagem(`Roupa vestida: ${r.roupa.ilhas_rigidas} placas rígidas, ${r.roupa.ilhas_de_pano} partes de pano.`);
+});
+$("mov-etiquetas").addEventListener("click", (e) => { const b = e.target.closest("[data-etiqueta]"); if (b) { etiquetaMov = b.dataset.etiqueta; pintarMovimento(); } });
+let esperaBusca = null;
+$("mov-busca").addEventListener("input", (e) => { clearTimeout(esperaBusca); esperaBusca = setTimeout(() => { buscaMov = e.target.value.trim(); pintarBanco(); }, 400); });
+$("mov-banco").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-aplicar]");
+  if (!b) return;
+  const como = (document.querySelector(`[data-como="${CSS.escape(b.dataset.aplicar)}"]`) || {}).value || "";
+  if (!como.trim()) return mensagem("Diga o nome da animação no jogo.", "alerta");
+  await acaoMovimento(b, "apply_motion", { clipes: [{ id: b.dataset.aplicar, como: como.trim(), ciclo: !!b.dataset.ciclo }], video: true }, `"${como.trim()}" no personagem`);
+});
 
 // ---------- Testar ----------
 let ultimoTeste = null;

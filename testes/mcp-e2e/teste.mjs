@@ -39,7 +39,7 @@ const FERRAMENTAS = [
   "create_character", "generate_concept", "generate_3d", "create_material", "create_skeleton", "generate_animation",
   "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_code",
   "import_to_engine", "run_test", "plan_request", "queue_job", "list_queue", "cancel_job", "check_style",
-  "list_motions", "apply_motion", "check_motion", "import_motion", "show_skeleton", "edit_skeleton",
+  "list_motions", "apply_motion", "check_motion", "import_motion", "show_skeleton", "edit_skeleton", "dress_character",
 ];
 
 const PASTAS = ["GameDesign", "World", "Characters", "Enemies", "Items", "Weapons", "Animations",

@@ -339,6 +339,15 @@ pub fn lista() -> Vec<Ferramenta> {
             so_leitura: false,
         },
         Ferramenta {
+            nome: "dress_character",
+            titulo: "Vestir roupa ou armadura",
+            descricao: "Roupa por cima de um personagem que já se mexe (primeiro o movimento, depois a roupa): a malha de roupa ou armadura (da IA, de pacote ou feita à mão; glb, obj ou fbx) recebe os pesos do corpo pela superfície mais próxima. Cada peça pequena de um osso só (placa, ombreira, manopla, elmo) fica rígida nesse osso, como armadura de jogo; pano grande (capa, sobreveste, saia) dobra com o corpo. Depois confere todas as animações com a roupa (corpo sólido mede a roupa também). encaixar: true leva a roupa para o tamanho e o lugar do corpo.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string", "description": "Personagem com esqueleto e animações."},
+                "roupa": {"type": "string"}, "rigido": {"type": "string", "enum": ["auto", "sim", "nao"]}, "encaixar": {"type": "boolean"},
+                "saida": {"type": "string"}}, "required": ["arquivo", "roupa"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
             nome: "generate_sfx",
             titulo: "Gerar efeitos sonoros",
             descricao: "Gera os efeitos por evento em Audio/efeitos/ (passos na grama, pedra, água e madeira, golpes, impacto, espada, pulo, aterrissagem, dano, morte, moeda, clique), com variações. Sem efeitos pedidos, gera o pacote que o jogo usa.",
@@ -764,6 +773,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "import_motion" => crate::movimento::importar(f, args(a)?).await,
         "show_skeleton" => crate::movimento::ver_esqueleto(f, args(a)?).await,
         "edit_skeleton" => crate::movimento::editar_esqueleto(f, args(a)?, quem).await,
+        "dress_character" => crate::movimento::vestir(f, args(a)?, quem).await,
         "retarget_animation" => {
             let x: geracao::ArgsAnimacao = args(a)?;
             if x.origem.is_none() {

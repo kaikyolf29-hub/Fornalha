@@ -1010,6 +1010,54 @@ def tarefa_esqueleto_editar(t):
             "feitas": feitas, "pesos": pesos, "ossos": ossos, "avisos": avisos, "altura_m": round(H, 3)}
 
 
+def tarefa_vestir(t):
+    """Roupa por cima de um personagem que já se mexe: os pesos vêm do corpo, as placas ficam rígidas num
+    osso, e a conferência roda com a roupa (corpo sólido mede a roupa também)."""
+    import fc_conferir
+    import fc_esqueleto
+    import fc_vestir
+
+    objs, arm = _com_esqueleto(t)
+    corpo = fc_esqueleto._malhas(arm, com_pesos=True)
+    if not corpo:
+        raise ValueError("o personagem não tem malha com pesos para servir de molde")
+    novos = _importar(t["roupa"])
+    roupa = [o for o in novos if o.type == "MESH"]
+    for o in novos:
+        if o.type != "MESH":
+            bpy.data.objects.remove(o, do_unlink=True)
+    for o in roupa:
+        mundo = o.matrix_world.copy()
+        o.parent = None
+        o.matrix_world = mundo
+        o.modifiers.clear()
+        o.vertex_groups.clear()
+    if not roupa:
+        raise ValueError("o arquivo da roupa não tem malha")
+    escala = fc_vestir.encaixar(roupa, corpo) if t.get("encaixar") else None
+    mn, mx = c.caixa_envolvente(corpo)
+    H = mx.z - mn.z
+    resumo = fc_vestir.vestir(arm, corpo, roupa, H, t.get("rigido", "auto"))
+    if escala:
+        resumo["escala_do_encaixe"] = round(escala, 3)
+    acoes = sorted((a for a in bpy.data.actions if a.use_fake_user), key=lambda a: a.name)
+    res = []
+    arquivos = {}
+    saida = t.get("saida") or t["entrada"]
+    if acoes:
+        conf, res = fc_conferir.conferir(arm, acoes, t.get("altura_m"))
+        arm.animation_data.action = acoes[0]
+    tamanho = c.exportar_glb(saida, [o for o in bpy.context.scene.objects if o.type in ("MESH", "ARMATURE", "EMPTY")])
+    arquivos["modelo"] = saida
+    if acoes and t.get("imagens", "todas") != "nenhuma":
+        f = fc_conferir.folha(os.path.splitext(saida)[0] + ".vestido.png", conf, res, acoes, todos=True)
+        if f:
+            arquivos["imagem"] = f["arquivo"]
+            arquivos["ordem_da_imagem"] = f["ordem"]
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "roupa": resumo,
+            "aprovado": all(r["aprovado"] for r in res), "reprovados": [r["nome"] for r in res if not r["aprovado"]], "clipes": res}
+
+
 def tarefa_material(t):
     """Recolore os materiais: cores pedidas por nome, ou a paleta do guia visual em ordem."""
     objs = _importar(t["entrada"])
@@ -1071,6 +1119,7 @@ TAREFAS = {
     "aplicar_banco": tarefa_aplicar_banco,
     "esqueleto_ver": tarefa_esqueleto_ver,
     "esqueleto_editar": tarefa_esqueleto_editar,
+    "vestir": tarefa_vestir,
 }
 
 

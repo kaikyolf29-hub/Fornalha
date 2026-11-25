@@ -18,6 +18,7 @@
     <nav class="estacoes" aria-label="Estações">
       <button data-estacao="projeto" class="ativa">Projeto</button>
       <button data-estacao="forjar">Forjar</button>
+      <button data-estacao="movimento">Movimento</button>
       <button data-estacao="galeria">Galeria</button>
       <button data-estacao="testar">Testar</button>
       <button data-estacao="licencas">Licenças</button>
@@ -100,6 +101,32 @@
         <div class="titulo-painel"><h2>Fila</h2><button class="botao" id="limpar-fila">Tirar as terminadas</button></div>
         <p class="nota" id="noite-info" style="margin:0 0 10px"></p>
         <div id="fila" class="lista"><p class="vazio">Nada na fila.</p></div>
+      </section>
+    </section>
+
+    <!-- ===== Movimento ===== -->
+    <section id="est-movimento" class="estacao" hidden>
+      <h1>Movimento</h1>
+      <p class="lead">Primeiro o movimento, depois a roupa. A conferência mede cada animação e reprova o que fica feio no jogo (braço virado, junta ao contrário, tronco torcido, membro atravessando o corpo, pé escorregando, corpo no chão); a correção conserta o que dá. Aprovado quer dizer que a régua não achou defeito: olhe o vídeo antes de dar por pronto.</p>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Personagem</h2><select id="mov-personagem"></select></div>
+        <div class="acoes"><button class="botao" id="mov-conferir">Conferir o movimento</button>
+          <button class="botao quente" id="mov-corrigir">Conferir e corrigir</button>
+          <button class="botao" id="mov-esqueleto">Ver o esqueleto</button></div>
+        <div id="mov-resultado"></div>
+      </section>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Banco de movimento</h2><input type="text" id="mov-busca" placeholder="Buscar (walk, jab, sword…)" style="max-width:240px"></div>
+        <div class="filtros" id="mov-etiquetas"></div>
+        <div id="mov-fontes" class="nota" style="margin:0 0 10px"></div>
+        <div id="mov-banco" class="lista"><p class="vazio">Abra um projeto para ver o banco.</p></div>
+      </section>
+      <section class="painel">
+        <h2>Roupa por cima</h2>
+        <p class="nota" style="margin:0 0 10px">A roupa ou armadura recebe os pesos do corpo que já se mexe; peça pequena de um osso só (placa, ombreira, manopla, elmo) fica rígida nesse osso, pano grande dobra com o corpo.</p>
+        <div class="acoes"><button class="botao" id="mov-vestir">Escolher a roupa e vestir</button>
+          <label class="campo" style="grid-auto-flow:column;align-items:center"><span>Placas rígidas</span><select id="mov-rigido"><option value="auto">automático</option><option value="sim">todas</option><option value="nao">nenhuma</option></select></label>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mov-encaixar"> Encaixar no tamanho do corpo</label></div>
       </section>
     </section>
 

@@ -522,6 +522,50 @@ pub async fn editar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Res
               "dica": "As animações que já existiam continuam (cada osso guarda o giro dele); confira com check_motion. Ossos novos não têm animação: use mola_<grupo>_<n> para eles balançarem no jogo."}))
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsVestir {
+    pub projeto: Option<String>,
+    /// Personagem (glb) com esqueleto, pesos e as animações já conferidas.
+    pub arquivo: String,
+    /// Malha da roupa ou armadura (glb, obj, fbx), feita para este corpo (ou com encaixar: true).
+    pub roupa: String,
+    /// auto (padrão: peça pequena de um osso só fica rígida), sim (todas rígidas) ou nao (tudo dobra).
+    pub rigido: Option<String>,
+    /// Leva a roupa para o tamanho e o lugar do corpo (altura, centro, chão).
+    pub encaixar: bool,
+    /// Onde gravar (padrão: o próprio personagem).
+    pub saida: Option<String>,
+}
+
+/// dress_character: roupa por cima de um personagem que já se mexe.
+pub async fn vestir(f: &Fornalha, a: ArgsVestir, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    let roupa = f.resolver_no_projeto(&p, &a.roupa);
+    for (x, o) in [(&arquivo, "personagem"), (&roupa, "roupa")] {
+        if !x.is_file() {
+            return Err(Erro::argumento(format!("Não achei o arquivo da {o}: {}.", x.display())));
+        }
+    }
+    let rigido = a.rigido.clone().unwrap_or_else(|| "auto".into());
+    if !["auto", "sim", "nao"].contains(&rigido.as_str()) {
+        return Err(Erro::argumento("rigido: auto, sim ou nao."));
+    }
+    let saida = a.saida.as_deref().map(|s| f.resolver_no_projeto(&p, s)).unwrap_or_else(|| arquivo.clone());
+    let r = forjar(
+        f,
+        &json!({"tarefa": "vestir", "entrada": arquivo, "roupa": roupa, "saida": saida, "rigido": rigido, "encaixar": a.encaixar, "materiais": null}),
+    )
+    .await?;
+    recibo(f, &p, &saida, "forja-3d", None, None, json!({"bancada": "roupa", "roupa": a.roupa, "rigido": rigido}), quem).await?;
+    f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
+    let mut out = resultado(&r, None);
+    out["roupa"] = r["roupa"].clone();
+    out["dica"] = json!("A roupa segue as animações que o personagem já tinha. Placas (ilhas_rigidas) ficam presas no osso de baixo; pano grande dobra com o corpo. Se a conferência reprovar por corpo sólido, a roupa é grossa demais ali: afaste com check_motion (corrigir) ou ajuste a peça.");
+    Ok(out)
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;

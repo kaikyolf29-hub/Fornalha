@@ -146,8 +146,9 @@ async fn scripts_do_jogo_compilam_na_engine() {
     }
 }
 
-/// Pedido da Erethea: o run_test chama `--agent-test=<pasta>` e lê `<pasta>/report.json`;
-/// saída 2 (opções desconhecidas) cai no teste_automatico da Fornalha.
+/// Pedido da Erethea: o run_test chama `--agent-test=<pasta>` e lê `<pasta>/report.json`, e roda junto o
+/// teste_automatico da Fornalha (o jogador anda, o inimigo reage); saída 2 (opções desconhecidas) fica só
+/// com o da Fornalha.
 #[cfg(unix)]
 #[tokio::test]
 async fn erethea_usa_o_teste_de_agente_dela() {
@@ -158,7 +159,8 @@ async fn erethea_usa_o_teste_de_agente_dela() {
     let falsa = tmp.path().join("erethea");
     std::fs::write(
         &falsa,
-        "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in --agent-test=*) d=\"${a#--agent-test=}\";; --agent-test-seconds=*) s=\"${a#--agent-test-seconds=}\";; esac; done\n\
+        "#!/bin/sh\nf=\nfor a in \"$@\"; do [ \"$f\" = 1 ] && { mkdir -p \"$a\"; printf '{\"jogador\": {\"andou_m\": 5, \"caiu_do_mapa\": false}}' > \"$a/relatorio.json\"; exit 0; }\n\
+         case \"$a\" in --fornalha-teste) f=1;; --agent-test=*) d=\"${a#--agent-test=}\";; --agent-test-seconds=*) s=\"${a#--agent-test-seconds=}\";; esac; done\n\
          [ -z \"$d\" ] && exit 2\nmkdir -p \"$d\"\nprintf '{\"passou\": true, \"segundos\": %s, \"quadros\": 240}' \"$s\" > \"$d/report.json\"\nexit 0\n",
     )
     .unwrap();
@@ -166,8 +168,9 @@ async fn erethea_usa_o_teste_de_agente_dela() {
     let eng = externas::Achado { programa: Programa::Erethea, caminho: falsa.clone(), versao: Some("4.8-erethea".into()) };
     let op = OpcoesTeste { segundos: 4.0, sem_janela: true, ..Default::default() };
     let rel = engine::testar(&eng, &raiz, &tmp.path().join("saida"), &op).await.unwrap();
-    assert_eq!(rel["teste"], "erethea --agent-test");
-    assert_eq!(rel["passou"], true);
+    assert_eq!(rel["teste"], "fornalha + erethea --agent-test");
+    assert_eq!(rel["passou"], true, "{rel}");
+    assert_eq!(rel["jogador"]["andou_m"], 5, "o teste da Fornalha também rodou: {rel}");
     assert_eq!(rel["erethea"]["quadros"], 240);
     assert_eq!(rel["erethea"]["segundos"], 4);
     // Erethea antiga (sai com 2): a Fornalha tenta o teste dela (que aqui não roda, pois a "engine" é falsa)

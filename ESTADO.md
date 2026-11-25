@@ -65,7 +65,15 @@ de outra conta e não chegou ao repositório até 25/11.
 - **Erethea é a engine padrão** dos projetos novos (decisão do criador); sem ela instalada, a Fornalha usa
   a Godot e avisa. O CI da Fornalha ainda testa na Godot 4.6.1; a Erethea (fork da 4.8 beta) está sendo
   compilada aqui para rodar o mesmo teste nela.
-Falta na Etapa 1: a prova na Erethea, o CI verde no Windows e no Linux, e o teste no PC do criador.
+- **Provado na Erethea (25/11):** a Erethea do `main` (commit c4993bf, base Godot 4.8-beta4) foi compilada
+  aqui (Linux, editor, sem placa: `erethea.linuxbsd.editor.x86_64`, "Erethea Engine v4.8.beta"). Com
+  `FORNALHA_TESTE_ERETHEA`, os testes de engine da Fornalha passam nela (6 de 6) e o templário realista
+  (MakeHuman, captura, IK dos pés, olhar, golpe andando) roda: andou 7,77 m, pés parados ≤ 1,3 cm, 0 erros
+  e 0 avisos da engine. O `run_test` na Erethea agora roda os dois testes (o `--agent-test` dela, com
+  desempenho e avisos, e o da Fornalha, com o jogador andando e o inimigo reagindo) e junta. O aviso da
+  4.8 sobre ponto do BlendSpace sem nome foi corrigido (`_ponto_no_blend`, que continua valendo na 4.6).
+  O CI da Fornalha continua na Godot 4.6.1 (sem build da Erethea para baixar): a prova na Erethea é daqui.
+Falta na Etapa 1: o CI das gerações verde no Windows e no Linux, e o teste no PC do criador.
 
 ### Etapa 2 — começo (25/11)
 - **Cabelo médio e comprido:** experimento com o caminho fio a fio + cards (opção `cabelo_em_cards` na

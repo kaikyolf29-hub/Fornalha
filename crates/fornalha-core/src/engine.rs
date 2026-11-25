@@ -367,12 +367,26 @@ pub struct OpcoesTeste {
 /// run_test: abre o jogo em modo de teste e devolve o relatório. Se a janela
 /// não abrir (máquina sem placa nem OpenGL), roda de novo sem janela.
 pub async fn testar(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Value> {
-    // a Erethea tem o teste de agente dela (--agent-test); se ela não conhecer as opções, cai no da Fornalha
-    if engine.programa == externas::Programa::Erethea {
-        if let Some(rel) = testar_na_erethea(engine, raiz, pasta_saida, op).await? {
-            return Ok(rel);
+    // a Erethea tem o teste de agente dela (--agent-test: desempenho, memória, avisos da engine); o da
+    // Fornalha roda junto (o jogador anda, o inimigo reage e cai) e os dois entram no relatório
+    let agente =
+        if engine.programa == externas::Programa::Erethea { testar_na_erethea(engine, raiz, pasta_saida, op).await? } else { None };
+    let mut rel = testar_fornalha(engine, raiz, pasta_saida, op).await?;
+    if let Some(ag) = agente {
+        let passou = rel["passou"] == Value::Bool(true) && ag["passou"] == Value::Bool(true);
+        if let (Some(e), Some(ea)) = (rel["erros"].as_array().cloned(), ag["erros"].as_array()) {
+            let mut todos = e;
+            todos.extend(ea.iter().cloned());
+            rel["erros"] = json!(todos);
         }
+        rel["erethea"] = ag["erethea"].clone();
+        rel["teste"] = json!("fornalha + erethea --agent-test");
+        rel["passou"] = json!(passou);
     }
+    Ok(rel)
+}
+
+async fn testar_fornalha(engine: &Achado, raiz: &Path, pasta_saida: &Path, op: &OpcoesTeste) -> Resultado<Value> {
     match testar_uma_vez(engine, raiz, pasta_saida, op).await {
         Err(e) if e.codigo == "jogo_nao_rodou" && !op.sem_janela => {
             let sem = OpcoesTeste { sem_janela: true, video: false, ..op.clone() };

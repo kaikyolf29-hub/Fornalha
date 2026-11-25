@@ -75,8 +75,26 @@ FIOS = {
     # comprimento em cima / nos lados (m), altura do volume na frente / em cima / nos lados (m)
     "curto": dict(cima=(0.09, 0.115), lados=(0.02, 0.03), h_frente=0.016, h_cima=0.009, h_lados=0.004, grav=0.1, fios=70000, guias=0, segs=16),
     "medio": dict(cima=(0.15, 0.2), lados=(0.13, 0.18), h_frente=0.01, h_cima=0.007, h_lados=0.006, grav=0.9, fios=70000, guias=2400, segs=18),
-    "longo": dict(cima=(0.32, 0.42), lados=(0.3, 0.4), h_frente=0.01, h_cima=0.007, h_lados=0.006, grav=1.3, fios=80000, guias=2600, segs=24),
+    # comprido: o caminho sobre o crânio gasta ~0,25 m; o resto pende até os ombros e as costas
+    "longo": dict(cima=(0.55, 0.68), lados=(0.42, 0.55), h_frente=0.012, h_cima=0.010, h_lados=0.009, grav=1.3, fios=80000, guias=2600, segs=30),
 }
+
+
+class CampoCombinado:
+    """O campo fino da cabeça onde ele vale (dentro da grade dele) e o do tronco no resto: o cabelo
+    comprido sai da grade da cabeça e o campo dela devolvia direções erradas (cards espetados)."""
+
+    def __init__(self, cabeca, corpo):
+        self.a, self.b = cabeca, corpo
+        self.lo = cabeca.o + cabeca.h
+        self.hi = cabeca.o + (cabeca.n - 2) * cabeca.h
+
+    def __call__(self, P):
+        P = np.asarray(P)
+        d1, g1 = self.a(P)
+        d2, g2 = self.b(P)
+        dentro = np.all((P >= self.lo) & (P <= self.hi), axis=-1)
+        return np.where(dentro, d1, d2), np.where(dentro[..., None], g1, g2)
 
 
 class CampoDistancia:
@@ -221,6 +239,9 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
         para_frente = _sstep(oy + 0.15 * s, oy + 0.05 * s, R[:, 1])
         comp = comp * (0.42 + 0.58 * para_frente) + rng.uniform(*e["lados"], nf) * s * (1 - para_frente) * 0.35
     h_pico = (e["h_lados"] * (1 - cima) + (e["h_cima"] + (e["h_frente"] - e["h_cima"]) * frente) * cima) * s
+    if longo:
+        # camadas: uns fios rentes, outros por cima (o volume do cabelo comprido)
+        h_pico = h_pico * rng.uniform(0.35, 1.9, nf)
     borda = mascara_couro(R[:, 0], R[:, 1], R[:, 2], pontos)
     comp *= rng.uniform(0.88, 1.04, nf) * (0.45 + 0.55 * np.clip((borda - 0.5) * 2, 0, 1))
     # leve variação de direção, suave de um fio para o vizinho (cabelo de verdade não é régua)
@@ -280,6 +301,7 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
         nrm_v = normais.reshape(-1, 3)
         campo_corpo = CampoDistancia(co, nrm_v, sel, passo=0.012 * s, margem=max(0.12 * s, float(np.max(comp)) * 0.6))
         P = assentar_fios(P, livre, campo_corpo, s)
+        campo = CampoCombinado(campo, campo_corpo)
     # mechas: puxa cada fio um pouco para o fio-guia mais perto (mais na ponta)
     nc = max(400, nf // 15)
     centros = rng.choice(nf, nc, replace=False)

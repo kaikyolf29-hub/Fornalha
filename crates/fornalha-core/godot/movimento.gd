@@ -458,7 +458,7 @@ func _criar_arvore() -> void:
 	for k in _pontos.size():
 		var p: Dictionary = _pontos[k]
 		if p["nome"] == "parado":
-			bs.add_blend_point(_animacao("parado", true), 0.0)
+			_ponto_no_blend(bs, _animacao("parado", true), 0.0, "parado")
 			continue
 		# ciclo na linha do tempo normalizada (1 = um ciclo), começando com o pé esquerdo na frente
 		var ponto := AnimationNodeBlendTree.new()
@@ -473,7 +473,7 @@ func _criar_arvore() -> void:
 		ponto.add_node("ritmo", AnimationNodeTimeScale.new())
 		ponto.connect_node("ritmo", 0, "anim")
 		ponto.connect_node("output", 0, "ritmo")
-		bs.add_blend_point(ponto, p["v"])
+		_ponto_no_blend(bs, ponto, p["v"], p["nome"])
 	raiz.add_node("loco", bs)
 	# chão, no ar e morto
 	var estados := ["chao", "ar", "morto"]
@@ -1079,3 +1079,13 @@ func _atualizar_olhar(dt: float) -> void:
 	for k in _olhar.size():
 		_olhar[k].active = _peso_olhar > 0.001
 		_olhar[k].influence = _olhar_base[k] * _peso_olhar
+
+
+## Ponto no BlendSpace1D com nome: a Godot 4.8 (e a Erethea) pede o nome do ponto e avisa sem ele; a 4.6
+## não tem esse argumento (por isso a chamada é por callv, que não quebra a análise do script).
+func _ponto_no_blend(bs: AnimationNodeBlendSpace1D, no: AnimationRootNode, pos: float, nome: String) -> void:
+	var v := Engine.get_version_info()
+	if int(v["major"]) > 4 or int(v["minor"]) >= 8:
+		bs.callv("add_blend_point", [no, pos, -1, StringName(nome)])
+	else:
+		bs.add_blend_point(no, pos)

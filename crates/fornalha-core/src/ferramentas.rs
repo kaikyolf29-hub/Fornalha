@@ -275,6 +275,48 @@ pub fn lista() -> Vec<Ferramenta> {
             so_leitura: false,
         },
         Ferramenta {
+            nome: "list_motions",
+            titulo: "Banco de movimento",
+            descricao: "Lista as capturas de movimento com licença comercial que a Fornalha tem (Quaternius CC0, ACCAD CC BY 3.0 com luta e passos, 100STYLE CC BY 4.0 com 100 estilos de andar, e o que a pessoa trouxe: Mixamo, CMU, capturas próprias), com etiquetas em português (andar, correr, ataque, espada, soco, chute, defesa, esquiva, morte, dano, zumbi, agachado, de_costas, de_lado, virar, pular, carregar, gesto, estilo:<nome>), duração, se fecha em laço e quanto anda. Filtre por busca, etiquetas, fonte ou laço. Os ids vão para apply_motion.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "busca": {"type": "string"},
+                "etiquetas": {"type": "array", "items": {"type": "string"}}, "fonte": {"type": "string"}, "laco": {"type": "boolean"},
+                "limite": {"type": "integer", "minimum": 1, "maximum": 500}}}),
+            so_leitura: true,
+        },
+        Ferramenta {
+            nome: "apply_motion",
+            titulo: "Pôr movimentos do banco no personagem",
+            descricao: "Passa clipes do banco de movimento para um personagem com esqueleto de jogo (o do humano da Fornalha ou o da malha da IA), com o nome que cada um terá no jogo. Retarget por pose (funciona com BVH de descanso esquisito), começa de frente e no centro; ciclo: true recorta sozinho o trecho que fecha em laço numa tomada longa (andar e correr do ACCAD e do 100STYLE); no_lugar tira o deslocamento; inicio/fim/velocidade recortam e aceleram. Depois confere cada animação (braço virado, cotovelo ou joelho ao contrário ou de lado, tranco, braço atravessando o tronco, pernas se cruzando, pé escorregando, corpo no chão ou flutuando) e corrige sozinho o que der (pé travado no chão por IK, junta endireitada, torção passada para o antebraço, membro afastado do corpo, quadril assentado). Devolve aprovado/reprovado com números, a imagem do pior quadro (ossos ruins em vermelho) e, com video, o vídeo. Mantém as outras animações do personagem.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string", "description": "Personagem (glb) com esqueleto de jogo."},
+                "clipes": {"type": "array", "items": {"type": "object", "properties": {
+                    "id": {"type": "string", "description": "id do list_motions, ou caminho de um BVH/FBX/glb."},
+                    "como": {"type": "string", "description": "Nome da animação no jogo (andar, correr, atacar, chute…)."},
+                    "laco": {"type": "boolean"}, "ciclo": {"type": "boolean"}, "no_lugar": {"type": "boolean"},
+                    "inicio": {"type": "integer", "minimum": 0}, "fim": {"type": "integer", "minimum": 0},
+                    "velocidade": {"type": "number", "minimum": 0.1, "maximum": 4}}, "required": ["id", "como"]}},
+                "corrigir": {"type": "boolean", "description": "Corrigir sozinho o que reprovar (padrão: sim)."},
+                "video": {"type": "boolean", "description": "Vídeo das animações novas (lento no processador)."}},
+                "required": ["arquivo", "clipes"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "check_motion",
+            titulo: "Conferir o movimento",
+            descricao: "Mede todas as animações de um personagem e reprova o que fica feio no jogo: osso torcido além do natural (braço virado), cotovelo ou joelho dobrando ao contrário ou de lado, tranco (osso que vira de um quadro para o outro), corpo sólido (braço atravessando o tronco, pernas se cruzando), pé escorregando no chão, corpo entrando no chão ou flutuando. Vale para humano e para criaturas (as regras de humano só entram com os ossos de humano). Com corrigir: true, corrige sozinho e regrava o glb. Devolve números por animação, o pior quadro de cada problema e uma imagem com os ossos ruins em vermelho.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"},
+                "animacoes": {"type": "array", "items": {"type": "string"}}, "corrigir": {"type": "boolean"},
+                "imagens": {"type": "string", "enum": ["reprovados", "todas", "nenhuma"]}}, "required": ["arquivo"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "import_motion",
+            titulo: "Trazer capturas de movimento",
+            descricao: "Copia para o banco de movimento do projeto (Motion/<fonte>/) capturas que a pessoa baixou: Mixamo (com a conta Adobe dela; o uso comercial depende do aceite dela pela janela), CMU, ACCAD, 100STYLE ou captura própria do estúdio. Aceita arquivos BVH, FBX e glb, ou pastas com eles.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivos": {"type": "array", "items": {"type": "string"}},
+                "fonte": {"type": "string", "enum": ["mixamo", "cmu", "accad", "100style", "propria"]}}, "required": ["arquivos", "fonte"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
             nome: "generate_sfx",
             titulo: "Gerar efeitos sonoros",
             descricao: "Gera os efeitos por evento em Audio/efeitos/ (passos na grama, pedra, água e madeira, golpes, impacto, espada, pulo, aterrissagem, dano, morte, moeda, clique), com variações. Sem efeitos pedidos, gera o pacote que o jogo usa.",
@@ -694,6 +736,10 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
             x.origem = None;
             geracao::animar(f, x, quem).await
         }
+        "list_motions" => crate::movimento::listar(f, args(a)?).await,
+        "apply_motion" => crate::movimento::aplicar(f, args(a)?, quem).await,
+        "check_motion" => crate::movimento::conferir(f, args(a)?, quem).await,
+        "import_motion" => crate::movimento::importar(f, args(a)?).await,
         "retarget_animation" => {
             let x: geracao::ArgsAnimacao = args(a)?;
             if x.origem.is_none() {

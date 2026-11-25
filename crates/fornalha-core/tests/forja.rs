@@ -166,3 +166,133 @@ fn todo_script_do_blender_vai_dentro_da_fornalha() {
         }
     }
 }
+
+/// Bancada de movimento: a conferência acha o que fica feio (as animações procedurais da Forja têm
+/// braço torcido no golpe e o corpo entra no chão na morte) e a correção automática deixa tudo aprovado.
+#[tokio::test]
+async fn conferencia_do_movimento_reprova_e_corrige() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("aren.glb");
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "personagem", "saida": saida, "previa": false,
+                "personagem": {"id": "aren", "tipo": "humano", "arma": "machado", "armadura": "leve"}}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    let r =
+        forja::rodar(&blender, tmp.path(), &json!({"tarefa": "conferir", "entrada": saida, "imagens": "reprovados"}), TEMPO).await.unwrap();
+    assert_eq!(r["pes"], json!(["LeftFoot", "RightFoot"]), "{r}");
+    let reprovados: Vec<&str> = r["reprovados"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    assert!(reprovados.contains(&"morrer"), "a morte entra no chão: {r}");
+    let parado = r["clipes"].as_array().unwrap().iter().find(|c| c["nome"] == "parado").unwrap();
+    assert_eq!(parado["aprovado"], true, "parado é limpo: {parado}");
+    assert!(std::path::Path::new(r["arquivos"]["imagem"].as_str().unwrap()).is_file());
+    let tipos: Vec<&str> = r["clipes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|c| c["problemas"].as_array().unwrap())
+        .map(|p| p["tipo"].as_str().unwrap())
+        .collect();
+    assert!(tipos.contains(&"abaixo_do_chao"), "{tipos:?}");
+    // a correção automática
+    let corrigido = tmp.path().join("aren_corrigido.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "conferir", "entrada": saida, "saida": corrigido, "corrigir": true, "imagens": "nenhuma"}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert_eq!(r["aprovado"], true, "depois da correção: {}", r["clipes"]);
+    assert!(r["correcoes"]["morrer"].is_array(), "{}", r["correcoes"]);
+    assert!(corrigido.is_file());
+    // o glb corrigido continua com todas as animações
+    let glb = std::fs::read(&corrigido).unwrap();
+    let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    let gltf: serde_json::Value = serde_json::from_slice(&glb[20..20 + json_len]).unwrap();
+    assert!(gltf["animations"].as_array().unwrap().len() >= 9);
+}
+
+/// BVH com os nomes do ACCAD (Mixamo sem prefixo, com ToSpine), 40 quadros de passada.
+fn bvh_de_teste() -> String {
+    let mut h =
+        String::from("HIERARCHY\nROOT Hips\n{\n OFFSET 0 94 0\n CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n");
+    fn junta(nome: &str, off: (f64, f64, f64), filhos: &[String]) -> String {
+        let mut s = format!("JOINT {nome}\n{{\n OFFSET {} {} {}\n CHANNELS 3 Zrotation Xrotation Yrotation\n", off.0, off.1, off.2);
+        if filhos.is_empty() {
+            s += " End Site\n {\n  OFFSET 0 5 0\n }\n";
+        }
+        for f in filhos {
+            s += f;
+        }
+        s + "}\n"
+    }
+    let cabeca = junta("Neck", (0.0, 20.0, 0.0), &[junta("Head", (0.0, 10.0, 0.0), &[])]);
+    let mut bracos = Vec::new();
+    for (lado, x) in [("Left", 1.0), ("Right", -1.0)] {
+        let mao = junta(&format!("{lado}Hand"), (x * 25.0, 0.0, 0.0), &[]);
+        let ante = junta(&format!("{lado}ForeArm"), (x * 27.0, 0.0, 0.0), &[mao]);
+        let braco = junta(&format!("{lado}Arm"), (x * 15.0, 0.0, 0.0), &[ante]);
+        bracos.push(junta(&format!("{lado}Shoulder"), (x * 3.0, 18.0, 0.0), &[braco]));
+    }
+    let mut filhos_peito = vec![cabeca];
+    filhos_peito.extend(bracos);
+    let peito = junta("Spine1", (0.0, 12.0, 0.0), &filhos_peito);
+    let coluna = junta("ToSpine", (0.0, 6.0, 0.0), &[junta("Spine", (0.0, 10.0, 0.0), &[peito])]);
+    h += &coluna;
+    for (lado, x) in [("Left", 1.0), ("Right", -1.0)] {
+        let dedo = junta(&format!("{lado}ToeBase"), (0.0, -4.0, 12.0), &[]);
+        let pe = junta(&format!("{lado}Foot"), (0.0, -42.0, 0.0), &[dedo]);
+        let canela = junta(&format!("{lado}Leg"), (0.0, -43.0, 0.0), &[pe]);
+        h += &junta(&format!("{lado}UpLeg"), (x * 9.0, -2.0, 0.0), &[canela]);
+    }
+    h += "}\n";
+    // canais: Hips 6, outras 21 juntas × 3
+    let n = 40;
+    h += &format!("MOTION\nFrames: {n}\nFrame Time: 0.0333333\n");
+    for q in 0..n {
+        let fase = (q as f64) / (n as f64) * std::f64::consts::TAU;
+        let mut v = vec![0.0, 94.0, q as f64 * 3.0, 0.0, 0.0, 0.0];
+        for j in 0..21 {
+            // as coxas (juntas 15 e 18) balançam em X
+            let x = if j == 14 {
+                25.0 * fase.sin()
+            } else if j == 17 {
+                -25.0 * fase.sin()
+            } else {
+                0.0
+            };
+            v.extend([0.0, x, 0.0]);
+        }
+        h += &v.iter().map(|x| format!("{x:.3}")).collect::<Vec<_>>().join(" ");
+        h += "\n";
+    }
+    h
+}
+
+#[tokio::test]
+async fn banco_de_movimento_cataloga_bvh_do_accad() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let arq = tmp.path().join("Male9_B3_Walk.bvh");
+    std::fs::write(&arq, bvh_de_teste()).unwrap();
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "banco", "fontes": [{"id": "accad", "arquivos": [arq]}]}), TEMPO)
+        .await
+        .unwrap();
+    let c = &r["clipes"][0];
+    assert_eq!(c["nome"], "Male9_B3_Walk", "{r}");
+    assert_eq!(c["id"], "accad:Male9_B3_Walk.bvh:Male9_B3_Walk");
+    assert_eq!(c["ossos_reconhecidos"], 22, "todos os ossos do ACCAD no mapa: {c}");
+    assert!(c["etiquetas"].as_array().unwrap().contains(&json!("andar")), "{c}");
+    assert_eq!(c["quadros"], 40);
+    // anda 117 cm em 94 cm de quadril: ~1,2 alturas do quadril
+    let d = c["desloca_no_chao"].as_f64().unwrap();
+    assert!((1.0..1.4).contains(&d), "{c}");
+    assert_eq!(c["laco"], false);
+}

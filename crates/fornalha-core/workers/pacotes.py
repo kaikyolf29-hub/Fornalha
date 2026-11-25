@@ -1,7 +1,7 @@
 # Fornalha: baixa os pacotes de conteúdo CC0 (só quando a pessoa pede, pela janela
 # ou pela linha de comando). Nada é enviado; só baixado. Fica só o que a Fornalha
 # usa (dados e imagens); arquivos de código ou de outros programas são descartados.
-#   python pacotes.py <makehuman|animacoes|materiais> <pasta>
+#   python pacotes.py <makehuman|animacoes|materiais|accad|100style> <pasta>
 import io
 import json
 import os
@@ -21,6 +21,13 @@ ANIMACOES = {
     "ual1": "https://opengameart.org/sites/default/files/universal_animation_librarystandard.zip",
     "ual2": "https://opengameart.org/sites/default/files/universal_animation_library_2standard.zip",
 }
+# capturas de movimento com licença comercial (crédito obrigatório)
+ACCAD = {  # Open Motion Project, ACCAD/The Ohio State University, CC BY 3.0
+    "male2": "https://accad.osu.edu/sites/accad.osu.edu/files/Male2_bvh.zip",
+    "male1": "https://accad.osu.edu/sites/accad.osu.edu/files/Male1_bvh.zip",
+    "female1": "https://accad.osu.edu/sites/accad.osu.edu/files/Female1_bvh.zip",
+}
+ESTILOS_100 = "https://zenodo.org/records/8127870/files/100STYLE.zip?download=1"  # The 100STYLE Dataset, CC BY 4.0
 MATERIAIS = ["Metal038", "Metal056C", "Metal048C", "Chainmail004", "Leather037", "Leather026", "Fabric031", "Fabric019",
              "Planks037A", "PavingStones153", "Bricks113A", "RoofingTiles014B", "Ground106", "Rock051",
              "Grass004", "Ground037", "Bark014", "Plaster007", "WoodFloor064"]
@@ -126,7 +133,41 @@ def materiais(pasta, resolucao="1K"):
     return {"materiais": pasta, "ceu": ceu, "itens": feitos, "licenca": "CC0 (ambientCG)", "fontes": ["https://ambientcg.com"]}
 
 
-PACOTES = {"makehuman": makehuman, "animacoes": animacoes, "materiais": materiais}
+def accad(pasta):
+    n = 0
+    for chave, url in ACCAD.items():
+        log(pasta, f"Baixando {chave} (ACCAD Open Motion Project, CC BY 3.0)")
+        n += extrair(baixar(url), pasta, lambda nome, c=chave: os.path.join(c, os.path.basename(nome)) if nome.lower().endswith(".bvh") else None)
+    log(pasta, f"{n} capturas em BVH")
+    return {"pasta": pasta, "capturas": n, "licenca": "CC BY 3.0 (ACCAD/The Ohio State University)",
+            "credito": "Open Motion Project by ACCAD/The Ohio State University (CC BY 3.0)", "fontes": list(ACCAD.values())}
+
+
+def estilos_100(pasta):
+    log(pasta, "Baixando o 100STYLE (100 estilos de andar e correr, CC BY 4.0, ~1,5 GB)")
+    tmp = os.path.join(pasta, "100STYLE.zip.parcial")
+    req = urllib.request.Request(ESTILOS_100, headers={"User-Agent": AGENTE})
+    with urllib.request.urlopen(req, timeout=600) as r, open(tmp, "wb") as f:
+        shutil.copyfileobj(r, f, 1 << 20)
+    n = 0
+    with zipfile.ZipFile(tmp) as z:
+        for info in z.infolist():
+            nome = info.filename
+            if info.is_dir() or not nome.lower().endswith(".bvh") or ".." in nome.split("/"):
+                continue
+            partes = nome.split("/")
+            alvo = os.path.join(pasta, *partes[-2:])
+            os.makedirs(os.path.dirname(alvo), exist_ok=True)
+            with z.open(info) as src, open(alvo, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            n += 1
+    os.remove(tmp)
+    log(pasta, f"{n} capturas em BVH")
+    return {"pasta": pasta, "capturas": n, "licenca": "CC BY 4.0 (Ian Mason et al.)", "credito": "The 100STYLE Dataset - Ian Mason (CC BY 4.0)",
+            "fontes": [ESTILOS_100]}
+
+
+PACOTES = {"makehuman": makehuman, "animacoes": animacoes, "materiais": materiais, "accad": accad, "100style": estilos_100}
 
 
 def main():

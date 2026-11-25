@@ -1,7 +1,9 @@
 //! Pacotes de conteúdo CC0 que sobem a qualidade das gerações:
 //! - MakeHuman: malha base, formas, esqueleto de jogo, pele, olhos e cabelo (humanos realistas);
 //! - Animações: Quaternius Universal Animation Library 1 e 2 (captura de movimento limpa);
-//! - Materiais: texturas PBR e céus HDRI do ambientCG (aço, cota de malha, couro, tecido, pedra...).
+//! - Materiais: texturas PBR e céus HDRI do ambientCG (aço, cota de malha, couro, tecido, pedra...);
+//! - ACCAD (CC BY 3.0) e 100STYLE (CC BY 4.0): capturas de movimento para o banco de movimento
+//!   (luta, passos, carregar; 100 estilos de andar), com crédito obrigatório.
 //!
 //! Só baixam quando a pessoa pede (janela ou `fornalha-cli baixar-pacote`), por um
 //! script à parte: o núcleo da Fornalha continua falando só com 127.0.0.1.
@@ -22,16 +24,20 @@ pub enum Pacote {
     MakeHuman,
     Animacoes,
     Materiais,
+    Accad,
+    Estilos100,
 }
 
 impl Pacote {
-    pub const TODOS: [Pacote; 3] = [Pacote::MakeHuman, Pacote::Animacoes, Pacote::Materiais];
+    pub const TODOS: [Pacote; 5] = [Pacote::MakeHuman, Pacote::Animacoes, Pacote::Materiais, Pacote::Accad, Pacote::Estilos100];
 
     pub fn id(self) -> &'static str {
         match self {
             Pacote::MakeHuman => "makehuman",
             Pacote::Animacoes => "animacoes",
             Pacote::Materiais => "materiais",
+            Pacote::Accad => "accad",
+            Pacote::Estilos100 => "100style",
         }
     }
 
@@ -40,6 +46,8 @@ impl Pacote {
             Pacote::MakeHuman => "Humanos realistas (MakeHuman, CC0)",
             Pacote::Animacoes => "Animações de captura (Quaternius, CC0)",
             Pacote::Materiais => "Materiais PBR e céus (ambientCG, CC0)",
+            Pacote::Accad => "Capturas de luta e passos (ACCAD, CC BY 3.0)",
+            Pacote::Estilos100 => "100 estilos de andar e correr (100STYLE, CC BY 4.0)",
         }
     }
 
@@ -48,6 +56,8 @@ impl Pacote {
             Pacote::MakeHuman => "~330 MB",
             Pacote::Animacoes => "~25 MB",
             Pacote::Materiais => "~110 MB",
+            Pacote::Accad => "~20 MB",
+            Pacote::Estilos100 => "~1,5 GB",
         }
     }
 

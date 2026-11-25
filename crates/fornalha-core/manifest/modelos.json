@@ -783,6 +783,47 @@
       "nota": "89 animações limpas de jogo (andar, correr, pular, rolar, combos de espada, escudo, socos, golpe, morte, zumbi), passadas para o esqueleto do personagem."
     },
     {
+      "id": "captura-accad",
+      "nome": "Capturas de movimento do ACCAD (Open Motion Project, Ohio State)",
+      "funcao": "animacao",
+      "onde": "biblioteca",
+      "licenca": "CC BY 3.0",
+      "url_licenca": "https://accad.osu.edu/research/motion-lab/mocap-system-and-data",
+      "uso_comercial": "sim",
+      "nota": "149+ capturas em BVH (andar, correr, virar, agachar, carregar, socos, chutes, bloqueios, esquivas, passos de luta). Crédito obrigatório: Open Motion Project by ACCAD/The Ohio State University. Use a versão original do ACCAD, não a do AMASS."
+    },
+    {
+      "id": "captura-100style",
+      "nome": "100STYLE (100 estilos de andar e correr, Ian Mason et al.)",
+      "funcao": "animacao",
+      "onde": "biblioteca",
+      "licenca": "CC BY 4.0",
+      "url_licenca": "https://www.ianxmason.com/100style/",
+      "uso_comercial": "sim",
+      "nota": "Locomoção em 100 estilos (andar, correr, de lado, de costas, virar), 60 qps, em BVH. Crédito obrigatório: The 100STYLE Dataset - Ian Mason."
+    },
+    {
+      "id": "captura-mixamo",
+      "nome": "Animações do Mixamo (Adobe), baixadas pela própria pessoa",
+      "funcao": "animacao",
+      "onde": "biblioteca",
+      "licenca": "Termos da Adobe (Mixamo)",
+      "url_licenca": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+      "uso_comercial": "condicional",
+      "nota": "A pessoa baixa com a própria conta Adobe e traz os arquivos (import_motion); a Fornalha não baixa nem redistribui. Os termos de uso em jogo comercial são da Adobe e a pessoa confere e aceita pela janela.",
+      "aceite": "adobe-mixamo"
+    },
+    {
+      "id": "captura-cmu",
+      "nome": "Capturas de movimento da CMU (Carnegie Mellon)",
+      "funcao": "animacao",
+      "onde": "biblioteca",
+      "licenca": "Uso livre (CMU Graphics Lab Motion Capture Database)",
+      "url_licenca": "http://mocap.cs.cmu.edu/faqs.php",
+      "uso_comercial": "sim",
+      "nota": "Pode ir em produto vendido; não pode revender os dados em si. Arquivos trazidos pela pessoa (import_motion)."
+    },
+    {
       "id": "materiais-ambientcg",
       "nome": "Materiais PBR e céus HDRI (ambientCG)",
       "funcao": "imagem",
@@ -806,6 +847,10 @@
     "tencent-hunyuan": {
       "nome": "Licença comunitária da Tencent (Hunyuan)",
       "texto": "Uso comercial permitido, com regras de território (a licença não vale na União Europeia, no Reino Unido e na Coreia do Sul) e de número de usuários. Leia a licença antes de aceitar. Sem aceite, a Fornalha usa as alternativas: a biblioteca de animações e, no 3D, o TRELLIS.2 (quando a textura sem o nvdiffrast ficar pronta, na Fase 1)."
+    },
+    "adobe-mixamo": {
+      "nome": "Animações do Mixamo (Adobe)",
+      "texto": "As animações do Mixamo são da Adobe. Você baixa com a sua conta Adobe em mixamo.com e a Fornalha só usa os arquivos que você trouxer, sem redistribuir. Confira os termos da Adobe (FAQ do Mixamo e termos gerais) sobre uso em jogo comercial antes de aceitar: a Fornalha não confere por você. Sem aceite, use o banco do Quaternius (CC0), do ACCAD (CC BY 3.0) e do 100STYLE (CC BY 4.0)."
     },
     "meta-dinov3": {
       "nome": "Licença do DINOv3 (Meta) — 3D pela IA",

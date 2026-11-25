@@ -204,13 +204,13 @@ async fn trellis_e_assar(
     Ok((malha, json!({"trellis": r["estatisticas"], "assar": a["estatisticas"], "previa": a["arquivos"]["previa"]})))
 }
 
-fn rel(raiz: &Path, arq: &Path) -> String {
+pub(crate) fn rel(raiz: &Path, arq: &Path) -> String {
     arq.strip_prefix(raiz).unwrap_or(arq).to_string_lossy().replace('\\', "/")
 }
 
 /// Registra o recibo de um arquivo gerado.
 #[allow(clippy::too_many_arguments)]
-async fn recibo(
+pub(crate) async fn recibo(
     f: &Fornalha,
     p: &Projeto,
     arq: &Path,
@@ -243,7 +243,7 @@ async fn blender(f: &Fornalha) -> Resultado<Achado> {
     f.programa(Programa::Blender).await
 }
 
-async fn forjar(f: &Fornalha, tarefa: &Value) -> Resultado<Value> {
+pub(crate) async fn forjar(f: &Fornalha, tarefa: &Value) -> Resultado<Value> {
     let b = blender(f).await?;
     let mut t = tarefa.clone();
     // com o pacote de materiais (CC0), tudo sai em PBR e as prévias usam o céu HDRI

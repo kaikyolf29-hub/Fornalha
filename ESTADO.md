@@ -11,6 +11,37 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Etapa 1 — bancada de movimento (25/11, em andamento)
+**Feito e provado aqui** (Linux, Blender 5.2.4, sem placa; testes `cargo test --test forja`):
+- **Conferência do movimento** (`fc_conferir.py`, MCP `check_motion`): por animação mede torção de osso
+  além do natural (braço virado), cotovelo/joelho ao contrário ou de lado, tranco (osso que vira de um
+  quadro para o outro), corpo sólido (cápsulas por osso: braço no tronco, pernas se cruzando), pé
+  escorregando (acha sozinho a velocidade do chão: captura no lugar ou parada), corpo abaixo do chão ou
+  flutuando. Vale para o esqueleto de jogo, o da Forja e as criaturas. Devolve números, o pior quadro e
+  imagem com os ossos ruins em vermelho.
+- **Correção automática** (`fc_corrigir.py`), em até 3 rodadas: trancos, dobradiças endireitadas (o osso
+  de cima gira no próprio eixo, sem salto entre quadros), torção da mão passada para o antebraço com
+  limite, torção limitada, membro afastado do corpo, **pé travado no chão por IK** (o ponto que toca o
+  chão; o pé pode girar na ponta) e quadril assentado. Roda sozinha no fim do `create_character`
+  (humano, malha da IA, criaturas e dragão): o templário sai com as 15 animações aprovadas (antes: 13 de
+  15 reprovadas na régua nova; rolamento e morte entravam ~70 cm no chão). Custa ~20 s a mais.
+- **Banco de movimento** (`fc_banco.py`, MCP `list_motions`, `apply_motion`, `import_motion`):
+  Quaternius (89 clipes), **ACCAD** (pacote novo `accad`, 299 BVH, CC BY 3.0, com socos, chutes,
+  bloqueios, esquivas, passos), **100STYLE** (pacote `100style`, 1,5 GB, CC BY 4.0) e o que a pessoa
+  trouxer (Mixamo, CMU, própria) em `Motion/<fonte>/`; etiquetas em português; catálogo guardado.
+  `apply_motion`: retarget **por pose** (a fonte é posta na pose de descanso do alvo osso por osso; BVH de
+  descanso esquisito é calibrado pelo quadro mais parecido com o descanso do alvo — acabou o pescoço
+  torcido 180° do ACCAD), começa de frente e no centro, `ciclo` acha o laço numa tomada longa, `no_lugar`,
+  recorte e velocidade; depois confere e corrige. Provado: chute circular, soco e corrida do ACCAD no
+  templário, aprovados, com vídeo.
+- Licenças conferidas nas páginas: ACCAD CC BY 3.0 (crédito "Open Motion Project by ACCAD/The Ohio State
+  University"), 100STYLE CC BY 4.0 (crédito "The 100STYLE Dataset - Ian Mason"); créditos voltam no
+  resultado do `apply_motion`. **Mixamo:** o criador autorizou em 25/11 ("Mixamo pode usar"); a página da
+  Adobe recusou a leitura automática, então entra como `captura-mixamo` com aceite da pessoa pela janela
+  (regra do CLAUDE.md), arquivos trazidos com a conta Adobe dela (`import_motion`).
+Falta na Etapa 1: esqueleto editado pela IA (imagem com ossos numerados), roupa por cima (armadura rígida
+por osso), estação Movimento na janela, CI.
+
 ## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI
 do Windows e do Linux.** Falta o teste do criador na máquina dele (TESTE_DO_CRIADOR.md) e falta

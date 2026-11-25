@@ -51,6 +51,29 @@ _SMPL = {"smpl_pelvis": "pelvis", "smpl_left_hip": "thigh_l", "smpl_right_hip": 
          "smpl_right_elbow": "lowerarm_r", "smpl_left_wrist": "hand_l", "smpl_right_wrist": "hand_r"}
 
 
+# ACCAD (Ohio State, CC BY 3.0): nomes do Mixamo sem prefixo, com ToSpine
+_ACCAD = dict(_MIXAMO, **{"ToSpine": "spine_01", "Spine": "spine_02", "Spine1": "spine_03"})
+# 100STYLE (Ian Mason, CC BY 4.0)
+_100STYLE = {"Hips": "pelvis", "Chest": "spine_01", "Chest2": "spine_02", "Chest4": "spine_03", "Neck": "neck_01", "Head": "head"}
+for _L, _l in (("Left", "_l"), ("Right", "_r")):
+    _100STYLE.update({f"{_L}Collar": "clavicle" + _l, f"{_L}Shoulder": "upperarm" + _l, f"{_L}Elbow": "lowerarm" + _l, f"{_L}Wrist": "hand" + _l,
+                      f"{_L}Hip": "thigh" + _l, f"{_L}Knee": "calf" + _l, f"{_L}Ankle": "foot" + _l, f"{_L}Toe": "ball" + _l})
+
+
+def mapa_do_esqueleto(nomes):
+    """Mapa nome-da-fonte → nome do esqueleto de jogo, pelo conjunto de ossos (algumas convenções usam
+    o mesmo nome para ossos diferentes, como "Spine")."""
+    curtos = {n.split(":")[-1] for n in nomes}
+    if "ToSpine" in curtos and "LeftUpLeg" in curtos:
+        return {n: _ACCAD[n.split(":")[-1]] for n in nomes if n.split(":")[-1] in _ACCAD}
+    if "Chest2" in curtos and "LeftHip" in curtos:
+        return {n: _100STYLE[n.split(":")[-1]] for n in nomes if n.split(":")[-1] in _100STYLE}
+    if "LeftUpLeg" in curtos and "Spine1" in curtos and "LowerBack" not in curtos:
+        # Mixamo sem o prefixo "mixamorig:" (exportado de outro programa)
+        return {n: _MIXAMO[n.split(":")[-1]] for n in nomes if n.split(":")[-1] in _MIXAMO}
+    return {n: p for n in nomes if (p := nome_padrao(n))}
+
+
 def nome_padrao(n):
     """Qualquer convenção conhecida → nome do esqueleto de jogo (ou None)."""
     if n in _SMPL:
@@ -82,7 +105,8 @@ def _importar(caminho):
     elif ext == ".fbx":
         bpy.ops.import_scene.fbx(filepath=caminho, automatic_bone_orientation=False)
     elif ext == ".bvh":
-        bpy.ops.import_anim.bvh(filepath=caminho, rotate_mode="NATIVE", axis_forward="-Z", axis_up="Y")
+        # capturas a 60 ou 120 qps entram no ritmo da cena (30 qps)
+        bpy.ops.import_anim.bvh(filepath=caminho, rotate_mode="NATIVE", axis_forward="-Z", axis_up="Y", use_fps_scale=True, update_scene_fps=False)
     else:
         raise ValueError(f"formato de animação não suportado: {ext}")
     novos = [o for o in bpy.data.objects if o not in antes]
@@ -95,34 +119,101 @@ def _rot(m):
     return m.to_3x3().normalized()
 
 
+# filho que dá a direção de cada osso (a ponta do osso no BVH e em outros programas é arbitrária quando
+# o osso tem vários filhos; a cabeça do filho certo não é)
+PRIMARIO = {"pelvis": "spine_01", "spine_01": "spine_02", "spine_02": "spine_03", "spine_03": "neck_01", "neck_01": "head"}
+for _l in ("l", "r"):
+    PRIMARIO.update({f"clavicle_{_l}": f"upperarm_{_l}", f"upperarm_{_l}": f"lowerarm_{_l}", f"lowerarm_{_l}": f"hand_{_l}",
+                     f"hand_{_l}": f"middle_01_{_l}", f"thigh_{_l}": f"calf_{_l}", f"calf_{_l}": f"foot_{_l}", f"foot_{_l}": f"ball_{_l}"})
+    for _d in _DEDOS:
+        PRIMARIO.update({f"{_d}_01_{_l}": f"{_d}_02_{_l}", f"{_d}_02_{_l}": f"{_d}_03_{_l}"})
+
+
+def _quadro_do_quadril(cabeca, esq, dir_, cima):
+    """Base (3x3) do corpo: x para a esquerda do personagem, z para cima, y para trás (frente = -y)."""
+    x = (esq - dir_)
+    z = cima.normalized()
+    x = (x - z * x.dot(z)).normalized()
+    y = z.cross(x)
+    return Matrix((x, y, z)).transposed()
+
+
 class Retarget:
-    def __init__(self, fonte, alvo):
+    """Retarget por pose: a fonte é posta, osso por osso do quadril para as pontas, na pose de descanso
+    do alvo (o quadril pela base do corpo; cada osso pela direção até o filho certo, girando o mínimo
+    a partir do pai). Daí em diante, cada osso do alvo faz o mesmo giro que o osso da fonte faz a partir
+    dessa pose. Funciona com fontes de descanso esquisito (BVH com a coluna deitada, A-pose, T-pose)
+    sem torcer os ossos."""
+
+    def __init__(self, fonte, alvo, quadro_ref=None):
+        """quadro_ref: quadro da animação da fonte que serve de pose de referência (no lugar do descanso),
+        para fontes de descanso que não é uma pose natural (BVH de alguns programas)."""
         self.S = fonte
         self.T = alvo
         self.pares = {}
+        mapa = mapa_do_esqueleto([b.name for b in fonte.data.bones])
         for b in fonte.data.bones:
-            p = nome_padrao(b.name)
+            p = mapa.get(b.name)
             if p and p in alvo.data.bones and p not in self.pares.values():
                 self.pares[b.name] = p
         self.inverso = {v: k for k, v in self.pares.items()}
         mw_s, mw_t = fonte.matrix_world, alvo.matrix_world
+        if quadro_ref is not None:
+            bpy.context.scene.frame_set(int(quadro_ref))
+            cab_s = {pb.name: mw_s @ pb.head for pb in fonte.pose.bones}
+            cau_s = {pb.name: mw_s @ pb.tail for pb in fonte.pose.bones}
+            rot_s = {pb.name: _rot(mw_s @ pb.matrix) for pb in fonte.pose.bones}
+        else:
+            cab_s = {b.name: mw_s @ b.head_local for b in fonte.data.bones}
+            cau_s = {b.name: mw_s @ b.tail_local for b in fonte.data.bones}
+            rot_s = {b.name: _rot(mw_s @ b.matrix_local) for b in fonte.data.bones}
+        cab_t = {b.name: mw_t @ b.head_local for b in alvo.data.bones}
+        cau_t = {b.name: mw_t @ b.tail_local for b in alvo.data.bones}
+
+        def direcoes(t):
+            c = PRIMARIO.get(t)
+            s = self.inverso[t]
+            if c and c in cab_t and c in self.inverso:
+                ds, dt = cab_s[self.inverso[c]] - cab_s[s], cab_t[c] - cab_t[t]
+                if ds.length > 1e-6 and dt.length > 1e-6:
+                    return ds.normalized(), dt.normalized()
+            ds, dt = cau_s[s] - cab_s[s], cau_t[t] - cab_t[t]
+            if ds.length > 1e-6 and dt.length > 1e-6:
+                return ds.normalized(), dt.normalized()
+            return None
+
+        # giro de cada osso da fonte até a pose do alvo (em mundo), do quadril para as pontas
+        G = {}
+        for b in self._ordem_de(fonte):
+            pai = G.get(b.parent.name) if b.parent else Matrix.Identity(3)
+            t = self.pares.get(b.name)
+            g = pai
+            if t == "pelvis" and all(x in self.inverso for x in ("thigh_l", "thigh_r", "spine_01")):
+                Fs = _quadro_do_quadril(cab_s[b.name], cab_s[self.inverso["thigh_l"]], cab_s[self.inverso["thigh_r"]],
+                                        cab_s[self.inverso["spine_01"]] - cab_s[b.name])
+                Ft = _quadro_do_quadril(cab_t["pelvis"], cab_t["thigh_l"], cab_t["thigh_r"], cab_t["spine_01"] - cab_t["pelvis"])
+                g = Ft @ Fs.transposed()
+            elif t:
+                d = direcoes(t)
+                if d:
+                    atual = (pai @ d[0]).normalized()
+                    g = atual.rotation_difference(d[1]).to_matrix() @ pai
+            G[b.name] = g
         self.ref_t = {}
         self.rest_s_inv = {}
         for s, t in self.pares.items():
-            bs, bt = fonte.data.bones[s], alvo.data.bones[t]
-            Rs = _rot(mw_s @ bs.matrix_local)
-            Rt = _rot(mw_t @ bt.matrix_local)
-            dir_s = (mw_s.to_3x3() @ (bs.tail_local - bs.head_local)).normalized()
-            dir_t = (mw_t.to_3x3() @ (bt.tail_local - bt.head_local)).normalized()
-            alinhar = dir_t.rotation_difference(dir_s).to_matrix() if dir_s.length and dir_t.length else Matrix.Identity(3)
-            self.ref_t[t] = alinhar @ Rt
-            self.rest_s_inv[s] = Rs.inverted()
+            Rs = rot_s[s]
+            Rt = _rot(mw_t @ alvo.data.bones[t].matrix_local)
+            # a fonte "na pose do alvo": G @ Rs; o alvo nessa pose: Rt
+            self.rest_s_inv[s] = (G[s] @ Rs).inverted()
+            self.ref_t[t] = Rt
         pel_s = fonte.data.bones.get(self.inverso.get("pelvis", ""))
         pel_t = alvo.data.bones.get("pelvis")
-        self.pelvis_s0 = (mw_s @ pel_s.head_local) if pel_s else Vector()
+        self.pelvis_s0 = (cab_s[pel_s.name] if quadro_ref is not None else mw_s @ pel_s.head_local) if pel_s else Vector()
         self.pelvis_t0 = (mw_t @ pel_t.head_local) if pel_t else Vector()
         self.escala = (self.pelvis_t0.z / self.pelvis_s0.z) if pel_s and self.pelvis_s0.z > 0.05 else 1.0
         self.ordem = []
+        self.desvio = None
 
         def andar(b):
             self.ordem.append(b)
@@ -132,6 +223,20 @@ class Retarget:
         for b in alvo.data.bones:
             if b.parent is None:
                 andar(b)
+
+    @staticmethod
+    def _ordem_de(arm):
+        ordem = []
+
+        def andar(b):
+            ordem.append(b)
+            for f in b.children:
+                andar(f)
+
+        for b in arm.data.bones:
+            if b.parent is None:
+                andar(b)
+        return ordem
 
     def quadro(self):
         """Poses do alvo (base local de cada osso) para o quadro atual da fonte."""
@@ -152,6 +257,9 @@ class Retarget:
                 pos = sem_pose.to_translation()
                 if b.name == "pelvis":
                     atual = mw_s @ pb_s.head
+                    if self.desvio is not None:
+                        # "no lugar": tira o deslocamento do quadril no chão (e o giro do corpo fica)
+                        atual = atual - self.desvio
                     pos = self.pelvis_t0 + (atual - self.pelvis_s0) * self.escala
                 desejado = Matrix.Translation(pos) @ Q.to_4x4()
                 base = sem_pose.inverted() @ desejado

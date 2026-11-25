@@ -27,6 +27,7 @@ pub mod ignis;
 pub mod janela;
 pub mod licencas;
 pub mod mcp;
+pub mod movimento;
 pub mod niveis;
 pub mod pacotes;
 pub mod partes;

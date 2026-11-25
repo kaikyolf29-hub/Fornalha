@@ -99,7 +99,7 @@ async fn main() {
         Some("baixar-pacote") => {
             use fornalha_core::pacotes::{self, Pacote};
             let Some(p) = args.get(1).and_then(|id| Pacote::de_id(id)) else {
-                eprintln!("Diga qual: makehuman, animacoes ou materiais.");
+                eprintln!("Diga qual: makehuman, animacoes, materiais, accad ou 100style.");
                 std::process::exit(2);
             };
             imprimir(pacotes::baixar_e_esperar(&paths, p).await)

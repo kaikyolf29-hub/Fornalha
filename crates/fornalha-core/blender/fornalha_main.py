@@ -49,6 +49,25 @@ def previas(t, objs, saida, arm=None, acoes=()):
     return arquivos
 
 
+def movimento_conferido(t, arm, acoes):
+    """Conferência e correção automática das animações recém-feitas (bancada de movimento). O resumo
+    vai nas estatísticas; o que não deu para corrigir fica listado para a IA trocar o clipe."""
+    if not acoes or not t.get("conferir_movimento", True):
+        return None
+    try:
+        _, res, corr, antes = _conferir_e_corrigir(t, None, arm, list(acoes), True)
+    except Exception as e:  # a conferência nunca impede o personagem de sair
+        print(f"[movimento] conferência falhou: {e}")
+        return {"erro": f"{type(e).__name__}: {e}"}
+    return {
+        "aprovado": all(r["aprovado"] for r in res),
+        "reprovados": [r["nome"] for r in res if not r["aprovado"]],
+        "corrigidas": sorted(corr),
+        "problemas_antes": antes,
+        "problemas_que_ficaram": {r["nome"]: [p["explicacao"] for p in r["problemas"]] for r in res if not r["aprovado"]},
+    }
+
+
 def tarefa_personagem(t):
     import fc_animacoes
     import fc_personagem
@@ -107,6 +126,7 @@ def tarefa_humano(t):
             clipes = {"parado": ("ual2", "Zombie_Idle_Loop", True), "andar": ("ual2", "Zombie_Walk_Fwd_Loop", True),
                       "atacar": ("ual2", "Zombie_Scratch", False)}
         acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes)
+    movimento = movimento_conferido(t, arm, acoes)
     saida = t["saida"]
     # QA automático (bíblia técnica 9.3): o resultado vai junto, para a janela e o agente verem
     import fc_lookdev
@@ -128,6 +148,7 @@ def tarefa_humano(t):
     st = estatisticas(pecas, arm, acoes)
     st["pecas"] = [o.name for o in pecas]
     st["qa"] = qa
+    st["movimento"] = movimento
     r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
     if arm is not None and "jaw" in arm.data.bones:
         # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do
@@ -551,6 +572,8 @@ def _rig_de_jogo(t, m, info):
     if t.get("escudo"):
         clipes.update(fc_armas_pbr.CLIPES_DA_ARMA["escudo"])
     acoes = fc_retarget.aplicar_biblioteca(arm, t["animacoes_de"], t.get("animacoes"), clipes) if t.get("animacoes_de") else []
+    # antes da saia: a saia é assada sobre as pernas já corrigidas
+    info_rig["movimento"] = movimento_conferido(t, arm, acoes)
     if acoes and info_rig.get("osso_da_saia"):
         import fc_molde
 
@@ -621,6 +644,7 @@ def _rig_de_criatura(t, m, info):
         arm.animation_data.action = acoes[0] if acoes else None
         for a in fora:
             bpy.data.actions.remove(a)
+    info_rig["movimento"] = movimento_conferido(t, arm, acoes)
     saida = t["saida"]
     tamanho = c.exportar_glb(saida, [arm, m], animacoes=bool(acoes))
     arquivos = {"modelo": saida}
@@ -644,6 +668,7 @@ def _rig_de_dragao(t, m, info):
         arm.animation_data.action = acoes[0] if acoes else None
         for a in fora:
             bpy.data.actions.remove(a)
+    info_rig["movimento"] = movimento_conferido(t, arm, acoes)
     saida = t["saida"]
     tamanho = c.exportar_glb(saida, [arm, m], animacoes=bool(acoes))
     arquivos = {"modelo": saida}
@@ -803,6 +828,137 @@ def tarefa_animar(t):
     return {"arquivos": {"modelo": saida}, "tamanho_bytes": tamanho, "estatisticas": estatisticas(malhas, arm, acoes)}
 
 
+def _acoes_do_glb(objs, arm):
+    """As animações que vieram no glb (o importador do glTF guarda cada uma como ação)."""
+    acoes = [a for a in bpy.data.actions if a.users or a.use_fake_user]
+    # glTF chama "<animação>" ou "<objeto>|<animação>": fica o nome do jogo
+    for a in acoes:
+        if "|" in a.name:
+            a.name = a.name.split("|")[-1]
+    return sorted(acoes, key=lambda a: a.name)
+
+
+def tarefa_conferir(t):
+    """Conferência do movimento: mede cada animação e reprova o que fica feio no jogo."""
+    import fc_conferir
+
+    objs = _importar(t["entrada"])
+    arm = next((o for o in objs if o.type == "ARMATURE"), None)
+    if arm is None:
+        raise ValueError("o modelo não tem esqueleto: monte o esqueleto antes")
+    acoes = _acoes_do_glb(objs, arm)
+    quero = set(t.get("animacoes") or [])
+    if quero:
+        acoes = [a for a in acoes if a.name in quero]
+    if not acoes:
+        raise ValueError("o modelo não tem animações para conferir")
+    conf, res, correcoes, antes = _conferir_e_corrigir(t, objs, arm, acoes, bool(t.get("corrigir")))
+    if correcoes:
+        for a in bpy.data.actions:
+            a.use_fake_user = True
+        c.exportar_glb(t.get("saida") or t["entrada"], objs)
+    else:
+        correcoes = None
+    arquivos = {}
+    imagens = t.get("imagens", "reprovados")
+    if imagens != "nenhuma":
+        base = os.path.splitext(t.get("saida") or t["entrada"])[0]
+        f = fc_conferir.folha(base + ".conferencia.png", conf, res, acoes, todos=imagens == "todas")
+        if f:
+            arquivos["imagem"] = f["arquivo"]
+            arquivos["ordem_da_imagem"] = f["ordem"]
+    reprovados = [r["nome"] for r in res if not r["aprovado"]]
+    if correcoes:
+        arquivos["modelo"] = t.get("saida") or t["entrada"]
+    return {
+        "correcoes": correcoes,
+        "problemas_antes": antes,
+        "arquivos": arquivos,
+        "aprovado": not reprovados,
+        "reprovados": reprovados,
+        "clipes": res,
+        "altura_m": round(conf.H, 3),
+        "chao_do_descanso_cm": conf.chao_descanso_cm,
+        "pes": conf.pes,
+        "regras": fc_conferir.regras(),
+    }
+
+
+def tarefa_banco(t):
+    """Catálogo do banco de movimento (duração, deslocamento, laço, etiquetas) das fontes pedidas."""
+    import fc_banco
+
+    clipes = fc_banco.catalogar(t["fontes"])
+    return {"arquivos": {}, "clipes": clipes}
+
+
+def _conferir_e_corrigir(t, objs, arm, acoes, corrigir=True):
+    import fc_conferir
+
+    conf, res = fc_conferir.conferir(arm, acoes, t.get("altura_m"))
+    correcoes, antes = {}, None
+    if corrigir and any(not r["aprovado"] for r in res):
+        import fc_corrigir
+
+        quais = t.get("correcoes") or ("trancos", "dobradicas", "pes", "corpo_solido", "torcao", "chao")
+        antes = {r["nome"]: [p["explicacao"] for p in r["problemas"]] for r in res if not r["aprovado"]}
+        # algumas correções criam problema novo (o cotovelo certo pede braço mais torcido): confere de
+        # novo e corrige o que sobrou, até 3 rodadas
+        for _ in range(int(t.get("rodadas", 3))):
+            feito = fc_corrigir.corrigir(arm, acoes, conf, res, quais)
+            for nome, log in feito.items():
+                correcoes.setdefault(nome, []).append(log)
+            res = [conf.medir(a) for a in acoes]
+            if all(r["aprovado"] for r in res):
+                break
+    return conf, res, correcoes, antes
+
+
+def tarefa_aplicar_banco(t):
+    """Clipes do banco de movimento no personagem (retarget, recorte, ciclo, no lugar), conferidos e
+    corrigidos; as animações que o personagem já tinha continuam (a não ser as de mesmo nome)."""
+    import fc_banco
+    import fc_conferir
+
+    objs = _importar(t["entrada"])
+    arm = next((o for o in objs if o.type == "ARMATURE"), None)
+    if arm is None:
+        raise ValueError("o personagem não tem esqueleto: monte o esqueleto antes")
+    for a in bpy.data.actions:
+        a.use_fake_user = True
+        if "|" in a.name:
+            a.name = a.name.split("|")[-1]
+    novas, notas = fc_banco.aplicar(arm, t["clipes"])
+    if not novas:
+        raise ValueError("nenhum clipe entrou: " + "; ".join(n.get("erro", "") for n in notas if n.get("erro")))
+    conf, res, correcoes, antes = _conferir_e_corrigir(t, objs, arm, novas, t.get("corrigir", True))
+    saida = t.get("saida") or t["entrada"]
+    todas = [a for a in bpy.data.actions if a.use_fake_user]
+    if arm.animation_data:
+        arm.animation_data.action = novas[0]
+    tamanho = c.exportar_glb(saida, objs)
+    arquivos = {"modelo": saida}
+    if t.get("imagens", "todas") != "nenhuma":
+        f = fc_conferir.folha(os.path.splitext(saida)[0] + ".movimento.png", conf, res, novas, todos=True)
+        if f:
+            arquivos["imagem"] = f["arquivo"]
+            arquivos["ordem_da_imagem"] = f["ordem"]
+    if t.get("video"):
+        malhas = [o for o in objs if o.type == "MESH"]
+        arquivos["video"] = c.video(os.path.splitext(saida)[0] + ".movimento.mp4", malhas, novas, arm, largura=480, altura=540, amostras=8)
+    return {
+        "arquivos": arquivos,
+        "tamanho_bytes": tamanho,
+        "notas": notas,
+        "aprovado": all(r["aprovado"] for r in res),
+        "reprovados": [r["nome"] for r in res if not r["aprovado"]],
+        "clipes": res,
+        "correcoes": correcoes,
+        "problemas_antes": antes,
+        "animacoes": sorted(a.name for a in todas),
+    }
+
+
 def tarefa_material(t):
     """Recolore os materiais: cores pedidas por nome, ou a paleta do guia visual em ordem."""
     objs = _importar(t["entrada"])
@@ -859,6 +1015,9 @@ TAREFAS = {
     "humano": tarefa_humano,
     "criatura": tarefa_criatura,
     "movimento": tarefa_movimento,
+    "conferir": tarefa_conferir,
+    "banco": tarefa_banco,
+    "aplicar_banco": tarefa_aplicar_banco,
 }
 
 

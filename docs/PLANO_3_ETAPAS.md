@@ -4,6 +4,15 @@
 > [PLANO_2_ETAPAS.md](PLANO_2_ETAPAS.md) fica como histórico e lista do que já foi feito.
 > Meta: menos de uma semana de trabalho (sem contar as pausas de limite de uso).
 
+## Onde estamos (25/11/2026)
+- **Etapa 1:** feita no código e provada aqui (Linux, sem placa): conferência, correção automática,
+  banco (Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos), esqueleto editado pela IA, roupa por cima,
+  estação Movimento. Falta: prova na Erethea, CI verde no Windows e Linux, teste no PC do criador.
+  Lembrete: "aprovado pela régua" não é "pronto"; pronto só depois do vídeo e do teste do criador.
+- **Visual da janela:** refeito (clássico/premium) com tema preto e branco.
+- **Etapa 2:** cabelo começou (assentamento com gravidade e colisão, ainda feio: ver ESTADO.md); mapa não
+  começou.
+
 ## A ideia em uma frase
 Quem faz o jogo é a **IA** (Claude Code, Codex) junto com a **Erethea Engine** (a principal) e a
 **Fornalha 3D** (a ajudante). A Fornalha não tem jogo, mapa ou monstro pronto: ela dá à IA

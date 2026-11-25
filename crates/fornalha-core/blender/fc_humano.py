@@ -617,7 +617,7 @@ def criar_humano(dados, assets, ficha):
 
     # cabelo curto: penteado fio a fio + cards (pipeline AAA); médio/comprido: ainda o do pacote,
     # até a queda com colisão nos ombros ficar pronta (plano, etapa 1.2)
-    cards = bool(res_pele) and tem_cabelo and fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto"
+    cards = bool(res_pele) and tem_cabelo and (fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto" or bool(ficha.get("cabelo_em_cards")))
     if tem_cabelo and not cards:
         acessorios.append(("hair", ficha.get("cabelo", "short02"), True, ficha.get("cor_cabelo")))
     for roupa in ficha.get("roupas_makehuman", []):

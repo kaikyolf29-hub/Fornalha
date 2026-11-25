@@ -128,6 +128,49 @@ class CampoDistancia:
         return dist, grad
 
 
+def assentar_fios(P, livre, campo_corpo, s, iteracoes=90, folga=0.004):
+    """Cabelo que pende (médio, comprido): a parte penteada sobre o crânio fica; o resto cai com a
+    gravidade, guarda o comprimento de cada trecho (cada ponto segue o anterior), fica liso (sem
+    quinas) e não entra na cabeça, no pescoço nem nos ombros (campo de distância do tronco de cima).
+    livre: índice do primeiro ponto solto de cada fio (o fio inteiro preso: npts)."""
+    nf, npts, _ = P.shape
+    X = P.astype(np.float64).copy()
+    L = np.linalg.norm(np.diff(X, axis=1), axis=-1)  # comprimento de cada trecho
+    j = np.arange(npts)[None, :]
+    move = j >= livre[:, None]
+    if not move.any():
+        return X
+    peso = move.astype(np.float64)[..., None]
+    queda = np.array([0.0, 0.0, -0.006 * s])
+    for it in range(iteracoes):
+        # gravidade (passo constante: o que importa é onde o fio assenta, não a velocidade)
+        X = X + queda * peso
+        # cada ponto segue o anterior no comprimento certo (da raiz para a ponta)
+        for k in range(1, npts):
+            m = move[:, k]
+            if not m.any():
+                continue
+            d = X[m, k] - X[m, k - 1]
+            d /= np.linalg.norm(d, axis=-1, keepdims=True) + 1e-12
+            X[m, k] = X[m, k - 1] + d * L[m, k - 1][:, None]
+        # liso: puxa cada ponto do meio para a média dos vizinhos (mais firme perto da raiz)
+        if npts > 2:
+            meio = (X[:, :-2] + X[:, 2:]) * 0.5
+            rig = 0.35 * peso[:, 1:-1]
+            X[:, 1:-1] = X[:, 1:-1] * (1 - rig) + meio * rig
+        # colisão com o corpo
+        dist, nrm = campo_corpo(X)
+        entra = np.maximum(folga * s - dist, 0.0)[..., None] * peso
+        X = X + nrm * entra
+    # o comprimento de novo no fim (a colisão e o alisado mexem um pouco)
+    for k in range(1, npts):
+        m = move[:, k]
+        d = X[m, k] - X[m, k - 1]
+        d /= np.linalg.norm(d, axis=-1, keepdims=True) + 1e-12
+        X[m, k] = X[m, k - 1] + d * L[m, k - 1][:, None]
+    return X
+
+
 def _alisar_fios(P, passes=3):
     """Suaviza cada fio ao longo do comprimento (a raiz fica presa): tira o zigue-zague."""
     P = P.copy()
@@ -209,6 +252,7 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
     Q = R.copy()
     passo = (comp / segs)[:, None]
     solto = np.zeros(nf, dtype=bool)  # cabelo comprido: abaixo do crânio cai livre
+    livre = np.full(nf, segs + 1)
     d_livre = np.zeros((nf, 3))
     for j in range(segs + 1):
         t = j / segs
@@ -221,6 +265,7 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
         F = pente(Q, nrm)
         if longo:
             abaixo = (Q[:, 2] < qz + 0.03 * s) & ~solto
+            livre[abaixo] = j + 1
             d_livre[abaixo] = F[abaixo]
             solto |= abaixo
             Q[abaixo] = P[abaixo, j]
@@ -228,6 +273,13 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
             d_livre /= np.linalg.norm(d_livre, axis=-1, keepdims=True) + 1e-9
             F = np.where(solto[:, None], d_livre, F)
         Q = Q + F * passo
+    campo_corpo = None
+    if longo:
+        # o tronco de cima (cabeça, pescoço, ombros, peito e costas) para o cabelo assentar em cima
+        sel = co[:, 2] > qz - 0.42 * s
+        nrm_v = normais.reshape(-1, 3)
+        campo_corpo = CampoDistancia(co, nrm_v, sel, passo=0.012 * s, margem=max(0.12 * s, float(np.max(comp)) * 0.6))
+        P = assentar_fios(P, livre, campo_corpo, s)
     # mechas: puxa cada fio um pouco para o fio-guia mais perto (mais na ponta)
     nc = max(400, nf // 15)
     centros = rng.choice(nf, nc, replace=False)
@@ -245,6 +297,9 @@ def crescer_fios(corpo, pontos, cabeca_peso, estilo="curto", semente=11, fios=No
     P = _alisar_fios(P, 2)
     dist, nrm = campo(P)
     P = P + nrm * np.maximum(0.0007 * s - dist, 0)[..., None]  # nunca entra na pele
+    if campo_corpo is not None:
+        dist, nrm = campo_corpo(P)
+        P = P + nrm * np.maximum(0.002 * s - dist, 0)[..., None]
     raios = np.linspace(0.00004, 0.000012, segs + 1, dtype=np.float32)
     if devolver_campo:
         return P.astype(np.float32), raios, campo

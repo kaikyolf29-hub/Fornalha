@@ -53,8 +53,29 @@ de outra conta e não chegou ao repositório até 25/11.
   mexe nada, longe do corpo, lados diferentes); mudanças mover/criar/apagar/renomear/pai/espelhar pelo
   nome ou número; pesos refeitos só perto do que mudou. Ossos `mola_<grupo>_1..N` viram mola na
   Godot/Erethea (`movimento.gd`), com rigidez por grupo (cabelo, cauda, asa).
-Falta na Etapa 1: roupa por cima (armadura rígida por osso), estação Movimento na janela, prova na
-Erethea (compilando aqui; o CI da Fornalha ainda testa na Godot 4.6.1), CI.
+- **Roupa por cima** (`fc_vestir.py`, MCP `dress_character`): a roupa/armadura recebe os pesos do corpo
+  que já se mexe; peça pequena de um osso só fica rígida nesse osso (teste: placa do peito no `Chest`,
+  braçadeira no `LeftLowerArm`), pano grande dobra; a conferência roda com a roupa.
+- **Estação Movimento na janela**: conferir e corrigir, ver o esqueleto, banco com etiquetas/licenças e
+  "Pôr no personagem", vestir.
+- **Visual novo da janela (25/11, pedido do criador):** clássico/premium — Cormorant Garamond (OFL, dentro
+  do app) nos títulos e números, versalete nos rótulos, latão nos filetes, brasa só na ação principal;
+  temas Forja (escuro), Pergaminho (claro) e **Preto e branco** (escuro ou claro pelo sistema), em
+  Ajustes → Visual. Só aparência: os ids e o app.js são os mesmos.
+- **Erethea é a engine padrão** dos projetos novos (decisão do criador); sem ela instalada, a Fornalha usa
+  a Godot e avisa. O CI da Fornalha ainda testa na Godot 4.6.1; a Erethea (fork da 4.8 beta) está sendo
+  compilada aqui para rodar o mesmo teste nela.
+Falta na Etapa 1: a prova na Erethea, o CI verde no Windows e no Linux, e o teste no PC do criador.
+
+### Etapa 2 — começo (25/11)
+- **Cabelo médio e comprido:** experimento com o caminho fio a fio + cards (opção `cabelo_em_cards` na
+  ficha; o padrão continua o cabelo do pacote MakeHuman). Feito: assentamento dos fios que pendem
+  (gravidade, comprimento preservado, liso, colisão com cabeça/pescoço/ombros por campo de distância).
+  **Ainda feio** (render conferido): os fios longos andam colados no crânio até o queixo (parece puxado
+  para trás), poucos caem pela nuca, cards soltos espetados na silhueta, linha da testa serrilhada e uma
+  mancha clara no alto. Próximo: raiz descolando com volume, queda começando na coroa, orientação dos
+  cards pela superfície do cabelo (não da cabeça), máscara da testa em resolução maior, e as medidas da
+  bancada (couro aparecendo, fio atravessando) antes de virar padrão.
 
 ## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI

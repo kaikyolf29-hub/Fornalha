@@ -41,6 +41,9 @@ ATRAVESSA_MAX_CM = 5.5  # e mais de 50% do raio da cápsula menor (o braço enco
 ESCORREGA_MAX_CM = 5.0
 CHAO_MAX_CM = 4.0
 FLUTUA_MIN_CM = 6.0
+TRONCO_TORCAO_MAX = 55.0  # graus que o peito gira em volta da coluna em relação ao quadril
+TRONCO_DOBRA_MAX = 75.0  # graus que o peito dobra em relação ao quadril
+TRONCO_PARES = (("pelvis", "spine_03"), ("Hips", "Chest"), ("quadril", "coluna_3"))
 SEM_CHAO = ("pular", "no_ar", "jump", "pulo", "voar", "voo", "fly")
 
 # cápsulas do corpo sólido (padrões dos nomes; o raio sai da malha)
@@ -51,7 +54,7 @@ PES = re.compile(r"^(foot_[lr]|(Left|Right)Foot|.*_pe|pata_\d+_pe|pe_.*)$")
 
 
 def regras():
-    return {"torcao_graus": TORCAO, "ao_contrario_graus": AO_CONTRARIO_MAX, "de_lado_graus": DE_LADO_MAX, "salto_graus_por_quadro": SALTO_MAX,
+    return {"tronco_torcao_graus": TRONCO_TORCAO_MAX, "tronco_dobra_graus": TRONCO_DOBRA_MAX, "torcao_graus": TORCAO, "ao_contrario_graus": AO_CONTRARIO_MAX, "de_lado_graus": DE_LADO_MAX, "salto_graus_por_quadro": SALTO_MAX,
             "atravessa_cm": ATRAVESSA_MAX_CM, "escorrega_cm": ESCORREGA_MAX_CM, "abaixo_do_chao_cm": CHAO_MAX_CM, "flutua_cm": FLUTUA_MIN_CM}
 
 
@@ -250,6 +253,13 @@ class Conferencia:
         usados = sorted({n for par in self.pares for n in par})
         self.raios = _raios(arm, self.malhas, usados, self.H)
         self.pes = [b.name for b in arm.data.bones if PES.match(b.name)]
+        self.tronco = next(((a, b) for a, b in TRONCO_PARES if a in self.ossos and b in self.ossos), None)
+        if self.tronco:
+            mw3 = arm.matrix_world.to_3x3()
+            bp, bc = arm.data.bones[self.tronco[0]], arm.data.bones[self.tronco[1]]
+            self.tronco_rest = ((mw3 @ bp.matrix_local.to_3x3()).normalized(), (mw3 @ bc.matrix_local.to_3x3()).normalized())
+            # eixo da coluna no descanso (do quadril ao peito)
+            self.tronco_eixo = (mw3 @ (bc.head_local - bp.head_local)).normalized()
         self._descanso()
 
     def _segmento(self, n, h, t):
@@ -323,6 +333,7 @@ class Conferencia:
         min_z = []
         anterior = None
         # medida dos ossos com a malha desligada (rápido); a malha entra só nas amostras do chão
+        tronco = {"torcao": (0.0, None), "dobra": (0.0, None)}
         mods = [m for o in self.malhas for m in o.modifiers if m.type == "ARMATURE"]
         estados = [m.show_viewport for m in mods]
         for m in mods:
@@ -374,6 +385,22 @@ class Conferencia:
                 for p in self.pes:
                     h, tt, _ = self._mundo(p)
                     pes[p].append((h, tt))
+                if self.tronco:
+                    Rp = self._mundo(self.tronco[0])[2]
+                    Rc = self._mundo(self.tronco[1])[2]
+                    Rp0, Rc0 = self.tronco_rest
+                    # giro do peito em relação ao quadril, comparado com o descanso, no espaço do descanso
+                    d = (Rp0 @ Rp.inverted() @ Rc @ Rc0.inverted()).to_quaternion()
+                    if d.w < 0:
+                        d = -d
+                    ax = self.tronco_eixo
+                    tw = math.degrees(2.0 * math.atan2(d.x * ax.x + d.y * ax.y + d.z * ax.z, d.w))
+                    total = math.degrees(2.0 * math.acos(min(1.0, d.w)))
+                    dobra = math.sqrt(max(0.0, total * total - tw * tw))
+                    if abs(tw) > tronco["torcao"][0]:
+                        tronco["torcao"] = (abs(tw), q)
+                    if dobra > tronco["dobra"][0]:
+                        tronco["dobra"] = (dobra, q)
         finally:
             for m, e in zip(mods, estados):
                 m.show_viewport = e
@@ -391,6 +418,7 @@ class Conferencia:
             min_z.append((min(z), q))
         escorrega = self._escorrega(pes, quadros, laco)
         salto = self._trancos(salto)
+        self._ultimo_tronco = tronco
         return self._julgar(nome, quadros, laco, sem_chao, torcao, contrario, de_lado, salto, atravessa, escorrega, min_z)
 
     def _trancos(self, seqs):
@@ -467,6 +495,14 @@ class Conferencia:
                 zz = min(x for x, _ in min_z)
                 if (zz - self.chao) * 100 > FLUTUA_MIN_CM:
                     add("flutua", "malha", (zz - self.chao) * 100, FLUTUA_MIN_CM, quadros[0], "cm", f"nenhum pé encosta no chão: fica {(zz - self.chao) * 100:.0f} cm no ar")
+        tronco = getattr(self, "_ultimo_tronco", None)
+        if tronco and self.tronco:
+            v, q = tronco["torcao"]
+            if v > TRONCO_TORCAO_MAX:
+                add("tronco", self.tronco[1], v, TRONCO_TORCAO_MAX, q, "graus", f"tronco torcido: o peito gira {v:.0f}° em relação ao quadril (máximo {TRONCO_TORCAO_MAX:.0f}°)")
+            v, q = tronco["dobra"]
+            if v > TRONCO_DOBRA_MAX:
+                add("tronco", self.tronco[1], v, TRONCO_DOBRA_MAX, q, "graus", f"tronco dobrado {v:.0f}° em relação ao quadril (máximo {TRONCO_DOBRA_MAX:.0f}°)")
         prob.sort(key=lambda x: -x["valor"] / max(x["limite"], 1e-6))
         medidas = {
             "torcao_max_graus": {n: round(v, 1) for n, (v, _) in sorted(torcao.items(), key=lambda kv: -kv[1][0])[:6]},
@@ -477,6 +513,9 @@ class Conferencia:
             "escorrega_max_cm": {p: round(v[0], 1) for p, v in escorrega.items()},
             "chao_min_cm": round((min(min_z)[0] - self.chao) * 100, 1) if min_z else None,
         }
+        if tronco and self.tronco:
+            medidas["tronco_torcao_max_graus"] = round(tronco["torcao"][0], 1)
+            medidas["tronco_dobra_max_graus"] = round(tronco["dobra"][0], 1)
         medidas["locomocao_no_lugar"] = bool(getattr(self, "ultima_locomocao", False))
         medidas["velocidade_da_passada_m_s"] = getattr(self, "velocidade_do_chao", 0.0)
         return {"nome": nome, "quadros": len(quadros), "laco": laco, "aprovado": not prob, "problemas": prob[:12], "medidas": medidas}

@@ -296,3 +296,46 @@ async fn banco_de_movimento_cataloga_bvh_do_accad() {
     assert!((1.0..1.4).contains(&d), "{c}");
     assert_eq!(c["laco"], false);
 }
+
+/// Bancada de esqueleto: a imagem numerada, a lista com avisos e a edição (corrente de mola nova, osso
+/// apagado, renomeado pelo número) com os pesos refeitos só perto do que mudou.
+#[tokio::test]
+async fn esqueleto_visto_e_editado_pela_ia() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("aren.glb");
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "personagem", "saida": saida, "previa": false, "personagem": {"id": "aren", "tipo": "humano", "arma": "machado"}}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "esqueleto_ver", "entrada": saida}), TEMPO).await.unwrap();
+    assert!(std::path::Path::new(r["arquivos"]["imagem"].as_str().unwrap()).is_file());
+    let ossos = r["ossos"].as_array().unwrap();
+    let antes =
+        |nome: &str, lista: &Vec<serde_json::Value>| lista.iter().find(|o| o["nome"] == nome).map(|o| o["vertices_que_carrega"].clone());
+    let perna = antes("RightUpperLeg", ossos).unwrap();
+    let pescoco = ossos.iter().find(|o| o["nome"] == "Neck").unwrap()["n"].as_u64().unwrap();
+    let editado = tmp.path().join("aren_editado.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "esqueleto_editar", "entrada": saida, "saida": editado, "mudancas": [
+            {"op": "criar", "osso": "mola_rabo_1", "pai": "Head", "cabeca": [0, 0.09, 1.78], "ponta": [0, 0.16, 1.62]},
+            {"op": "criar", "osso": "mola_rabo_2", "pai": "mola_rabo_1", "cabeca": [0, 0.16, 1.62], "ponta": [0, 0.18, 1.45], "ligado": true},
+            {"op": "apagar", "osso": "Jaw"},
+            {"op": "renomear", "osso": pescoco, "novo": "Pescoco"}]}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    let ossos = r["ossos"].as_array().unwrap();
+    let nomes: Vec<&str> = ossos.iter().map(|o| o["nome"].as_str().unwrap()).collect();
+    assert!(nomes.contains(&"mola_rabo_2") && nomes.contains(&"Pescoco") && !nomes.contains(&"Jaw"), "{nomes:?}");
+    assert!(antes("mola_rabo_1", ossos).unwrap().as_u64().unwrap() > 0, "a corrente nova carrega a parte de trás da cabeça");
+    assert_eq!(antes("RightUpperLeg", ossos).unwrap(), perna, "longe do que mudou, os pesos ficam");
+    assert!(editado.is_file());
+}

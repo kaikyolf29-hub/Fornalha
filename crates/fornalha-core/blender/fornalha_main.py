@@ -959,6 +959,57 @@ def tarefa_aplicar_banco(t):
     }
 
 
+def _com_esqueleto(t):
+    objs = _importar(t["entrada"])
+    arm = next((o for o in objs if o.type == "ARMATURE"), None)
+    if arm is None:
+        raise ValueError("o modelo não tem esqueleto: use create_skeleton (esqueleto automático) antes")
+    for a in bpy.data.actions:
+        a.use_fake_user = True
+        if "|" in a.name:
+            a.name = a.name.split("|")[-1]
+    return objs, arm
+
+
+def tarefa_esqueleto_ver(t):
+    """Imagem (frente, lado, cima) com os ossos numerados e a lista com avisos, para a IA conferir."""
+    import fc_esqueleto
+
+    objs, arm = _com_esqueleto(t)
+    base = os.path.splitext(t.get("saida") or t["entrada"])[0]
+    ossos, avisos, H = fc_esqueleto.ver(arm, base + ".esqueleto.png")
+    return {"arquivos": {"imagem": base + ".esqueleto.png"}, "ossos": ossos, "avisos": avisos, "altura_m": round(H, 3),
+            "animacoes": sorted(a.name for a in bpy.data.actions)}
+
+
+def tarefa_esqueleto_editar(t):
+    """Mudanças no esqueleto pedidas pela IA, pesos refeitos e a imagem nova."""
+    import fc_esqueleto
+
+    objs, arm = _com_esqueleto(t)
+    feitas, mexidos = fc_esqueleto.editar(arm, t.get("mudancas") or [])
+    malhas = fc_esqueleto._malhas(arm, com_pesos=True)
+    pesos = t.get("pesos") or "locais"
+    if pesos == "locais":
+        fc_esqueleto.pesar_por_distancia(arm, malhas, so_perto_de=mexidos)
+    elif pesos == "distancia":
+        fc_esqueleto.pesar_por_distancia(arm, malhas)
+    elif pesos == "auto":
+        for o in bpy.context.scene.objects:
+            o.select_set(o in malhas or o == arm)
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+    saida = t.get("saida") or t["entrada"]
+    if arm.animation_data is None or arm.animation_data.action is None:
+        acoes = [a for a in bpy.data.actions]
+        if acoes:
+            (arm.animation_data or arm.animation_data_create()).action = acoes[0]
+    tamanho = c.exportar_glb(saida, [o for o in bpy.context.scene.objects if o in objs or o.type in ("MESH", "ARMATURE", "EMPTY")])
+    ossos, avisos, H = fc_esqueleto.ver(arm, os.path.splitext(saida)[0] + ".esqueleto.png")
+    return {"arquivos": {"modelo": saida, "imagem": os.path.splitext(saida)[0] + ".esqueleto.png"}, "tamanho_bytes": tamanho,
+            "feitas": feitas, "pesos": pesos, "ossos": ossos, "avisos": avisos, "altura_m": round(H, 3)}
+
+
 def tarefa_material(t):
     """Recolore os materiais: cores pedidas por nome, ou a paleta do guia visual em ordem."""
     objs = _importar(t["entrada"])
@@ -1018,6 +1069,8 @@ TAREFAS = {
     "conferir": tarefa_conferir,
     "banco": tarefa_banco,
     "aplicar_banco": tarefa_aplicar_banco,
+    "esqueleto_ver": tarefa_esqueleto_ver,
+    "esqueleto_editar": tarefa_esqueleto_editar,
 }
 
 

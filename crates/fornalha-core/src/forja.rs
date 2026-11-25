@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::erro::{Erro, Resultado};
 use crate::externas::{self, Achado};
 
-const SCRIPTS: [(&str, &str); 27] = [
+const SCRIPTS: [(&str, &str); 28] = [
     ("fornalha_main.py", include_str!("../blender/fornalha_main.py")),
     ("fc_comum.py", include_str!("../blender/fc_comum.py")),
     ("fc_personagem.py", include_str!("../blender/fc_personagem.py")),
@@ -39,6 +39,7 @@ const SCRIPTS: [(&str, &str); 27] = [
     ("fc_conferir.py", include_str!("../blender/fc_conferir.py")),
     ("fc_corrigir.py", include_str!("../blender/fc_corrigir.py")),
     ("fc_banco.py", include_str!("../blender/fc_banco.py")),
+    ("fc_esqueleto.py", include_str!("../blender/fc_esqueleto.py")),
 ];
 
 /// Tipos que a Forja sabe fazer.

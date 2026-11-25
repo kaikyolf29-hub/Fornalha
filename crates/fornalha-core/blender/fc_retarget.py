@@ -130,9 +130,13 @@ for _l in ("l", "r"):
 
 
 def _quadro_do_quadril(cabeca, esq, dir_, cima):
-    """Base (3x3) do corpo: x para a esquerda do personagem, z para cima, y para trás (frente = -y)."""
+    """Base (3x3) do corpo: x para a esquerda do personagem, z para cima, y para trás (frente = -y). O
+    "para cima" é a vertical do mundo (as duas poses de referência estão em pé): a direção do quadril
+    até a coluna varia de esqueleto para esqueleto (no MakeHuman ela já sai inclinada 24°) e entortava o
+    quadril de todo personagem."""
+    del cima
     x = (esq - dir_)
-    z = cima.normalized()
+    z = Vector((0.0, 0.0, 1.0))
     x = (x - z * x.dot(z)).normalized()
     y = z.cross(x)
     return Matrix((x, y, z)).transposed()
@@ -145,9 +149,11 @@ class Retarget:
     dessa pose. Funciona com fontes de descanso esquisito (BVH com a coluna deitada, A-pose, T-pose)
     sem torcer os ossos."""
 
-    def __init__(self, fonte, alvo, quadro_ref=None):
+    def __init__(self, fonte, alvo, quadro_ref=None, ref=None):
         """quadro_ref: quadro da animação da fonte que serve de pose de referência (no lugar do descanso),
-        para fontes de descanso que não é uma pose natural (BVH de alguns programas)."""
+        para fontes de descanso que não é uma pose natural (BVH de alguns programas). ref: a pose de
+        referência já medida (cabeças, pontas e giros em mundo por nome de osso), de outro arquivo com o
+        mesmo esqueleto (a pessoa parada em pé na mesma sessão de captura)."""
         self.S = fonte
         self.T = alvo
         self.pares = {}
@@ -158,7 +164,9 @@ class Retarget:
                 self.pares[b.name] = p
         self.inverso = {v: k for k, v in self.pares.items()}
         mw_s, mw_t = fonte.matrix_world, alvo.matrix_world
-        if quadro_ref is not None:
+        if ref is not None:
+            cab_s, cau_s, rot_s = ref["cab"], ref["cau"], ref["rot"]
+        elif quadro_ref is not None:
             bpy.context.scene.frame_set(int(quadro_ref))
             cab_s = {pb.name: mw_s @ pb.head for pb in fonte.pose.bones}
             cau_s = {pb.name: mw_s @ pb.tail for pb in fonte.pose.bones}
@@ -209,7 +217,7 @@ class Retarget:
             self.ref_t[t] = Rt
         pel_s = fonte.data.bones.get(self.inverso.get("pelvis", ""))
         pel_t = alvo.data.bones.get("pelvis")
-        self.pelvis_s0 = (cab_s[pel_s.name] if quadro_ref is not None else mw_s @ pel_s.head_local) if pel_s else Vector()
+        self.pelvis_s0 = (cab_s[pel_s.name] if (quadro_ref is not None or ref is not None) else mw_s @ pel_s.head_local) if pel_s else Vector()
         self.pelvis_t0 = (mw_t @ pel_t.head_local) if pel_t else Vector()
         self.escala = (self.pelvis_t0.z / self.pelvis_s0.z) if pel_s and self.pelvis_s0.z > 0.05 else 1.0
         self.ordem = []

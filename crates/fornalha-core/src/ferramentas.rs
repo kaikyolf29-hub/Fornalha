@@ -317,6 +317,28 @@ pub fn lista() -> Vec<Ferramenta> {
             so_leitura: false,
         },
         Ferramenta {
+            nome: "show_skeleton",
+            titulo: "Ver o esqueleto",
+            descricao: "Mostra o esqueleto de um personagem ou criatura para conferir: imagem com a malha clara e os ossos coloridos e numerados (frente, lado e cima; azul = esquerda, vermelho = direita, amarelo = meio, roxo = mola) e a lista dos ossos (número, nome, pai, cabeça e ponta em metros, comprimento, quantos vértices carrega, distância até a malha), com avisos (osso que não mexe nada, osso longe do corpo, lados diferentes ou fora de espelho).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}}, "required": ["arquivo"]}),
+            so_leitura: true,
+        },
+        Ferramenta {
+            nome: "edit_skeleton",
+            titulo: "Mexer no esqueleto",
+            descricao: "Muda o esqueleto de qualquer corpo (humano, criatura de patas, asas, cauda, tentáculos): mover a cabeça ou a ponta de um osso, criar osso (com pai e se fica ligado), apagar (os filhos sobem para o pai), renomear, trocar o pai, espelhar um lado no outro. Ossos pelo nome ou pelo número do show_skeleton; posições em metros como no show_skeleton. Ossos chamados mola_<grupo>_1..N (mola_cauda_1, mola_cabelo_1, mola_asa_l_1) viram mola no jogo. Os pesos são refeitos só perto dos ossos mexidos (pesos: locais), no corpo todo (distancia), pelo Blender (auto) ou ficam (manter). Devolve a imagem nova e a lista.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"},
+                "mudancas": {"type": "array", "items": {"type": "object", "properties": {
+                    "op": {"type": "string", "enum": ["mover", "criar", "apagar", "renomear", "pai", "espelhar"]},
+                    "osso": {"type": ["string", "integer"]}, "pai": {"type": ["string", "integer", "null"]},
+                    "cabeca": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "ponta": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "ligado": {"type": "boolean"}, "novo": {"type": "string"}, "de": {"type": "string", "enum": ["_l", "_r", "Left", "Right"]}},
+                    "required": ["op"]}},
+                "pesos": {"type": "string", "enum": ["locais", "distancia", "auto", "manter"]}}, "required": ["arquivo", "mudancas"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
             nome: "generate_sfx",
             titulo: "Gerar efeitos sonoros",
             descricao: "Gera os efeitos por evento em Audio/efeitos/ (passos na grama, pedra, água e madeira, golpes, impacto, espada, pulo, aterrissagem, dano, morte, moeda, clique), com variações. Sem efeitos pedidos, gera o pacote que o jogo usa.",
@@ -740,6 +762,8 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "apply_motion" => crate::movimento::aplicar(f, args(a)?, quem).await,
         "check_motion" => crate::movimento::conferir(f, args(a)?, quem).await,
         "import_motion" => crate::movimento::importar(f, args(a)?).await,
+        "show_skeleton" => crate::movimento::ver_esqueleto(f, args(a)?).await,
+        "edit_skeleton" => crate::movimento::editar_esqueleto(f, args(a)?, quem).await,
         "retarget_animation" => {
             let x: geracao::ArgsAnimacao = args(a)?;
             if x.origem.is_none() {

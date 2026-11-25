@@ -284,6 +284,49 @@ def quadro_de_referencia(S, alvo, rt, acao, passo=3):
     return melhor[1]
 
 
+PARADO = re.compile(r"(stand|idle|_id$|tpose|t_pose|neutral_id|a1_)", re.I)
+_CALIBRACOES = {}
+
+
+def calibracao(caminho, alvo):
+    """Pose de referência da mesma sessão de captura: um arquivo da mesma pasta com a pessoa parada em pé
+    (Stand, Idle, _ID) e o mesmo esqueleto. A referência de um quadro do próprio clipe (correndo,
+    lutando) põe o giro e a inclinação do tronco como "normal" e o tronco sai torcido."""
+    pasta = os.path.dirname(caminho)
+    if pasta in _CALIBRACOES:
+        return _CALIBRACOES[pasta]
+    _CALIBRACOES[pasta] = None
+    try:
+        nomes = sorted(os.listdir(pasta))
+    except OSError:
+        return None
+    candidatos = [n for n in nomes if n.lower().endswith(".bvh") and PARADO.search(os.path.splitext(n)[0])]
+    # o parado puro primeiro (Stand, Idle), não as transições (StandToSkip, SkipToStand)
+    candidatos.sort(key=lambda n: (bool(re.search(r"to|_to_", os.path.splitext(n)[0].split("_", 1)[-1], re.I)), len(n)))
+    if not candidatos:
+        return None
+    S2, novos, acoes = fc_retarget._importar(os.path.join(pasta, candidatos[0]))
+    try:
+        if S2 is None or not acoes:
+            return None
+        rt2 = fc_retarget.Retarget(S2, alvo)
+        if len(rt2.pares) < 10:
+            return None
+        a2 = acoes[0]
+        q = quadro_de_referencia(S2, alvo, rt2, a2)
+        virar_para_frente(S2, alvo, rt2, a2, q)
+        _usar(S2, a2)
+        bpy.context.scene.frame_set(int(q))
+        mw = S2.matrix_world
+        ref = {"cab": {pb.name: mw @ pb.head for pb in S2.pose.bones}, "cau": {pb.name: mw @ pb.tail for pb in S2.pose.bones},
+               "rot": {pb.name: (mw @ pb.matrix).to_3x3().normalized() for pb in S2.pose.bones},
+               "arquivo": candidatos[0], "quadro": q, "ossos": sorted(b.name for b in S2.data.bones)}
+        _CALIBRACOES[pasta] = ref
+        return ref
+    finally:
+        _limpar(novos, acoes)
+
+
 def virar_para_frente(S, alvo, rt, acao, quadro, ate=None):
     """Gira a captura (em volta do eixo vertical) para o corpo começar olhando para a frente do alvo.
     Com `ate` (ciclo de andar), a frente é a direção em que o quadril anda (a passada fica reta)."""
@@ -399,11 +442,16 @@ def aplicar(alvo, pedidos):
                                          ate=int(p.get("fim") or fim) if (p.get("ciclo") or p.get("laco")) else None)
                 if abs(giro) > 1:
                     nota["virado_graus"] = round(giro, 1)
-            ref = None
+            ref, cal = None, None
             if not caminho.lower().endswith((".glb", ".gltf")) or p.get("calibrar"):
-                ref = quadro_de_referencia(S, alvo, fc_retarget.Retarget(S, alvo), a)
-                nota["quadro_de_referencia"] = ref
-            rt = fc_retarget.Retarget(S, alvo, ref)
+                cal = calibracao(caminho, alvo) if caminho.lower().endswith(".bvh") else None
+                if cal is not None and cal["ossos"] == sorted(b.name for b in S.data.bones):
+                    nota["calibrado_por"] = f"{cal['arquivo']} (quadro {cal['quadro']})"
+                else:
+                    cal = None
+                    ref = quadro_de_referencia(S, alvo, fc_retarget.Retarget(S, alvo), a)
+                    nota["quadro_de_referencia"] = ref
+            rt = fc_retarget.Retarget(S, alvo, ref, cal)
             if p.get("ciclo"):
                 ci, cf, erro = achar_ciclo(S, rt, a)
                 ini, fim = ci, cf

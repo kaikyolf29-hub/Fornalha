@@ -981,6 +981,38 @@ func _criar_molas() -> void:
 	if esqueleto.find_bone("saia") >= 0:
 		# a barra da sobreveste: um osso do quadril até a barra, de pé, empurrado pelas coxas e canelas
 		cadeias.append(["saia", "saia", 0.5, 1.5, 0.5, 1.0, 0.06])
+	# cadeias que a IA montou na bancada de esqueleto: ossos "mola_<grupo>_<n>" (cauda, cabelo, asa,
+	# orelha, rabo de cavalo...), do 1 (raiz) até o último (ponta)
+	var grupos := {}
+	for i in esqueleto.get_bone_count():
+		var nome := esqueleto.get_bone_name(i)
+		if not nome.begins_with("mola_"):
+			continue
+		var partes := nome.rsplit("_", true, 1)
+		if partes.size() != 2 or not partes[1].is_valid_int():
+			continue
+		var g: String = partes[0]
+		var n := int(partes[1])
+		if not grupos.has(g):
+			grupos[g] = [n, n]
+		grupos[g] = [mini(grupos[g][0], n), maxi(grupos[g][1], n)]
+	for g in grupos:
+		var rigidez := 0.8
+		var gravidade := 0.6
+		var raio := 0.03
+		if "cabelo" in g or "rabo_de_cavalo" in g or "trança" in g:
+			rigidez = 0.5
+			gravidade = 0.8
+			raio = 0.02
+		elif "cauda" in g or "rabo" in g:
+			rigidez = 1.2
+			gravidade = 0.3
+			raio = 0.05
+		elif "asa" in g:
+			rigidez = 2.0
+			gravidade = 0.2
+			raio = 0.05
+		cadeias.append(["%s_%d" % [g, grupos[g][0]], "%s_%d" % [g, grupos[g][1]], 0.08, rigidez, 0.4, gravidade, raio])
 	if cadeias.is_empty():
 		return
 	molas = SpringBoneSimulator3D.new()

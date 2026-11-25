@@ -39,8 +39,22 @@ de outra conta e não chegou ao repositório até 25/11.
   resultado do `apply_motion`. **Mixamo:** o criador autorizou em 25/11 ("Mixamo pode usar"); a página da
   Adobe recusou a leitura automática, então entra como `captura-mixamo` com aceite da pessoa pela janela
   (regra do CLAUDE.md), arquivos trazidos com a conta Adobe dela (`import_motion`).
-Falta na Etapa 1: esqueleto editado pela IA (imagem com ossos numerados), roupa por cima (armadura rígida
-por osso), estação Movimento na janela, CI.
+- **Tronco (25/11, achado pelo criador no vídeo da corrida):** a corrida do ACCAD saía com o peito
+  girado e a barriga torcida e a régua tinha aprovado (ela não media o tronco). Causas: (1) o quadril era
+  alinhado pela direção quadril→coluna, que no MakeHuman já é inclinada 24°: todo personagem saía com o
+  quadril girado (Quaternius também); agora é pela vertical; (2) o BVH era calibrado por um quadro do
+  próprio clipe (o corredor inclinado virava o "normal"); agora pela pose em pé da mesma sessão de
+  captura (ACCAD `Male2_A1_Stand`). A conferência ganhou a medida do tronco (giro do peito em relação ao
+  quadril até 55°, dobra até 75°): a corrida foi de 86° de dobra para 17°. **Regra:** "aprovado" quer
+  dizer que a régua não achou o que ela mede; não quer dizer pronto. Pronto só depois de olhar o vídeo
+  (e, no fim, o teste do criador).
+- **Esqueleto editado pela IA** (`fc_esqueleto.py`, MCP `show_skeleton`, `edit_skeleton`): imagem
+  (frente, lado, cima) com a malha clara e os ossos coloridos e numerados, lista com avisos (osso que não
+  mexe nada, longe do corpo, lados diferentes); mudanças mover/criar/apagar/renomear/pai/espelhar pelo
+  nome ou número; pesos refeitos só perto do que mudou. Ossos `mola_<grupo>_1..N` viram mola na
+  Godot/Erethea (`movimento.gd`), com rigidez por grupo (cabelo, cauda, asa).
+Falta na Etapa 1: roupa por cima (armadura rígida por osso), estação Movimento na janela, prova na
+Erethea (compilando aqui; o CI da Fornalha ainda testa na Godot 4.6.1), CI.
 
 ## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI

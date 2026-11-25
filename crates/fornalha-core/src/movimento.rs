@@ -472,6 +472,56 @@ pub async fn importar(f: &Fornalha, a: ArgsImportar) -> Resultado<Value> {
     )
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsEsqueleto {
+    pub projeto: Option<String>,
+    pub arquivo: String,
+    /// Mudanças (edit_skeleton): [{op: mover|criar|apagar|renomear|pai|espelhar, osso, pai, cabeca, ponta, ligado, novo, de}].
+    pub mudancas: Vec<Value>,
+    /// locais (padrão: só perto dos ossos mexidos), distancia (o corpo todo), auto (Blender) ou manter.
+    pub pesos: Option<String>,
+}
+
+/// show_skeleton: imagem com os ossos numerados (frente, lado, cima) e a lista com avisos.
+pub async fn ver_esqueleto(f: &Fornalha, a: ArgsEsqueleto) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    if !arquivo.is_file() {
+        return Err(Erro::argumento(format!("Não achei {}.", arquivo.display())));
+    }
+    let r = forjar(f, &json!({"tarefa": "esqueleto_ver", "entrada": arquivo, "materiais": null})).await?;
+    Ok(
+        json!({"imagem": r["arquivos"]["imagem"], "ossos": r["ossos"], "avisos": r["avisos"], "altura_m": r["altura_m"], "animacoes": r["animacoes"],
+              "dica": "Coordenadas em metros (x: esquerda do personagem, y: para trás, z: para cima; o personagem olha para -y). Edite com edit_skeleton pelo nome ou pelo número. Ossos mola_<grupo>_1..N (cauda, cabelo, asa, orelha) viram mola no jogo."}),
+    )
+}
+
+/// edit_skeleton: muda o esqueleto como a IA pediu, refaz os pesos e devolve a imagem nova.
+pub async fn editar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    if !arquivo.is_file() {
+        return Err(Erro::argumento(format!("Não achei {}.", arquivo.display())));
+    }
+    if a.mudancas.is_empty() {
+        return Err(Erro::argumento("Diga as mudanças (mudancas): mover, criar, apagar, renomear, pai ou espelhar."));
+    }
+    let pesos = a.pesos.clone().unwrap_or_else(|| "locais".into());
+    if !["locais", "distancia", "auto", "manter"].contains(&pesos.as_str()) {
+        return Err(Erro::argumento("pesos: locais, distancia, auto ou manter."));
+    }
+    let r = forjar(
+        f,
+        &json!({"tarefa": "esqueleto_editar", "entrada": arquivo, "saida": arquivo, "mudancas": a.mudancas, "pesos": pesos, "materiais": null}),
+    )
+    .await?;
+    recibo(f, &p, &arquivo, "forja-3d", None, None, json!({"bancada": "esqueleto", "mudancas": a.mudancas}), quem).await?;
+    f.avisar_ponte(vec![rel(&p.raiz, &arquivo)]);
+    Ok(json!({"feitas": r["feitas"], "pesos": r["pesos"], "imagem": r["arquivos"]["imagem"], "ossos": r["ossos"], "avisos": r["avisos"],
+              "dica": "As animações que já existiam continuam (cada osso guarda o giro dele); confira com check_motion. Ossos novos não têm animação: use mola_<grupo>_<n> para eles balançarem no jogo."}))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;

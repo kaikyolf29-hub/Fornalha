@@ -84,6 +84,15 @@ Falta na Etapa 1: o CI das gerações verde no Windows e no Linux, e o teste no 
   mancha clara no alto. Próximo: raiz descolando com volume, queda começando na coroa, orientação dos
   cards pela superfície do cabelo (não da cabeça), máscara da testa em resolução maior, e as medidas da
   bancada (couro aparecendo, fio atravessando) antes de virar padrão.
+  **Rodada 2 (25/11):** os fios agora estão certos (desenhados crus, de frente e de lado): o comprido se
+  solta do crânio atrás da orelha e cai como um lençol; queda em uma passada só (cada ponto segue o
+  anterior, vira para baixo e contorna a pele); "dentro" do corpo só vale perto da pele (longe dela o
+  sinal do campo era lixo e fazia laços); fio que sai da grade da cabeça solta em vez de ser puxado
+  (eram os fios disparando para trás). Cards do comprido: mechas agrupadas pelo caminho inteiro, card no
+  fio-guia, orientados para fora do eixo da cabeça, menos cards e mais largos, normais de cápsula.
+  **Ainda não está aceitável** no render: sobram lascas claras/acinzentadas em volta (não é a normal;
+  suspeitas: variantes claras do atlas nas bordas, alfa visto de lado), cruzamentos no alto da cabeça,
+  e a linha da testa serrilhada. Continua atrás de `cabelo_em_cards`; o padrão segue o cabelo do pacote.
 
 ## Situação (21/11/2026, fim da tarde)
 **Fases 0 a 4 implementadas e testadas sem placa de vídeo; gerações de verdade provadas no CI

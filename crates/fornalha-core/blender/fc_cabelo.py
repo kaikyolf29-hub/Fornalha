@@ -756,6 +756,32 @@ def transferir_normais(alvo, casca):
         alvo.modifiers.remove(mod)
 
 
+def normais_de_capsula(cards, pontos):
+    """Normais de volume para o cabelo que pende: esfera em volta do crânio no alto e cilindro abaixo
+    (o eixo da cabeça). A casca do couro cabeludo só cobre o crânio; nos cards longe dela a normal
+    transferida saía errada e o brilho estourava em branco."""
+    s = pontos["s"]
+    oy = (pontos["olho_l"][1] + pontos["olho_r"][1]) / 2
+    cy, cz = oy + 0.085 * s, pontos["olho_z"] + 0.03 * s
+    me = cards.data
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    M = np.array(cards.matrix_world)
+    mundo = co @ M[:3, :3].T + M[:3, 3]
+    centro = np.stack([np.zeros(len(mundo)), np.full(len(mundo), cy), np.minimum(mundo[:, 2], cz)], -1)
+    n = mundo - centro
+    n /= np.linalg.norm(n, axis=-1, keepdims=True) + 1e-9
+    # de volta para o espaço do objeto (só rotação)
+    R = np.linalg.inv(M[:3, :3]).T
+    n = n @ R.T
+    n /= np.linalg.norm(n, axis=-1, keepdims=True) + 1e-9
+    try:
+        me.normals_split_custom_set_from_vertices([tuple(v) for v in n])
+    except Exception as e:  # sem isso, ficam as normais dos próprios cards
+        print(f"[cabelo] normais de cápsula falharam: {e}")
+
+
 def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n=1.0, res_atlas=2048, grisalho=0.0):
     """Pipeline completo de cabelo AAA. Devolve [couro_cabeludo, cards] (objetos do jogo)."""
     P, raios, campo = crescer_fios(corpo, pontos, cabeca_peso, estilo, devolver_campo=True)
@@ -793,7 +819,10 @@ def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n
             o.select_set(o == casca)
         bpy.context.view_layer.objects.active = casca
         bpy.ops.object.modifier_apply(modifier=sm.name)
-        transferir_normais(cards, casca)
+        if estilo == "curto":
+            transferir_normais(cards, casca)
+        else:
+            normais_de_capsula(cards, pontos)
         bpy.data.objects.remove(casca)
     objs = [o for o in (cap, cards) if o is not None]
     for o in objs:

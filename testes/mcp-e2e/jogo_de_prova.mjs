@@ -33,7 +33,8 @@ function confere(cond, texto, extra) {
 }
 
 const client = new Client({ name: "jogo-de-prova", version: "1.0.0" });
-await client.connect(new StdioClientTransport({ command: cli, args: ["mcp"], stderr: "inherit" }));
+// o ambiente inteiro (DISPLAY/WAYLAND para a engine abrir a janela e tirar as fotos)
+await client.connect(new StdioClientTransport({ command: cli, args: ["mcp"], env: { ...process.env }, stderr: "inherit" }));
 
 async function chamar(nome, args) {
   const t0 = Date.now();
@@ -75,7 +76,7 @@ const espada = await chamar("generate_3d", {
     { tipo: "torno", material: "guarda", lados: 16, perfil: [[0, -0.175], [0.022, -0.168], [0.032, -0.145], [0.026, -0.122], [0.012, -0.112], [0, -0.11]] },
   ],
 });
-confere(espada && fs.existsSync(path.join(raiz, "Weapons/espada_de_aren.glb")), "espada montada por peças");
+confere(espada && fs.existsSync(espada.arquivos?.modelo || ""), "espada montada por peças");
 const casa = await chamar("generate_3d", {
   tipo: "objeto", nome: "casa_brasa",
   materiais: { pedra: { cor: "#9a948a", tipo: "pedra" }, telha: { cor: "#5a3a2e", tipo: "telha" }, madeira: { cor: "#4a3324", tipo: "madeira" }, janela: { cor: "#141210" } },
@@ -89,7 +90,8 @@ const casa = await chamar("generate_3d", {
     { tipo: "caixa", material: "janela", centro: [-2.2, -2.53, 1.7], tamanho: [0.9, 0.08, 1.0], espelhar: "x" },
   ],
 });
-confere(casa && fs.existsSync(path.join(raiz, "Items/casa_brasa.glb")), "casa montada por peças");
+const casaGlb = casa?.arquivos?.modelo || "";
+confere(fs.existsSync(casaGlb), "casa montada por peças");
 
 // 3. herói com os controles finos (penteado, barba, idade) e três inimigos
 const heroi = await chamar("create_character", {
@@ -98,7 +100,7 @@ const heroi = await chamar("create_character", {
   cabelo: { penteado: "short04", cor: "#4f4842", volume_cm: 1.2, agrupamento: 0.6, ondulacao: 0.25 },
   barba: { tipo: "cheia", cor: "#5b534b", comprimento_cm: 2.0, densidade: 1.1 },
 });
-confere(heroi && fs.existsSync(path.join(raiz, "Characters/aren/aren.glb")), "herói criado", heroi?.avisos);
+confere(heroi && fs.existsSync(heroi.arquivos?.modelo || ""), "herói criado", heroi?.avisos);
 const inimigos = [];
 for (const pedido of [
   { papel: "inimigo", tipo: "orc", descricao: "orc grandalhão com martelo", arma: "martelo" },
@@ -116,7 +118,7 @@ const mapa = await chamar("generate_map", {
   plano: {
     tamanho_m: 384, relevo: { estilo: "colinas", altura_m: 30 }, clima: "temperado", hora: "tarde", nevoa: 0.3, rio: true,
     regioes: [
-      { id: "vila", tipo: "vila", centro: [0, 0], raio_m: 55, casas: ["Items/casa_brasa.glb"] },
+      { id: "vila", tipo: "vila", centro: [0, 0], raio_m: 55, casas: [path.relative(raiz, casaGlb).split(path.sep).join("/")] },
       { id: "mata", tipo: "floresta", posicao: "norte", raio_m: 70 },
       { id: "cripta", tipo: "masmorra", posicao: "leste", raio_m: 40 },
     ],
@@ -124,6 +126,7 @@ const mapa = await chamar("generate_map", {
   },
 });
 confere(mapa?.medidas?.aprovado === true, "mapa aprovado nas medidas", mapa?.medidas);
+confere(!(mapa?.avisos || []).some((a) => a.includes("não existe")), "a vila achou a casa montada", mapa?.avisos);
 
 // 5. som: música de duas situações e os efeitos
 await chamar("generate_music", { situacao: "vila", compassos: 16 });
@@ -144,12 +147,15 @@ const cena = await chamar("create_cutscene", {
 confere(cena && fs.existsSync(path.join(raiz, "Cutscenes/chegada.cena.json")), "cena curta gravada");
 
 // 7. montar e testar na engine
-await chamar("import_to_engine", {});
+// um inimigo perto do início (os do mapa ficam na masmorra, longe para os segundos do teste)
+await chamar("import_to_engine", { inimigo_perto: true });
 const teste = await chamar("run_test", { segundos: 25 });
 console.log(JSON.stringify(teste, null, 1).slice(0, 4000));
 confere(teste?.passou === true, "run_test passou", teste?.erros);
 confere((teste?.jogador?.andou_m ?? 0) > 3, "o jogador andou no mapa");
-confere((teste?.inimigos?.perseguiram ?? 0) >= 1, "inimigo viu e perseguiu");
+confere((teste?.inimigos?.perseguiram ?? 0) >= 1, "inimigo viu e perseguiu", teste?.inimigos);
+confere((teste?.inimigos?.total ?? 0) >= 3, "os três inimigos no jogo", teste?.inimigos);
+confere((teste?.fotos_mapa || []).length >= 3 || !process.env.DISPLAY, "fotos de cada região do mapa", teste?.fotos_mapa);
 confere(teste?.cena_curta?.linhas?.length === 3, "a cena curta tocou as 3 linhas", teste?.cena_curta);
 const lic = await chamar("check_licenses", {});
 confere(lic && (lic.sem_recibo || []).length === 0, "todo arquivo com recibo", lic?.sem_recibo);

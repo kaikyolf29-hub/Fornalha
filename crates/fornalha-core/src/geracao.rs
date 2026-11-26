@@ -556,6 +556,25 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
     let cor = |pedido: &Option<String>, chave: &str, i: usize, padrao: &str| -> String {
         cor_valida(pedido).or_else(|| cor_valida(&c(chave))).or_else(|| pal.get(i).cloned()).unwrap_or_else(|| padrao.into())
     };
+    // sem nome (nem da pessoa nem do cérebro): o do tipo, com número se já houver um com esse nome
+    // (antes todo inimigo sem nome virava "Inimigo" e o segundo apagava o primeiro)
+    let sem_nome = a.nome.as_deref().is_none_or(|n| n.trim().is_empty()) && c("nome").is_none_or(|n| n.trim().is_empty());
+    let nome = if sem_nome {
+        let base = match tipo.as_str() {
+            "humano" => nome,
+            t => {
+                let mut cs = t.chars();
+                cs.next().map(|p| p.to_uppercase().collect::<String>() + cs.as_str()).unwrap_or(nome)
+            }
+        };
+        let existe = |n: &str| {
+            let id = projeto::nome_de_pasta(n);
+            p.raiz.join("Enemies").join(&id).exists() || p.raiz.join("Characters").join(&id).exists()
+        };
+        (1..100).map(|i| if i == 1 { base.clone() } else { format!("{base} {i}") }).find(|n| !existe(n)).unwrap_or(base)
+    } else {
+        nome
+    };
     let id = projeto::nome_de_pasta(&nome);
     json!({
         "id": id, "nome": nome, "papel": papel, "inimigo": inimigo,

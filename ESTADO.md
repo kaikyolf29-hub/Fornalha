@@ -71,6 +71,17 @@ nada medíocre. **Feito aqui** (Linux, sem placa; testes `forja`, `geracao`, Tes
   pano). É nível de NPC de jogo indie/AA, não de herói AAA. Para chegar perto do AAA faltam: roupa com
   malha própria (TRELLIS.2/API na NVIDIA ou simulação de pano + escultura), cabelo fio a fio (Erethea #40)
   com o groom da Fornalha, e pele escaneada.
+- **Jogo de prova (Etapa 3, item 4), rodado aqui em 26/11** (`testes/mcp-e2e/jogo_de_prova.mjs`, só pelo
+  MCP, nível qualidade): projeto com o guia → espada e casa montadas por peças → herói com barba, idade e
+  penteado → três inimigos (orc, zumbi, orc-2) → mapa (vila com a casa montada, floresta, cripta, rio)
+  aprovado nas medidas → duas músicas e os efeitos → cena curta de 3 linhas → montar → `run_test`: passou,
+  andou, inimigo perseguiu e caiu (física), 3 inimigos, cena curta tocada, 139 FPS no modo sem janela,
+  todo arquivo com recibo. **Não provado aqui:** as fotos de cada região (nesta máquina sem placa a janela
+  com render por software passa do tempo-limite com 4 personagens realistas e cai para o modo sem janela;
+  ficaram 4 capturas) e a dublagem com boca (sem o Ignis aqui, a cena saiu só com legenda). No PC com placa
+  e o Ignis aberto: `FORNALHA_PROVA_VOZ=1`. **Achado e corrigido pelo jogo de prova:** sem o Ignis e sem
+  nome, todo inimigo virava "Inimigo" e o segundo apagava o primeiro; agora sai com o nome do tipo e
+  número.
 - **Teste Bruto** verde nos 4 casos (protagonista, inimigo, zumbi, dragão). Consertos: régua de "cabelo em
   camadas" aceita o caminho guiado; cobertura do couro medida na pose de descanso (o zumbi curvado tirava
   os pontos da malha dos raios e reprovava sem motivo).

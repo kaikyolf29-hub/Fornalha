@@ -562,9 +562,85 @@ def rigar(obj, nome, altura, makehuman):
     finally:
         if obj.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
+    manopla = _manopla_firme(obj, arm)
+    manopla += _pes_firmes(obj, arm)
     obj.parent = arm
     mod = obj.modifiers.new("esqueleto", "ARMATURE")
     mod.object = arm
-    return arm, {"altura_m": round(H, 3), "pesos": "molde-makehuman", "ossos": len(arm.data.bones),
+    return arm, {"altura_m": round(H, 3), "pesos": "molde-makehuman", "ossos": len(arm.data.bones), "manopla_firme": manopla,
                  "pesos_pela_superficie": round(float(conhecido.mean()), 3), "molas": capa, "paineis": paineis,
                  "osso_da_saia": saia_osso}
+
+
+def _manopla_firme(obj, arm, raio=0.11):
+    """Mão da malha da IA presa à mão do esqueleto: a manopla (ou a mão grande) é maior que a mão do
+    molde e a transferência pela superfície deixava ~54% do peso no antebraço; com o punho girando (golpe)
+    a mão visível ficava para trás e a espada parecia solta. Depois do pulso, o peso do antebraço passa
+    para a mão (mistura em 3 cm em volta do pulso); os dedos ficam como estão."""
+    mw = arm.matrix_world
+    total = 0
+    grupos = {g.name: g for g in obj.vertex_groups}
+    for lado in ("l", "r"):
+        mao, braco = arm.data.bones.get(f"hand_{lado}"), arm.data.bones.get(f"lowerarm_{lado}")
+        if mao is None or braco is None or braco.name not in grupos:
+            continue
+        g_mao = grupos.get(mao.name) or obj.vertex_groups.new(name=mao.name)
+        g_braco = grupos[braco.name]
+        pulso = mw @ mao.head_local
+        eixo = (mw @ mao.head_local - mw @ braco.head_local).normalized()
+        ponta = mw @ mao.tail_local
+        for v in obj.data.vertices:
+            p = obj.matrix_world @ v.co
+            t = (p - pulso).dot(eixo)
+            if t < -0.015 or (p - pulso).length > raio + (ponta - pulso).length:
+                continue
+            w_b = next((ge.weight for ge in v.groups if ge.group == g_braco.index), 0.0)
+            if w_b <= 0.0:
+                continue
+            k = min(1.0, max(0.0, (t + 0.015) / 0.03))  # 0 antes do pulso, 1 a 1,5 cm depois
+            if k <= 0.0:
+                continue
+            passa = w_b * k
+            w_m = next((ge.weight for ge in v.groups if ge.group == g_mao.index), 0.0)
+            g_braco.add([v.index], w_b - passa, "REPLACE")
+            g_mao.add([v.index], w_m + passa, "REPLACE")
+            total += 1
+    return total
+
+
+def _pes_firmes(obj, arm):
+    """Bota (sabatão) da malha da IA presa ao pé: abaixo do tornozelo o peso da canela passa para o pé
+    (mistura em 4 cm) e metade do peso dos dedos (ball) vai para o pé. Com o peso dividido, a sola
+    esticava em bico no golpe e saía uma aba no tornozelo."""
+    mw = arm.matrix_world
+    total = 0
+    grupos = {g.name: g for g in obj.vertex_groups}
+    for lado in ("l", "r"):
+        pe, canela, dedo = (arm.data.bones.get(f"{n}_{lado}") for n in ("foot", "calf", "ball"))
+        if pe is None or canela is None:
+            continue
+        g_pe = grupos.get(pe.name) or obj.vertex_groups.new(name=pe.name)
+        g_can = grupos.get(canela.name)
+        g_ded = grupos.get(dedo.name) if dedo is not None else None
+        tornozelo = mw @ pe.head_local
+        ponta = mw @ (dedo.tail_local if dedo is not None else pe.tail_local)
+        raio = max(0.16, (ponta - tornozelo).length + 0.06)
+        for v in obj.data.vertices:
+            p = obj.matrix_world @ v.co
+            if (p - tornozelo).length > raio or p.z > tornozelo.z + 0.02:
+                continue
+            k = min(1.0, max(0.0, (tornozelo.z + 0.02 - p.z) / 0.04))
+            pesos = {ge.group: ge.weight for ge in v.groups}
+            passa = 0.0
+            if g_can is not None and pesos.get(g_can.index, 0.0) > 0:
+                w = pesos[g_can.index]
+                passa += w * k
+                g_can.add([v.index], w * (1 - k), "REPLACE")
+            if g_ded is not None and pesos.get(g_ded.index, 0.0) > 0:
+                w = pesos[g_ded.index]
+                passa += w * 0.5
+                g_ded.add([v.index], w * 0.5, "REPLACE")
+            if passa > 0:
+                g_pe.add([v.index], pesos.get(g_pe.index, 0.0) + passa, "REPLACE")
+                total += 1
+    return total

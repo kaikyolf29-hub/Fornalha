@@ -410,6 +410,41 @@ def gravar(rt, acao_fonte, nome, laco, quadros_fonte, no_lugar):
     return act
 
 
+def janela_do_golpe(S, a, ini, fim, antes=0.35, depois=0.55):
+    """Numa tomada longa de luta (guarda → golpe → guarda), o trecho do golpe: em volta do pico de
+    velocidade da mão (a direita, quando dá para saber). Golpe de jogo é curto; a tomada inteira deixava o
+    personagem 2,6 s golpeando."""
+    maos = [b.name for b in S.pose.bones if any(k in b.name.lower() for k in ("hand", "wrist", "mao"))]
+    if not maos:
+        return ini, fim
+    direitas = [n for n in maos if "right" in n.lower() or n.lower().endswith(("_r", ".r"))] or maos
+    ad = S.animation_data or S.animation_data_create()
+    antiga = ad.action
+    ad.action = a
+    if hasattr(ad, "action_slot") and getattr(a, "slots", None):
+        ad.action_slot = a.slots[0]
+    cena = bpy.context.scene
+    pos = {n: [] for n in direitas}
+    quadros = list(range(ini, fim + 1))
+    for q in quadros:
+        cena.frame_set(q)
+        for n in direitas:
+            pos[n].append(np.array(S.matrix_world @ S.pose.bones[n].head))
+    ad.action = antiga
+    melhor, pico = -1.0, None
+    for n, ps in pos.items():
+        if len(ps) < 3:
+            continue
+        v = np.linalg.norm(np.diff(np.array(ps), axis=0), axis=1)
+        k = int(np.argmax(v))
+        if v[k] > melhor:
+            melhor, pico = float(v[k]), quadros[k]
+    if pico is None:
+        return ini, fim
+    fps = cena.render.fps / max(cena.render.fps_base, 1e-6)
+    return max(ini, pico - int(round(antes * fps))), min(fim, pico + int(round(depois * fps)))
+
+
 def aplicar(alvo, pedidos):
     """pedidos: [{"arquivo", "acao" (ou "*"), "como" (nome no jogo), "laco", "inicio", "fim" (quadros da
     fonte), "velocidade", "no_lugar", "ciclo"}]. Devolve (ações criadas, notas)."""
@@ -458,6 +493,9 @@ def aplicar(alvo, pedidos):
                 nota["ciclo"] = {"inicio": ci, "fim": cf, "diferenca": erro}
             ini = int(p.get("inicio") or ini)
             fim = int(p.get("fim") or fim)
+            if p.get("golpe") and not (p.get("inicio") or p.get("fim")):
+                ini, fim = janela_do_golpe(S, a, ini, fim)
+                nota["golpe"] = {"inicio": ini, "fim": fim}
             vel = float(p.get("velocidade") or 1.0)
             n = max(2, int(round((fim - ini) / max(vel, 0.05))) + 1)
             quadros = list(np.linspace(ini, fim, n))

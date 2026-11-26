@@ -145,6 +145,16 @@ async function urlDoModelo(caminho) {
     return URL.createObjectURL(new Blob([bytes], { type: "model/gltf-binary" }));
   } catch { return null; }
 }
+/** O arquivo inteiro em bytes (para o Estúdio 3D abrir o glb). */
+async function lerBytes(caminho) {
+  if (!tauri || !caminho) return null;
+  const r = await tauri.invoke("ler_arquivo", { caminho });
+  const bin = atob(r.base64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+// ponte para o Estúdio 3D (módulo à parte, estudio.js)
+window.Fornalha = { ferramenta, mensagem, calor, esc, pinta, dataUrl, lerBytes, raiz: () => raiz };
 let urlVisualizador = null;
 async function abrirVisualizador(caminho) {
   const url = await urlDoModelo(caminho);
@@ -621,6 +631,7 @@ async function pintarBanco() {
   } catch (e) { pinta($("mov-banco"), `<p class="vazio">${esc(e.message)}</p>`); }
 }
 async function mostrarConferencia(r, titulo) {
+  if (window.FornalhaEstudio) window.FornalhaEstudio.marcar(r);
   const anims = r.animacoes || [];
   const ok = anims.filter((a) => a.aprovado).length;
   const img = r.arquivos && r.arquivos.imagem ? await dataUrl(r.arquivos.imagem) : null;
@@ -871,18 +882,24 @@ function pintarComfyUI() {
     : vk ? `Imagem: ${vk.id_do_modelo} (roda na hora de gerar, não fica aberto)`
     : e.conectado ? "Sem modelo de imagem de licença comercial instalado" : "";
   const ultima = inst.log && inst.log.length ? inst.log[inst.log.length - 1] : "";
-  const tem3d = !!(inst.instalacao && (inst.instalacao.modelos || []).some((m) => m.includes("trellis_2")));
+  // placa sem CUDA nem ROCm (RX 580): o 3D pela IA fica num ComfyUI à parte, no processador
+  const t3 = c.tres_d_no_processador;
+  const tem3d = t3 ? !!t3.instalado : !!(inst.instalacao && (inst.instalacao.modelos || []).some((m) => m.includes("trellis_2")));
   const botoes = inst.instalando ? "" : (!inst.instalado
     ? `<button class="botao" data-comfy="instalar">Instalar</button>`
     : e.conectado || vk ? "" : `<button class="botao" data-comfy="abrir">Abrir</button>`)
-    + (tem3d ? "" : ` <button class="botao" data-comfy="instalar_3d" title="TRELLIS.2 + DINOv3, ~8,5 GB; precisa do aceite da licença do DINOv3 em Licenças">Instalar o 3D pela IA</button>`);
+    + (tem3d || (t3 && t3.instalando) ? "" : ` <button class="botao" data-comfy="instalar_3d" title="TRELLIS.2 + DINOv3, ~8,5 GB; precisa do aceite da licença do DINOv3 em Licenças">Instalar o 3D pela IA${t3 ? " (no processador)" : ""}</button>`);
+  const ultima3 = t3 && t3.log && t3.log.length ? t3.log[t3.log.length - 1] : "";
   pinta($("comfyui"), `<div class="item"><div><strong>${esc(situacao)}</strong>`
     + `<small>${esc(cam.backend ? "Caminho nesta máquina: " + cam.backend + " — " + (cam.motivo || "") : "")}</small>`
     + (modelo ? `<small>${esc(modelo)}</small>` : "")
     + (ultima && (inst.instalando || !inst.instalado) ? `<small class="mono">${esc(ultima)}</small>` : "")
-    + `</div><div class="lado">${botoes}</div></div>`);
+    + `</div><div class="lado">${botoes}</div></div>`
+    + (t3 ? `<div class="item"><div><strong>3D pela IA no processador: ${t3.instalando ? "instalando…" : t3.instalado ? "instalado" : "não instalado"}</strong>`
+      + `<small>Esta placa não roda o TRELLIS.2 (sem CUDA nem ROCm): ele roda no processador, ao lado do motor de imagem, que continua na placa. Leva de 2 a 4 horas por personagem num processador de 6 núcleos; peça na fila da noite. A qualidade é a mesma da placa, só demora.</small>`
+      + (ultima3 && t3.instalando ? `<small class="mono">${esc(ultima3)}</small>` : "") + `</div></div>` : ""));
   clearTimeout(vigiaComfy);
-  if (inst.instalando) vigiaComfy = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
+  if (inst.instalando || (t3 && t3.instalando)) vigiaComfy = setTimeout(() => { if (!$("est-maquina").hidden) carregar("maquina"); }, 5000);
 }
 function pintarApis() {
   const lista = (estado && estado.apis_3d) || [];

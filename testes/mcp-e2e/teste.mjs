@@ -40,6 +40,7 @@ const FERRAMENTAS = [
   "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_map", "create_cutscene", "compare_reference", "generate_code",
   "import_to_engine", "run_test", "plan_request", "queue_job", "list_queue", "cancel_job", "check_style",
   "list_motions", "apply_motion", "check_motion", "import_motion", "show_skeleton", "edit_skeleton", "dress_character",
+  "show_motion", "edit_motion", "create_garment",
 ];
 
 const PASTAS = ["GameDesign", "World", "Characters", "Enemies", "Items", "Weapons", "Animations",

@@ -227,7 +227,20 @@ def _juntar(partes, nome):
 
 
 def prender_na_mao(obj, arm, lado="r", escudo=False):
-    """Põe a arma na pegada da mão (pela palma e pelo polegar) e prende no osso."""
+    """Põe a arma na pegada da mão (pela palma e pelo polegar) e prende no osso. Sempre com o esqueleto em
+    repouso: a pegada é medida no repouso e, com uma animação já aplicada (malha da IA), prender "mantendo
+    a posição" usava o osso posado e gravava a espada 33 cm fora da mão."""
+    pose_antes = arm.data.pose_position
+    arm.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    try:
+        return _prender_na_mao(obj, arm, lado, escudo)
+    finally:
+        arm.data.pose_position = pose_antes
+        bpy.context.view_layer.update()
+
+
+def _prender_na_mao(obj, arm, lado="r", escudo=False):
     mw = arm.matrix_world
     mao = arm.data.bones[f"hand_{lado}"]
     meio = arm.data.bones.get(f"middle_01_{lado}")

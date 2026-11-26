@@ -433,6 +433,69 @@ def tarefa_limpar(t):
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
 
 
+def limpar_manchas_da_ia(m, res=1024):
+    """A IA de 3D só vê a frente no conceito e inventa as costas: no pano claro de trás (capa, sobreveste)
+    aparecem manchas escuras soltas, como queimado. Na metade de trás da malha, onde o pano em volta é
+    claro e sem cor, o que é bem mais escuro que a vizinhança vira a cor do pano em volta (com um pouco do
+    desenho original). A frente (cruz, emblema) não é tocada. Devolve quantos texels mudaram."""
+    import numpy as np
+
+    import fc_pele
+
+    img = None
+    for mat in m.data.materials:
+        if mat is None or not mat.use_nodes:
+            continue
+        bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        for l_ in mat.node_tree.links:
+            if l_.to_node == bsdf and l_.to_socket.name == "Base Color" and l_.from_node.type == "TEX_IMAGE":
+                img = l_.from_node.image
+                no = l_.from_node
+    if img is None or not m.data.uv_layers:
+        return 0
+    W, H = img.size
+    r = min(res, W)
+    px = fc_pele._pixels(img)  # de cima para baixo, 0..1 (como no arquivo)
+    pos, mask, _ = fc_pele.rasterizar(m, r)
+    mw = np.array(m.matrix_world, dtype=np.float32)
+    pw = pos @ mw[:3, :3].T + mw[:3, 3]
+    if not mask.any():
+        return 0
+    ys = pw[..., 1][mask]
+    alto = float(np.ptp(pw[..., 2][mask])) or 1.0
+    costas = mask & (pw[..., 1] > float(np.median(ys)) + 0.03 * alto)  # no Blender a frente é -Y
+    pq = fc_pele._redimensionar(px, r)
+    L = pq @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    if not costas.any():
+        return 0
+    claro = costas & (L > np.percentile(L[costas], 35))
+    raio = max(4, r // 48)
+    w = fc_pele.borrar(claro.astype(np.float32), raio)
+    ref = np.stack([fc_pele.borrar(pq[..., k] * claro, raio) for k in range(3)], -1) / np.maximum(w[..., None], 1e-4)
+    refL = ref @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    sat = ref.max(-1) - ref.min(-1)
+    mancha = costas & (w > 0.15) & (refL > 0.55) & (sat < 0.12) & (L < refL - 0.18)
+    mancha = fc_pele.borrar(mancha.astype(np.float32), 2) > 0.2
+    n = int(mancha.sum())
+    if n < 30:
+        return 0
+    grande = fc_pele._redimensionar(mancha.astype(np.float32)[..., None], W)[..., 0] > 0.35 if W != r else mancha
+    ref_g = fc_pele._redimensionar(ref, W) if W != r else ref
+    Lg = px @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    refLg = ref_g @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    # guarda a trama do pano (variação fina) e tira o escuro da mancha
+    detalhe = np.clip(Lg - fc_pele.borrar(Lg, 3), -0.08, 0.08)[..., None]
+    novo = px.copy()
+    novo[grande] = np.clip(ref_g[grande] * (1.0 + detalhe[grande] / np.maximum(refLg[grande][:, None], 0.2)), 0, 1)
+    rgba = np.ones((H, W, 4), dtype=np.float32)
+    rgba[..., :3] = novo
+    nova = bpy.data.images.new(f"{img.name}_limpa", W, H, alpha=True)
+    nova.pixels.foreach_set(np.ascontiguousarray(rgba[::-1]).ravel())
+    nova.pack()
+    no.image = nova
+    return n
+
+
 def corrigir_metal_da_ia(m, limite=0.85):
     """O 3D pela IA às vezes devolve o mapa de metal todo em 1 (o pelo da fera saía prata). Mede o metal
     nos pontos da textura que a malha usa; se quase tudo é metal, o mapa é descartado (material não
@@ -572,6 +635,12 @@ def tarefa_rig(t):
     metal = corrigir_metal_da_ia(m)
     if metal is not None:
         info["metal_da_ia"] = metal
+    try:
+        manchas = limpar_manchas_da_ia(m)
+        if manchas:
+            info["manchas_limpas_nas_costas"] = manchas
+    except Exception as e:  # sem a limpeza, a textura segue como veio
+        print(f"[rig] limpeza das manchas não rodou: {e}")
     if t.get("conceito"):
         cor = cor_pelo_conceito(m, t["conceito"])
         if cor:
@@ -981,7 +1050,7 @@ def _conferir_e_corrigir(t, objs, arm, acoes, corrigir=True):
     if corrigir and any(not r["aprovado"] for r in res):
         import fc_corrigir
 
-        quais = t.get("correcoes") or ("trancos", "dobradicas", "pes", "corpo_solido", "torcao", "chao")
+        quais = t.get("correcoes") or ("trancos", "dobradicas", "pes", "corpo_solido", "torcao", "chao", "pesos")
         antes = {r["nome"]: [p["explicacao"] for p in r["problemas"]] for r in res if not r["aprovado"]}
         # algumas correções criam problema novo (o cotovelo certo pede braço mais torcido): confere de
         # novo e corrige o que sobrou, até 3 rodadas
@@ -1180,6 +1249,134 @@ def tarefa_previa(t):
     return {"arquivos": {"previa": caminho}, "estatisticas": estatisticas(malhas)}
 
 
+def _acao_pedida(t, arm):
+    acoes = {a.name: a for a in bpy.data.actions}
+    nome = t.get("animacao")
+    if not nome:
+        nome = next((n for n in ("parado", "andar") if n in acoes), None) or (sorted(acoes)[0] if acoes else None)
+    if nome not in acoes:
+        raise ValueError(f"a animação {nome} não existe; o modelo tem: {', '.join(sorted(acoes)) or 'nenhuma'}")
+    return acoes[nome]
+
+
+def tarefa_ver_movimento(t):
+    """Folhas do movimento em quadros grandes para a IA (e a pessoa) verem: ângulos, rastro, esqueleto e de perto."""
+    import fc_conferir
+    import fc_estudio
+
+    objs, arm = _com_esqueleto(t)
+    acao = _acao_pedida(t, arm)
+    conf, res = fc_conferir.conferir(arm, [acao], t.get("altura_m"))
+    r = res[0]
+    vermelhos = {}
+    for p in r["problemas"]:
+        vermelhos.setdefault(p["quadro"], []).append(p["osso"])
+        vermelhos.setdefault("todos", []).append(p["osso"])
+    base = os.path.splitext(t.get("saida") or t["entrada"])[0] + f".ver_{acao.name}"
+    v = fc_estudio.ver(arm, acao, base, quadros=t.get("quadros") or 8, angulos=tuple(t.get("angulos") or ("tres_quartos", "lado")),
+                       estilo=t.get("estilo") or "material", rastro=t.get("rastro", True), ossos=t.get("esqueleto", True),
+                       zoom=t.get("de_perto", True), vermelhos_por_quadro=vermelhos, amostras=int(t.get("amostras", 14)))
+    v["conferencia"] = r
+    v["animacoes"] = sorted(a.name for a in bpy.data.actions)
+    v["arquivos"] = {"folhas": [f["arquivo"] for f in v["folhas"]]}
+    return v
+
+
+def tarefa_editar_movimento(t):
+    """Ajustes do estúdio (girar/mover ossos em quadros) aplicados na animação, conferidos de novo e gravados."""
+    import fc_estudio
+
+    objs, arm = _com_esqueleto(t)
+    acao = _acao_pedida(t, arm)
+    como = (t.get("salvar_como") or "").strip()
+    if como and como != acao.name:
+        velha = bpy.data.actions.get(como)
+        if velha is not None:
+            bpy.data.actions.remove(velha)
+        copia = acao.copy()
+        copia.name = como
+        copia.use_fake_user = True
+        acao = copia
+    feitos = fc_estudio.editar(arm, acao, t.get("edicoes") or [], int(t.get("suavizar", 6)))
+    conf, res, correcoes, antes = _conferir_e_corrigir(t, objs, arm, [acao], bool(t.get("corrigir")))
+    saida = t.get("saida") or t["entrada"]
+    if arm.animation_data:
+        arm.animation_data.action = acao
+    tamanho = c.exportar_glb(saida, objs)
+    return {
+        "arquivos": {"modelo": saida},
+        "tamanho_bytes": tamanho,
+        "animacao": acao.name,
+        "edicoes": feitos,
+        "conferencia": res[0],
+        "aprovado": res[0]["aprovado"],
+        "correcoes": correcoes or None,
+        "problemas_antes": antes,
+        "animacoes": sorted(a.name for a in bpy.data.actions if a.use_fake_user or a.users),
+    }
+
+
+MARCOS_DO_CORPO = ("pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+                   "thigh_l", "calf_l", "foot_l", "ball_l")
+
+
+def _marcos(arm, corpo):
+    """Onde fica cada parte do corpo (metros, x = esquerda do personagem, y = para trás, z = para cima),
+    para a IA pôr cintura, peito, joelho e barra no lugar certo."""
+    mw = arm.matrix_world
+    ossos = {}
+    for n in MARCOS_DO_CORPO:
+        b = arm.data.bones.get(n)
+        if b is not None:
+            h, t = mw @ b.head_local, mw @ b.tail_local
+            ossos[n] = {"cabeca": [round(x, 3) for x in h], "ponta": [round(x, 3) for x in t]}
+    return {"altura_m": round(corpo.H, 3), "chao_z": round(corpo.z0, 3), "topo_z": round(corpo.z1, 3), "ossos": ossos,
+            "dica": "Os ossos do lado direito (_r) são o espelho do esquerdo em x. A cintura é a cabeça do spine_01; o peito, a do spine_03; o joelho, a cabeça do calf; o tornozelo, a do foot."}
+
+
+def tarefa_roupa(t):
+    """Roupa ou armadura feita separada no corpo do manequim (casca, faixa, saia, adorno): grava só a
+    roupa (para vestir depois) e as imagens dela sozinha e no manequim de barro."""
+    import fc_casca
+    import fc_esqueleto
+
+    objs, arm = _com_esqueleto(t)
+    corpo_malhas = fc_esqueleto._malhas(arm, com_pesos=True)
+    if not corpo_malhas:
+        raise ValueError("o corpo não tem malha com pesos: use um personagem com esqueleto (create_character)")
+    partes, avisos, corpo = fc_casca.montar(arm, corpo_malhas, t["roupa"])
+    saida = t["saida"]
+    os.makedirs(os.path.dirname(saida), exist_ok=True)
+    tamanho = c.exportar_glb(saida, partes, animacoes=False)
+    base = os.path.splitext(saida)[0]
+    arquivos = {"modelo": saida}
+    if t.get("previa", True):
+        # sozinha (o que vai ser vestido) e no manequim de barro (assenta? cobre o que devia?)
+        corpo_objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in partes]
+        for o in corpo_objs:
+            o.hide_render = True
+        c.folha_de_modelo(base + ".ver_sozinha.png", partes, largura=420, altura=640, amostras=int(t.get("amostras", 16)))
+        chao = bpy.data.objects.get("chao_previa")
+        if chao is not None:
+            bpy.data.objects.remove(chao, do_unlink=True)  # a primeira folha pôs o chão embaixo da roupa, não dos pés
+        barro = c.material("fc_barro_manequim", (0.55, 0.53, 0.5), 0.75)
+        for o in corpo_objs:
+            o.hide_render = False
+            o.data.materials.clear()
+            o.data.materials.append(barro)
+        arm.data.pose_position = "REST"
+        bpy.context.view_layer.update()
+        c.folha_de_modelo(base + ".ver_no_corpo.png", corpo_objs + partes, largura=420, altura=640, amostras=int(t.get("amostras", 16)))
+        arquivos["sozinha"] = base + ".ver_sozinha.png"
+        arquivos["no_corpo"] = base + ".ver_no_corpo.png"
+    lista = []
+    for o in partes:
+        o.data.calc_loop_triangles()
+        lista.append({"nome": o.name, "triangulos": len(o.data.loop_triangles), "material": o.data.materials[0].name if o.data.materials else None})
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "partes": lista, "triangulos": sum(x["triangulos"] for x in lista),
+            "avisos": avisos, "corpo": _marcos(arm, corpo)}
+
+
 TAREFAS = {
     "personagem": tarefa_personagem,
     "arma": tarefa_arma,
@@ -1203,6 +1400,9 @@ TAREFAS = {
     "esqueleto_ver": tarefa_esqueleto_ver,
     "esqueleto_editar": tarefa_esqueleto_editar,
     "vestir": tarefa_vestir,
+    "ver_movimento": tarefa_ver_movimento,
+    "editar_movimento": tarefa_editar_movimento,
+    "roupa": tarefa_roupa,
 }
 
 

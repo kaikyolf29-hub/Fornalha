@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! Núcleo da Fornalha.
 //!
 //! Tudo o que não é janela nem bandeja mora aqui, para poder ser testado sem

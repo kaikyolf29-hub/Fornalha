@@ -21,6 +21,14 @@ ESCALA = 0.1  # o MakeHuman trabalha em decímetros
 # ------------------------------------------------------------------ arquivos
 
 
+
+def _grisalho(estilo, pela_idade):
+    """Fração de fios brancos: a que a IA pediu (0 a 1) ou a da idade."""
+    try:
+        return float(np.clip(float((estilo or {})["grisalho"]), 0.0, 1.0))
+    except (KeyError, TypeError, ValueError):
+        return pela_idade
+
 def ler_obj(caminho):
     """OBJ do MakeHuman: vértices, UVs, faces (índices 0-based) e grupos."""
     v, vt, faces, grupos = [], [], [], {}
@@ -692,7 +700,8 @@ def criar_humano(dados, assets, ficha):
             pecas.extend(fc_cabelo.cards_guiados(nome, guia, ficha.get("cor_cabelo") or "#3b2a1e", arm,
                                                  n_cards=900 if res_pele >= 4096 else (700 if res_pele >= 2048 else 500),
                                                  estilo=ficha.get("cabelo_estilo"), penteado=ficha.get("cabelo") or "",
-                                                 grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
+                                                 grisalho=_grisalho(ficha.get("cabelo_estilo"), float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))),
+                                                 corpo=corpo))
     if not guiado and not cards:
         # só o cabelo do pacote (níveis leves): preso à cabeça e ao pescoço (o pacote prende na mandíbula e
         # o cabelo abria com a fala), na cor pedida e denso (sem couro aparecendo), borda suave
@@ -717,7 +726,7 @@ def criar_humano(dados, assets, ficha):
         pts = fc_pele.pontos_do_rosto(corpo, olhos_, dentes_)
         idade_b = float(ficha.get("macro", {}).get("idade", 0.5))
         pecas.extend(fc_cabelo.barba_em_cards(nome, corpo, pts, peso_cab, ficha.get("cor_barba") or ficha.get("cor_cabelo") or "#3b2a1e",
-                                              arm, tipo=ficha["barba"], grisalho=0.75 * float(np.clip((idade_b - 0.62) / 0.3, 0.0, 0.8)),
+                                              arm, tipo=ficha["barba"], grisalho=_grisalho(ficha.get("barba_estilo"), 0.75 * float(np.clip((idade_b - 0.62) / 0.3, 0.0, 0.8))),
                                               estilo=ficha.get("barba_estilo")))
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":

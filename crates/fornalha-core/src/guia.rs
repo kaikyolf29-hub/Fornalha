@@ -59,8 +59,13 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    paleta, áreas do mundo). Referência em estilo anime/cel: `guia_visual.render = "anime"` (no jogo, luz
    em faixas e contorno); fotorrealista: `"realista"` (padrão).
 2. **Personagem**: `create_character` (com `imagem` para usar um conceito pronto; `corpo` para criaturas).
-   Controles finos do humano: `cabelo` (penteado, cor, volume, agrupamento, ondulação, frizz, direção),
-   `barba`, `idade`, `genero`, `corpo_humano`, `rosto` (alvos do MakeHuman), `cor_olhos`, `sobrancelha`.
+   Controles finos do humano: `cabelo` (penteado, cor, volume, agrupamento, ondulação, frizz, rente,
+   grisalho, direção), `barba` (tipo, cor, comprimento, densidade, grisalho), `idade`, `genero`,
+   `corpo_humano`, `rosto` (alvos do MakeHuman, inclusive expressão), `pele` (sardas, manchas, poros,
+   rugas, bronzeado), `cor_olhos`, `sobrancelha`, `roupa` (estilo e cores).
+   Malha pronta (TRELLIS.2, API, artista, armadura inteira): `create_skeleton` com `arma` — o manequim
+   entra como molde e ela ganha o esqueleto de jogo, a captura de movimento conferida e a arma na mão.
+   Golpes: com o pacote ACCAD, captura real (corte, estocada, aparar) para espada, machado, martelo e adaga.
    **Com referência** (personagem, arma, casa, mapa): passe `referencia` ou use `compare_reference`, olhe o
    lado a lado e as medidas (paleta, diferença de cor, silhueta), ajuste e gere de novo até chegar o mais perto
    possível. Fique sempre com o melhor resultado; não entregue o que está visivelmente pior que a referência.

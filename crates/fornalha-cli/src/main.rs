@@ -196,6 +196,12 @@ async fn principal() {
             // 3D pela IA: o criador aceitou a licença do DINOv3 para os testes; na janela, pelo aceite
             c.tres_d = args.iter().any(|a| a == "--3d");
             match args.get(1).map(String::as_str) {
+                Some("instalar") if c.tres_d && c.backend == "vulkan" => {
+                    // RX 580 e outras sem CUDA/ROCm: o 3D vai para um ComfyUI no processador, à parte do Vulkan
+                    let c3 = comfyui::caminho_3d_no_processador(&c);
+                    eprintln!("Instalando o 3D pela IA no processador (à parte do motor Vulkan): {}", c3.motivo);
+                    imprimir(comfyui::instalar_3d_no_processador_e_esperar(&paths, &c, f.porta_comfyui()).await)
+                }
                 Some("instalar") => {
                     eprintln!("Instalando o ComfyUI: {} ({}), modelos {}", c.backend, c.motivo, c.modelos);
                     imprimir(comfyui::instalar_e_esperar(&paths, &c, f.porta_comfyui()).await)

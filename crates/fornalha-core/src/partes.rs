@@ -224,7 +224,7 @@ pub async fn cabeca_no_comfyui(
     .await?;
     let arq = pasta.join("cabeca_refinada.png");
     std::fs::write(&arq, &refinada).map_err(|e| Erro::io(&arq, e))?;
-    let (glb, info_3d) = crate::comfyui::gerar_3d(porta, refinada, "fornalha_cabeca.png", semente, segundos_3d).await?;
+    let (glb, info_3d) = crate::comfyui::gerar_3d(porta, refinada, "fornalha_cabeca.png", semente, segundos_3d, false).await?;
     let malha = pasta.join("cabeca_trellis2.glb");
     std::fs::write(&malha, &glb).map_err(|e| Erro::io(&malha, e))?;
     let mut v = para_o_blender(&r, &malha);

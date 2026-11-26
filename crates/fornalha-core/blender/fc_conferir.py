@@ -51,11 +51,17 @@ TRONCO = ("pelvis", "spine_01", "spine_02", "spine_03", "Hips", "Spine", "Chest"
 BRACO = ("upperarm_", "lowerarm_", "UpperArm", "LowerArm")
 PERNA_PARES = (("thigh_l", "thigh_r"), ("calf_l", "calf_r"), ("LeftUpperLeg", "RightUpperLeg"), ("LeftLowerLeg", "RightLowerLeg"))
 PES = re.compile(r"^(foot_[lr]|(Left|Right)Foot|.*_pe|pata_\d+_pe|pe_.*)$")
+MAOS = re.compile(r"^(hand_[lr]|(mixamorig:)?(Left|Right)Hand)$")
+PES_HUMANOS = re.compile(r"^(foot_[lr]|(mixamorig:)?(Left|Right)Foot)$")
+# régua visual: o que a pessoa vê de longe e os ossos sozinhos não contam
+MALHA_SOLTA_CM = 2.5  # a mão/o pé da malha se afasta do próprio osso (peso errado: manopla no antebraço)
+ARMA_FORA_CM = 3.0  # a pegada da arma fora do volume da mão da malha
 
 
 def regras():
     return {"tronco_torcao_graus": TRONCO_TORCAO_MAX, "tronco_dobra_graus": TRONCO_DOBRA_MAX, "torcao_graus": TORCAO, "ao_contrario_graus": AO_CONTRARIO_MAX, "de_lado_graus": DE_LADO_MAX, "salto_graus_por_quadro": SALTO_MAX,
-            "atravessa_cm": ATRAVESSA_MAX_CM, "escorrega_cm": ESCORREGA_MAX_CM, "abaixo_do_chao_cm": CHAO_MAX_CM, "flutua_cm": FLUTUA_MIN_CM}
+            "atravessa_cm": ATRAVESSA_MAX_CM, "escorrega_cm": ESCORREGA_MAX_CM, "abaixo_do_chao_cm": CHAO_MAX_CM, "flutua_cm": FLUTUA_MIN_CM,
+            "malha_solta_cm": MALHA_SOLTA_CM, "arma_fora_da_mao_cm": ARMA_FORA_CM}
 
 
 # ------------------------------------------------------------------ geometria
@@ -110,6 +116,35 @@ def _co_avaliado(obj):
     co = co.reshape(-1, 3)
     mw = np.array(obj.matrix_world, dtype=np.float32)
     return co @ mw[:3, :3].T + mw[:3, 3]
+
+
+_PANO_SOLTO = {}
+
+
+def _mascara_do_chao(obj):
+    """Vértices que contam para "o corpo entrou no chão": tira o pano solto (barra da saia, sobreveste e
+    capa da malha da IA, que têm ossos próprios e são assados depois sobre as pernas já corrigidas). Sem
+    isso a barra que passa do chão subia o quadril quadro a quadro e desfazia o pé travado."""
+    if obj.name in _PANO_SOLTO:
+        return _PANO_SOLTO[obj.name]
+    pano = {g.index for g in obj.vertex_groups if g.name == "saia" or g.name.startswith(("capa", "saia_"))}
+    mask = None
+    if pano:
+        n = len(obj.data.vertices)
+        w = np.zeros(n, dtype=np.float32)
+        for v in obj.data.vertices:
+            w[v.index] = sum(ge.weight for ge in v.groups if ge.group in pano)
+        mask = w < 0.3
+        if mask.all() or not mask.any():
+            mask = None
+    _PANO_SOLTO[obj.name] = mask
+    return mask
+
+
+def _co_do_chao(obj):
+    co = _co_avaliado(obj)
+    m = _mascara_do_chao(obj)
+    return co if m is None or len(m) != len(co) else co[m]
 
 
 def _raios(arm, malhas, nomes, H):
@@ -261,6 +296,107 @@ class Conferencia:
             # eixo da coluna no descanso (do quadril ao peito)
             self.tronco_eixo = (mw3 @ (bc.head_local - bp.head_local)).normalized()
         self._descanso()
+        self._pontas_da_malha()
+
+    def _pontas_da_malha(self):
+        """Mãos e pés da malha, escolhidos pelo lugar (não pelo peso): os vértices depois do pulso/tornozelo
+        perto do osso, sem os dedos (que dobram de verdade) e sem o pano solto. No descanso eles estão
+        presos ao osso; numa pose, se o peso estiver errado (manopla no antebraço), eles ficam para trás e a
+        régua vê a mão "solta". Também acha as armas presas na mão (a pegada tem de ficar dentro dela)."""
+        arm = self.arm
+        mw = arm.matrix_world
+        self.pontas = []  # (osso, objeto, índices, coordenadas no espaço do osso no descanso, sem os dedos)
+        nomes = [b.name for b in arm.data.bones if MAOS.match(b.name) or PES_HUMANOS.match(b.name)]
+        if not nomes:
+            self.armas = []
+            return
+        for obj in self.malhas:
+            n = len(obj.data.vertices)
+            if n == 0 or n >= 400000:
+                continue
+            co = np.empty(n * 3, dtype=np.float32)
+            obj.data.vertices.foreach_get("co", co)
+            co = co.reshape(-1, 3)
+            M = np.array(mw.inverted() @ obj.matrix_world, dtype=np.float64)
+            arm_co = co @ M[:3, :3].T + M[:3, 3]
+            pano = _mascara_do_chao(obj)
+            idx_grupo = {g.name: g.index for g in obj.vertex_groups}
+            for nome in nomes:
+                b = arm.data.bones[nome]
+                h, t = np.array(b.head_local), np.array(b.tail_local)
+                L = float(np.linalg.norm(t - h))
+                if L < 1e-4:
+                    continue
+                u = (t - h) / L
+                d = arm_co - h
+                s_ = d @ u
+                r = np.linalg.norm(d - np.outer(s_, u), axis=1)
+                mao = bool(MAOS.match(nome))
+                ini = 0.25 * L
+                fim = L + (0.03 if mao else 0.0)
+                raio = (0.05 if mao else 0.065) * self.H
+                cand = np.nonzero((s_ > ini) & (s_ < fim) & (r < raio))[0]
+                if pano is not None and len(pano) == n:
+                    cand = cand[pano[cand]]
+                if len(cand) < 12:
+                    continue
+                # só o que é do braço/da perna pelo peso (mão, dedos, antebraço): perto da mão em repouso
+                # também passa a coxa e a túnica, que não seguem a mão. Os dedos saem (dobram de verdade).
+                filhos = {c.name for c in b.children_recursive}
+                gf = {idx_grupo[c] for c in filhos if c in idx_grupo}
+                membro = {nome} | filhos | ({b.parent.name} if b.parent else set())
+                gm = {idx_grupo[c] for c in membro if c in idx_grupo}
+                ficam, firme = [], []
+                for i in cand:
+                    gs = obj.data.vertices[int(i)].groups
+                    if sum(ge.weight for ge in gs if ge.group in gm) >= 0.5:
+                        ficam.append(int(i))
+                        firme.append(sum(ge.weight for ge in gs if ge.group in gf) < 0.5)
+                cand, firme = np.array(ficam, dtype=np.int64), np.array(firme, dtype=bool)
+                if firme.sum() < 12:
+                    continue
+                if len(cand) > 3000:
+                    k = np.linspace(0, len(cand) - 1, 3000).astype(np.int64)
+                    cand, firme = cand[k], firme[k]
+                inv = np.array(b.matrix_local.inverted(), dtype=np.float64)
+                loc = arm_co[cand] @ inv[:3, :3].T + inv[:3, 3]
+                self.pontas.append((nome, obj, cand, loc, firme))
+        # armas presas num osso da mão (a origem é a pegada: veja fc_armas_pbr.prender_na_mao)
+        self.armas = [o for o in bpy.context.scene.objects
+                      if o.type == "MESH" and o.parent == arm and o.parent_type == "BONE" and MAOS.match(o.parent_bone or "")
+                      and not any(m.type == "ARMATURE" for m in o.modifiers)]
+
+    def _regua_visual(self, q, co_de, pior):
+        """Num quadro já avaliado: quanto a mão/o pé da malha fugiu do osso e a pegada da arma da mão."""
+        mw = self.arm.matrix_world
+        reais = {}
+        for nome, obj, idx, loc, firme in self.pontas:
+            co = co_de.get(obj.name)
+            if co is None or len(co) <= int(idx.max()):
+                continue
+            pb = self.arm.pose.bones[nome]
+            Mq = np.array(mw @ pb.matrix, dtype=np.float64)
+            esperado = loc[firme] @ Mq[:3, :3].T + Mq[:3, 3]
+            real = co[idx].astype(np.float64)
+            desvio = float(np.percentile(np.linalg.norm(real[firme] - esperado, axis=1), 90)) * 100
+            if desvio > pior["solta"].get(nome, (0.0, None))[0]:
+                pior["solta"][nome] = (desvio, q)
+            reais.setdefault(nome, []).append(real)
+        for arma in self.armas:
+            mao = reais.get(arma.parent_bone)
+            if not mao:
+                continue
+            # a pegada tem de cair dentro do volume da mão da malha (dedos e manopla juntos), medido no
+            # espaço do osso da mão: assim uma manopla grossa não reprova e a espada solta reprova
+            pb = self.arm.pose.bones[arma.parent_bone]
+            inv = np.array((mw @ pb.matrix).inverted(), dtype=np.float64)
+            pts = np.concatenate(mao) @ inv[:3, :3].T + inv[:3, 3]
+            g = np.array(arma.matrix_world.translation, dtype=np.float64) @ inv[:3, :3].T + inv[:3, 3]
+            lo, hi = np.percentile(pts, 2, axis=0) - 0.01, np.percentile(pts, 98, axis=0) + 0.01
+            d = float(np.linalg.norm(np.maximum(lo - g, 0) + np.maximum(g - hi, 0))) * 100
+            chave = f"{arma.name} na {arma.parent_bone}"
+            if d > pior["arma"].get(chave, (0.0, None, arma.parent_bone))[0]:
+                pior["arma"][chave] = (d, q, arma.parent_bone)
 
     def _segmento(self, n, h, t):
         """O braço só conta da metade para a ponta contra o tronco: a junta do ombro fica dentro dele."""
@@ -406,19 +542,30 @@ class Conferencia:
                 m.show_viewport = e
         # chão: a malha de verdade em algumas amostras
         passo = max(malha_a_cada, int(math.ceil(len(quadros) / max_amostras_malha)))
+        regua = {"solta": {}, "arma": {}}
+        com_pontas = {p[1].name for p in self.pontas}
         for q in quadros[::passo]:
             cena.frame_set(q)
             z = []
+            co_de = {}
             for o in self.malhas:
                 co = _co_avaliado(o)
+                if o.name in com_pontas:
+                    co_de[o.name] = co
+                m = _mascara_do_chao(o)
+                if m is not None and len(m) == len(co):
+                    co = co[m]
                 if len(co):
                     z.append(float(co[:, 2].min()))
+            if self.pontas:
+                self._regua_visual(q, co_de, regua)
             if not z:
                 z = [min(float(min(h[2], t[2])) for h, t in (self._mundo(n)[:2] for n in self.ossos))]
             min_z.append((min(z), q))
         escorrega = self._escorrega(pes, quadros, laco)
         salto = self._trancos(salto)
         self._ultimo_tronco = tronco
+        self._ultima_regua = regua
         return self._julgar(nome, quadros, laco, sem_chao, torcao, contrario, de_lado, salto, atravessa, escorrega, min_z)
 
     def _trancos(self, seqs):
@@ -503,6 +650,14 @@ class Conferencia:
             v, q = tronco["dobra"]
             if v > TRONCO_DOBRA_MAX:
                 add("tronco", self.tronco[1], v, TRONCO_DOBRA_MAX, q, "graus", f"tronco dobrado {v:.0f}° em relação ao quadril (máximo {TRONCO_DOBRA_MAX:.0f}°)")
+        regua = getattr(self, "_ultima_regua", None) or {"solta": {}, "arma": {}}
+        for n, (v, q) in regua["solta"].items():
+            if v > MALHA_SOLTA_CM:
+                parte = "mão" if MAOS.match(n) else "pé"
+                add("malha_solta", n, v, MALHA_SOLTA_CM, q, "cm", f"a {parte} da malha sai {v:.1f} cm do osso {n} (peso errado: ela fica para trás quando o osso gira)")
+        for chave, (v, q, osso) in regua["arma"].items():
+            if v > ARMA_FORA_CM:
+                add("arma_fora_da_mao", osso, v, ARMA_FORA_CM, q, "cm", f"a pegada da arma ({chave}) fica {v:.0f} cm fora da mão da malha")
         prob.sort(key=lambda x: -x["valor"] / max(x["limite"], 1e-6))
         medidas = {
             "torcao_max_graus": {n: round(v, 1) for n, (v, _) in sorted(torcao.items(), key=lambda kv: -kv[1][0])[:6]},
@@ -516,6 +671,10 @@ class Conferencia:
         if tronco and self.tronco:
             medidas["tronco_torcao_max_graus"] = round(tronco["torcao"][0], 1)
             medidas["tronco_dobra_max_graus"] = round(tronco["dobra"][0], 1)
+        if regua["solta"]:
+            medidas["mao_pe_solto_cm"] = {n: round(v, 1) for n, (v, _) in regua["solta"].items()}
+        if regua["arma"]:
+            medidas["arma_longe_da_mao_cm"] = {k: round(v, 1) for k, (v, _, _) in regua["arma"].items()}
         medidas["locomocao_no_lugar"] = bool(getattr(self, "ultima_locomocao", False))
         medidas["velocidade_da_passada_m_s"] = getattr(self, "velocidade_do_chao", 0.0)
         return {"nome": nome, "quadros": len(quadros), "laco": laco, "aprovado": not prob, "problemas": prob[:12], "medidas": medidas}

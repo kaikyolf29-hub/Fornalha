@@ -277,7 +277,7 @@ impl Pendencias {
 
 /// Imagens e vídeos de conferência das bancadas (movimento, esqueleto, roupa): servem para a IA e a
 /// pessoa olharem, não vão para o jogo e não precisam de recibo.
-pub const MARCAS_DE_CONFERENCIA: [&str; 4] = [".movimento.", ".conferencia.", ".esqueleto.", ".vestido."];
+pub const MARCAS_DE_CONFERENCIA: [&str; 5] = [".movimento.", ".conferencia.", ".esqueleto.", ".vestido.", ".ver_"];
 
 fn eh_asset(p: &Path) -> bool {
     let nome = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -490,9 +490,13 @@ mod testes_conferencia {
 
     #[test]
     fn imagens_das_bancadas_nao_sao_asset() {
-        for n in
-            ["Characters/a/a.movimento.mp4", "Characters/a/a.conferencia.png", "Characters/a/a.esqueleto.png", "Characters/a/a.vestido.png"]
-        {
+        for n in [
+            "Characters/a/a.movimento.mp4",
+            "Characters/a/a.conferencia.png",
+            "Characters/a/a.esqueleto.png",
+            "Characters/a/a.vestido.png",
+            "Characters/a/a.ver_soco.lado.png",
+        ] {
             assert!(!eh_asset(Path::new(n)), "{n}");
         }
         assert!(eh_asset(Path::new("Characters/a/a.glb")));

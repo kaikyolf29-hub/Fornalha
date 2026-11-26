@@ -426,13 +426,57 @@ pub fn pasta(paths: &crate::paths::Paths) -> std::path::PathBuf {
 
 /// O que o instalador gravou (`instalacao.json`): como abrir o ComfyUI.
 pub fn instalacao(paths: &crate::paths::Paths) -> Option<Value> {
-    let arq = pasta(paths).join("instalacao.json");
-    serde_json::from_str(&std::fs::read_to_string(arq).ok()?).ok()
+    instalacao_em(&pasta(paths))
+}
+
+fn instalacao_em(p: &std::path::Path) -> Option<Value> {
+    serde_json::from_str(&std::fs::read_to_string(p.join("instalacao.json")).ok()?).ok()
+}
+
+/// ComfyUI só para o 3D pela IA no processador, ao lado do motor de imagem pelo Vulkan (placas sem CUDA
+/// nem ROCm, como a RX 580): a imagem continua rápida na placa e o TRELLIS.2 roda no processador (horas
+/// por modelo; bom para a fila da noite). Pasta e porta próprias, para um não apagar o outro.
+pub fn pasta_3d(paths: &crate::paths::Paths) -> std::path::PathBuf {
+    paths.data_dir.join("comfyui-3d")
+}
+
+pub fn instalacao_3d(paths: &crate::paths::Paths) -> Option<Value> {
+    instalacao_em(&pasta_3d(paths))
+}
+
+/// Porta do ComfyUI do 3D no processador: a do motor principal + 1.
+pub fn porta_3d(porta: u16) -> u16 {
+    porta.saturating_add(1)
+}
+
+/// Caminho do 3D pela IA quando o motor de imagem desta máquina é o Vulkan: ComfyUI no processador, só
+/// com os modelos do 3D (o de imagem já está no Vulkan).
+pub fn caminho_3d_no_processador(principal: &Caminho) -> Caminho {
+    Caminho {
+        backend: "cpu",
+        hsa: None,
+        modelos: "nenhum",
+        pouca_vram: false,
+        motivo: format!(
+            "{} — o 3D pela IA roda no processador, numa instalação à parte (horas por modelo: use a fila da noite)",
+            principal.motivo
+        ),
+        tres_d: true,
+    }
 }
 
 /// Situação da instalação, para a janela e o get_status.
 pub fn estado_instalacao(paths: &crate::paths::Paths) -> Value {
-    let p = pasta(paths);
+    estado_em(&pasta(paths))
+}
+
+/// Situação do ComfyUI do 3D no processador (só existe nas máquinas do motor Vulkan).
+pub fn estado_instalacao_3d(paths: &crate::paths::Paths) -> Value {
+    estado_em(&pasta_3d(paths))
+}
+
+fn estado_em(p: &std::path::Path) -> Value {
+    let p = p.to_path_buf();
     let log: Vec<String> = std::fs::read_to_string(p.join("instalacao.log"))
         .unwrap_or_default()
         .lines()
@@ -444,14 +488,15 @@ pub fn estado_instalacao(paths: &crate::paths::Paths) -> Value {
         .take(6)
         .rev()
         .collect();
-    json!({"instalado": instalacao(paths).is_some(), "instalando": p.join("instalando").is_file(), "pasta": p, "log": log,
-           "instalacao": instalacao(paths)})
+    json!({"instalado": instalacao_em(&p).is_some(), "instalando": p.join("instalando").is_file(), "pasta": p, "log": log,
+           "instalacao": instalacao_em(&p)})
 }
 
 async fn comando_de_instalacao(
     paths: &crate::paths::Paths,
     c: &Caminho,
     porta: u16,
+    destino: std::path::PathBuf,
 ) -> Resultado<(tokio::process::Command, std::path::PathBuf)> {
     // o motor Vulkan só baixa arquivos: serve o Python que vem dentro do Blender; o ComfyUI cria um
     // ambiente próprio e precisa do Python do sistema
@@ -467,7 +512,6 @@ async fn comando_de_instalacao(
         )
     })?;
     let scripts = crate::workers::preparar_scripts(&paths.data_dir)?;
-    let destino = pasta(paths);
     std::fs::create_dir_all(&destino).map_err(|e| Erro::io(&destino, e))?;
     let mut cmd = tokio::process::Command::new(&python);
     cmd.arg(scripts.join("instalar_comfyui.py")).arg(&destino).arg(c.backend).args(["--modelos", c.modelos, "--porta", &porta.to_string()]);
@@ -485,7 +529,7 @@ async fn comando_de_instalacao(
 
 /// Instala aqui mesmo, mostrando o progresso no terminal (linha de comando).
 pub async fn instalar_e_esperar(paths: &crate::paths::Paths, c: &Caminho, porta: u16) -> Resultado<Value> {
-    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta).await?;
+    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta, pasta(paths)).await?;
     let ok = cmd.status().await.map(|s| s.success()).unwrap_or(false);
     if !ok {
         return Err(Erro::novo(
@@ -498,7 +542,28 @@ pub async fn instalar_e_esperar(paths: &crate::paths::Paths, c: &Caminho, porta:
 
 /// Começa a instalação em segundo plano (vários GB). O progresso fica em `<pasta>/instalacao.log`.
 pub async fn instalar(paths: &crate::paths::Paths, c: &Caminho, porta: u16) -> Resultado<Value> {
-    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta).await?;
+    instalar_em(paths, c, porta, pasta(paths)).await
+}
+
+/// O mesmo que `instalar_3d_no_processador`, esperando aqui (linha de comando).
+pub async fn instalar_3d_no_processador_e_esperar(paths: &crate::paths::Paths, principal: &Caminho, porta: u16) -> Resultado<Value> {
+    let (mut cmd, destino) = comando_de_instalacao(paths, &caminho_3d_no_processador(principal), porta_3d(porta), pasta_3d(paths)).await?;
+    if !cmd.status().await.map(|s| s.success()).unwrap_or(false) {
+        return Err(Erro::novo(
+            "instalacao_falhou",
+            format!("A instalação do 3D no processador falhou: veja {}", destino.join("instalacao.log").display()),
+        ));
+    }
+    Ok(estado_instalacao_3d(paths))
+}
+
+/// Instala o ComfyUI do 3D no processador ao lado do motor Vulkan (pasta e porta próprias).
+pub async fn instalar_3d_no_processador(paths: &crate::paths::Paths, principal: &Caminho, porta: u16) -> Resultado<Value> {
+    instalar_em(paths, &caminho_3d_no_processador(principal), porta_3d(porta), pasta_3d(paths)).await
+}
+
+async fn instalar_em(paths: &crate::paths::Paths, c: &Caminho, porta: u16, pasta_destino: std::path::PathBuf) -> Resultado<Value> {
+    let (mut cmd, destino) = comando_de_instalacao(paths, c, porta, pasta_destino).await?;
     cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
@@ -516,12 +581,21 @@ pub async fn instalar(paths: &crate::paths::Paths, c: &Caminho, porta: u16) -> R
 
 /// Abre o ComfyUI instalado pela Fornalha (se ainda não estiver aberto) e espera ele responder.
 pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoComfy> {
+    abrir_em(&pasta(paths), porta).await
+}
+
+/// Abre o ComfyUI do 3D no processador (na porta dele) e espera responder.
+pub async fn abrir_3d(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoComfy> {
+    abrir_em(&pasta_3d(paths), porta_3d(porta)).await
+}
+
+async fn abrir_em(pasta_comfy: &std::path::Path, porta: u16) -> Resultado<EstadoComfy> {
     let e = consultar(porta).await;
     if e.conectado {
         return Ok(e);
     }
-    let inst =
-        instalacao(paths).ok_or_else(|| Erro::novo("comfyui_ausente", "O ComfyUI não está instalado (Máquina → ComfyUI → Instalar)."))?;
+    let inst = instalacao_em(pasta_comfy)
+        .ok_or_else(|| Erro::novo("comfyui_ausente", "O ComfyUI não está instalado (Máquina → ComfyUI → Instalar)."))?;
     if inst["motor"] == "sdcpp" {
         return Err(Erro::novo(
             "motor_vulkan",
@@ -536,12 +610,12 @@ pub async fn abrir(paths: &crate::paths::Paths, porta: u16) -> Resultado<EstadoC
             *v = porta.to_string();
         }
     }
-    let log = std::fs::File::create(pasta(paths).join("comfyui.log")).map_err(|e| Erro::io(&pasta(paths), e))?;
+    let log = std::fs::File::create(pasta_comfy.join("comfyui.log")).map_err(|e| Erro::io(pasta_comfy, e))?;
     let mut cmd = tokio::process::Command::new(python);
     cmd.args(&args)
         .current_dir(dir)
         .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone().map_err(|e| Erro::io(&pasta(paths), e))?)
+        .stdout(log.try_clone().map_err(|e| Erro::io(pasta_comfy, e))?)
         .stderr(log);
     for (k, v) in inst["ambiente"].as_object().into_iter().flatten() {
         if let Some(v) = v.as_str() {
@@ -620,7 +694,9 @@ pub fn trocar_valor(api: &mut Value, tipo: &str, de: &Value, para: Value) -> usi
 
 /// O fluxo do TRELLIS.2 pronto para a API: ramo do TRELLIS.2 (não o Pixal3D), nossa imagem, nossos
 /// arquivos e, no processador, tamanhos menores (horas em vez de dias).
-pub fn fluxo_trellis2(object_info: &Value, imagem: &str, processador: bool, semente: u64) -> Resultado<Value> {
+/// `reduzido`: no processador, tamanhos menores (2 a 4 h em vez de uma noite inteira). No nível Máximo a
+/// Fornalha manda o fluxo inteiro mesmo no processador: a pessoa escolheu esperar pela qualidade.
+pub fn fluxo_trellis2(object_info: &Value, imagem: &str, reduzido: bool, semente: u64) -> Resultado<Value> {
     let ui: Value =
         serde_json::from_str(FLUXO_TRELLIS2).map_err(|e| Erro::novo("comfyui_fluxo", format!("Fluxo 3D embutido inválido: {e}")))?;
     let mut api = crate::comfyui_ui::para_api(&ui, object_info)?;
@@ -642,7 +718,7 @@ pub fn fluxo_trellis2(object_info: &Value, imagem: &str, processador: bool, seme
             no["inputs"]["seed"] = json!(semente);
         }
     }
-    if processador {
+    if reduzido {
         trocar_valor(&mut api, "Trellis2UpsampleStage", &json!(1536), json!(1024));
         trocar_valor(&mut api, "PrimitiveInt", &json!(4096), json!(2048));
         trocar_valor(&mut api, "DecimateMesh", &json!(700000), json!(200000));
@@ -652,7 +728,7 @@ pub fn fluxo_trellis2(object_info: &Value, imagem: &str, processador: bool, seme
 }
 
 /// Imagem → malha texturizada (.glb) pelo TRELLIS.2 no ComfyUI aberto. No processador pode levar horas.
-pub async fn gerar_3d(porta: u16, png: Vec<u8>, nome: &str, semente: u64, segundos: u64) -> Resultado<(Vec<u8>, Value)> {
+pub async fn gerar_3d(porta: u16, png: Vec<u8>, nome: &str, semente: u64, segundos: u64, completo: bool) -> Resultado<(Vec<u8>, Value)> {
     let e = consultar(porta).await;
     if !e.conectado {
         return Err(Erro::novo("comfyui_fora", "O ComfyUI não está aberto."));
@@ -667,7 +743,7 @@ pub async fn gerar_3d(porta: u16, png: Vec<u8>, nome: &str, semente: u64, segund
         .await
         .map_err(|e| Erro::novo("comfyui_recusou", format!("Lista de nós do ComfyUI ilegível: {e}")))?;
     let imagem = enviar_imagem(porta, nome, png).await?;
-    let fluxo = fluxo_trellis2(&info, &imagem, processador, semente)?;
+    let fluxo = fluxo_trellis2(&info, &imagem, processador && !completo, semente)?;
     let inicio = Instant::now();
     let saidas = executar(porta, &fluxo, segundos).await?;
     let glb = saidas.iter().find(|s| s.nome.to_lowercase().ends_with(".glb")).ok_or_else(|| {
@@ -678,7 +754,7 @@ pub async fn gerar_3d(porta: u16, png: Vec<u8>, nome: &str, semente: u64, segund
     })?;
     Ok((
         glb.bytes.clone(),
-        json!({"modelo": "trellis2-comfyui", "segundos": inicio.elapsed().as_secs_f64(), "processador": processador, "nos": fluxo.as_object().map(|m| m.len()),
+        json!({"modelo": "trellis2-comfyui", "segundos": inicio.elapsed().as_secs_f64(), "processador": processador, "tamanho_completo": !processador || completo, "nos": fluxo.as_object().map(|m| m.len()),
                "dispositivos": e.dispositivos}),
     ))
 }
@@ -848,6 +924,31 @@ mod testes {
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
+    }
+
+    /// RX 580 (motor de imagem pelo Vulkan): o 3D pela IA vai para um ComfyUI no processador em pasta e
+    /// porta próprias, sem apagar o motor Vulkan (antes os dois disputavam a mesma instalacao.json).
+    #[test]
+    fn tres_d_no_processador_fica_ao_lado_do_vulkan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = crate::paths::Paths::under(tmp.path());
+        let vulkan =
+            Caminho { backend: "vulkan", hsa: None, modelos: "gguf", pouca_vram: true, motivo: "AMD Radeon RX 580".into(), tres_d: false };
+        let c = caminho_3d_no_processador(&vulkan);
+        assert_eq!((c.backend, c.modelos, c.tres_d, c.pouca_vram), ("cpu", "nenhum", true, false));
+        assert!(c.motivo.contains("RX 580") && c.motivo.contains("processador"));
+        assert_ne!(pasta(&paths), pasta_3d(&paths));
+        assert_eq!(porta_3d(PORTA_PADRAO), PORTA_PADRAO + 1);
+        // as duas instalações convivem e cada uma lê a sua
+        std::fs::create_dir_all(pasta(&paths)).unwrap();
+        std::fs::create_dir_all(pasta_3d(&paths)).unwrap();
+        std::fs::write(pasta(&paths).join("instalacao.json"), r#"{"motor":"sdcpp"}"#).unwrap();
+        std::fs::write(pasta_3d(&paths).join("instalacao.json"), r#"{"motor":"comfyui","modelos":["trellis_2_int8_convrot.safetensors"]}"#)
+            .unwrap();
+        assert_eq!(instalacao(&paths).unwrap()["motor"], "sdcpp");
+        assert_eq!(instalacao_3d(&paths).unwrap()["motor"], "comfyui");
+        assert_eq!(estado_instalacao_3d(&paths)["instalado"], true);
+        assert_eq!(estado_instalacao(&paths)["instalacao"]["motor"], "sdcpp");
     }
 
     #[test]

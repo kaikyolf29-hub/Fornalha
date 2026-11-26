@@ -36,7 +36,9 @@ async fn trellis2_transforma_imagem_em_malha() {
         None => std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/dados/templario_conceito.png")).unwrap(),
     };
     let horas: u64 = std::env::var("FORNALHA_TESTE_HORAS").ok().and_then(|h| h.parse().ok()).unwrap_or(5);
-    let (glb, info) = comfyui::gerar_3d(porta, png, "templario_conceito.png", 7, horas * 3600).await.unwrap();
+    // FORNALHA_TESTE_COMPLETO=1: o fluxo inteiro mesmo no processador (o que o nível Máximo usa)
+    let completo = std::env::var("FORNALHA_TESTE_COMPLETO").is_ok_and(|v| v == "1");
+    let (glb, info) = comfyui::gerar_3d(porta, png, "templario_conceito.png", 7, horas * 3600, completo).await.unwrap();
     assert_eq!(&glb[0..4], b"glTF", "não é glb");
     assert!(glb.len() > 100_000, "malha pequena demais ({} bytes)", glb.len());
     std::fs::write(saida.join("templario_trellis2.glb"), &glb).unwrap();

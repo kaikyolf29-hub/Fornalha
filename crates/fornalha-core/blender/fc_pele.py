@@ -224,7 +224,10 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     poros /= poros.max() + 1e-6
     dens = 0.35 + 0.45 * rosto + 0.7 * np.maximum(bochecha, narizm) + 0.25 * testa
     dens *= 1.0 - labios
-    H -= 0.000055 * poros * dens
+    # controles finos da pele (a IA chega perto da referência): 0 = o padrão pela idade
+    est = {k: float(v) for k, v in (ficha.get("pele") or {}).items() if isinstance(v, (int, float))}
+    k_poros = 1.0 + 1.6 * est.get("poros", 0.0)
+    H -= 0.000055 * k_poros * poros * dens
     # microtextura cruzada (pele não é lisa nem no jovem)
     h1 = ruido(1)
     l1 = borrar(h1, max(1, round(5 * px)), 0, passes=2)
@@ -276,7 +279,7 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     rugas += (0.3 + 0.7 * a) * 0.00008 * (0.5 + 0.5 * np.cos(x / (0.0016 * s) * 2 * np.pi + 3 * quebra)) ** 4 * labios
     # pescoço: dobras horizontais
     rugas += (0.15 + a) * 0.00035 * sum(sulco(z - (qz - (0.03 + 0.022 * k) * s), 0.0016 * s) for k in range(3)) * pescoco * sstep(oy + 0.08 * s, oy + 0.04 * s, y)
-    rugas *= quebra
+    rugas *= quebra * (1.0 + 1.5 * est.get("rugas", 0.0))
     H -= rugas
 
     # ---------- cor
@@ -325,7 +328,7 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     # pálpebra e olheira mais escuras e arroxeadas (dá profundidade ao olhar)
     olheira = np.clip(sstep(0.024 * s, 0.01 * s, ro) * rosto * sstep(oz + 0.012 * s, oz + 0.004 * s, z), 0, 1)[..., None]
     lin = lin * (1 - (0.25 + 0.2 * a) * olheira) + lin * np.array([0.85, 0.72, 0.78], dtype=np.float32) * (0.25 + 0.2 * a) * olheira
-    lin *= (1 - 0.1 * poros * dens)[..., None]
+    lin *= (1 - 0.1 * k_poros * poros * dens)[..., None]
     if barba != "nenhuma" and homem:
         zona = rosto * sstep(nz - 0.004 * s, nz - 0.012 * s, z) * (1 - labios)
         # embaixo do queixo só na frente do pescoço (antes dava a volta e sujava a nuca e os ombros)
@@ -341,10 +344,21 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
         lin = lin * (1 - 0.32 * k) + np.array([0.08, 0.08, 0.09], dtype=np.float32) * 0.32 * k  # sombra azulada da barba feita
         lin = lin * (1 - fios[..., None] * k) + cb * fios[..., None] * k
         H -= 0.000015 * fios * zona
-    if a > 0.4:
+    k_manchas = max(0.0, a - 0.4) * 1.4 + 0.9 * est.get("manchas", 0.0)
+    if k_manchas > 0:
         manchas = np.clip(_normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(10 * px))) - 1.6, 0, None)
-        manchas = np.clip(manchas * 2, 0, 1)[..., None] * (a - 0.4) * 1.4 * cabeca[..., None]
+        manchas = np.clip(manchas * 2, 0, 1)[..., None] * k_manchas * cabeca[..., None]
         lin = lin * (1 - 0.35 * manchas) + lin * np.array([0.8, 0.62, 0.48], dtype=np.float32) * 0.35 * manchas
+    if est.get("sardas", 0.0) > 0:
+        # sardas e pintas de sol: pontos pequenos castanhos, mais no nariz, bochechas e testa
+        sd = np.clip(_normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), max(1, round(2.5 * px)))) - 1.4, 0, None)
+        sd = np.clip(sd * 1.6, 0, 1) * (0.4 + 0.6 * np.maximum(np.maximum(bochecha, narizm), testa)) * cabeca * est["sardas"]
+        sd = sd[..., None]
+        lin = lin * (1 - 0.5 * sd) + lin * np.array([0.72, 0.5, 0.36], dtype=np.float32) * 0.5 * sd
+    if est.get("bronzeado", 0.0) > 0:
+        # sol de anos: mais escuro e quente no rosto e no pescoço (o corpo coberto fica como estava)
+        b = (est["bronzeado"] * np.clip(cabeca + 0.6 * pescoco, 0, 1))[..., None]
+        lin = lin * (1 - b) + lin * np.array([0.78, 0.62, 0.5], dtype=np.float32) * b
     sangue = np.zeros((res, res), dtype=np.float32)
     if ficha.get("zumbi"):
         lin, H, sangue = _pele_de_zumbi(lin, H, rng, pos, mask, P, rosto, cabeca, labios, ro, px, ruido)

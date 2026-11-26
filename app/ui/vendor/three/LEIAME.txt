@@ -1,0 +1,2 @@
+three.js r170 (MIT), copiado do pacote npm three@0.170.0: build/three.module.min.js e examples/jsm (OrbitControls, TransformControls, GLTFLoader, BufferGeometryUtils).
+O import 'three' foi trocado por './three.module.min.js' (a janela não usa import map).

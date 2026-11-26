@@ -210,7 +210,7 @@ async fn unirig_de_mentira_passa_pelo_worker_para_criaturas() {
     let r = chamar(&f, "create_skeleton", json!({"entrada": entrada, "nome": "lobo", "criatura": true, "inimigo": true})).await;
     assert_eq!(r["modelo"], "unirig", "{r}");
     assert!(r["arquivos"]["modelo"].as_str().unwrap().ends_with("lobo.glb"));
-    // humanoide continua no esqueleto padrão
-    let h = chamar(&f, "create_skeleton", json!({"entrada": entrada, "nome": "barrilzinho"})).await;
+    // humanoide continua no esqueleto padrão (simples: um barril não serve de molde para o manequim)
+    let h = chamar(&f, "create_skeleton", json!({"entrada": entrada, "nome": "barrilzinho", "simples": true})).await;
     assert_eq!(h["modelo"], "rigify-blender");
 }

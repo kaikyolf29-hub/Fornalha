@@ -424,7 +424,20 @@ def _ik_dois_ossos(P, mw, coxa, canela, pe, alvo_mundo):
     return True
 
 
-def travar_pes(arm, acao, conf, rampa=3):
+def travar_pes(arm, acao, conf, rampa=3, passadas=5):
+    """Pé no chão, repetido até estabilizar: travar um apoio deixa o pé mais tempo no chão e a fase de
+    apoio cresce (quadros novos entram nela); numa passada só o andar do templário da IA ficava
+    escorregando 11 cm depois de 3 rodadas."""
+    total = 0
+    for _ in range(passadas):
+        n = _travar_pes_uma_vez(arm, acao, conf, rampa)
+        total += n
+        if n == 0:
+            break
+    return total
+
+
+def _travar_pes_uma_vez(arm, acao, conf, rampa=3):
     """Pé no chão: em cada fase de apoio o pé fica parado (ou anda na velocidade do chão, no ciclo no
     lugar) e a perna dobra para isso (IK de dois ossos); entra e sai aos poucos nas pontas da fase."""
     cadeias = []
@@ -503,7 +516,7 @@ def assentar_no_chao(arm, acao, conf, malhas, raiz="pelvis"):
     falta = []
     for q in qs:
         cena.frame_set(q)
-        z = min(float(fc_conferir._co_avaliado(o)[:, 2].min()) for o in malhas)
+        z = min(float(fc_conferir._co_do_chao(o)[:, 2].min()) for o in malhas)
         falta.append(max(0.0, conf.chao - z))
     falta = np.array(falta)
     if falta.max() < 0.01:
@@ -527,16 +540,52 @@ def assentar_no_chao(arm, acao, conf, malhas, raiz="pelvis"):
     return int(np.sum(suave >= 0.002))
 
 
-def corrigir(arm, acoes, conf, resultados, quais=("trancos", "dobradicas", "pes", "corpo_solido", "torcao", "chao")):
+def firmar_maos_e_pes(arm, conf, resultados):
+    """O que a régua visual reprova e não é da animação, é do modelo (vale para todas): a mão/o pé da malha
+    com peso no antebraço/na canela (fica para trás quando o osso gira) e a arma presa fora da mão. Firma os
+    pesos como o molde faz e prende a arma de novo pela pegada, no repouso."""
+    import fc_molde
+
+    tipos = {p["tipo"]: p for r in resultados for p in r["problemas"]}
+    log = {}
+    if "malha_solta" in tipos:
+        maos = any(p["tipo"] == "malha_solta" and fc_conferir.MAOS.match(p["osso"]) for r in resultados for p in r["problemas"])
+        pes = any(p["tipo"] == "malha_solta" and fc_conferir.PES_HUMANOS.match(p["osso"]) for r in resultados for p in r["problemas"])
+        n = 0
+        for o in conf.malhas:
+            if maos:
+                n += fc_molde._manopla_firme(o, arm)
+            if pes:
+                n += fc_molde._pes_firmes(o, arm)
+        if n:
+            log["pesos_firmes"] = n
+    if "arma_fora_da_mao" in tipos:
+        import fc_armas_pbr
+
+        presas = []
+        for o in getattr(conf, "armas", []):
+            lado = (o.parent_bone or "")[-1:]
+            if o.parent_bone in (f"hand_{lado}",) and lado in ("l", "r"):
+                fc_armas_pbr.prender_na_mao(o, arm, lado)
+                presas.append(o.name)
+        if presas:
+            log["arma_presa_de_novo"] = presas
+    if log:
+        conf._pontas_da_malha()
+    return log
+
+
+def corrigir(arm, acoes, conf, resultados, quais=("trancos", "dobradicas", "pes", "corpo_solido", "torcao", "chao", "pesos")):
     """Corrige cada animação reprovada. Devolve {animação: {correção: quadros mudados}}."""
     feito = {}
     mods = [m for o in conf.malhas for m in o.modifiers if m.type == "ARMATURE"]
+    pesos = firmar_maos_e_pes(arm, conf, resultados) if "pesos" in quais else {}
     for acao, r in zip(acoes, resultados):
         if r["aprovado"]:
             continue
         tipos = {p["tipo"] for p in r["problemas"]}
         _usar(arm, acao)
-        log = {}
+        log = dict(pesos) if tipos & {"malha_solta", "arma_fora_da_mao"} else {}
         estados = [m.show_viewport for m in mods]
         for m in mods:
             m.show_viewport = False
@@ -545,8 +594,6 @@ def corrigir(arm, acoes, conf, resultados, quais=("trancos", "dobradicas", "pes"
                 log["trancos"] = tirar_trancos(arm, acao, r["problemas"])
             if "dobradicas" in quais and tipos & {"ao_contrario", "de_lado"}:
                 log["dobradicas"] = endireitar(arm, acao, conf)
-            if "pes" in quais and "escorrega" in tipos:
-                log["pe_no_chao"] = travar_pes(arm, acao, conf)
             if "corpo_solido" in quais and "atravessa" in tipos:
                 log["corpo_solido"] = afastar(arm, acao, conf, r["problemas"])
             if "torcao" in quais and any(p["tipo"] == "torcao" and re.match(r"^(hand_[lr]|(Left|Right)Hand|lowerarm_[lr]|(Left|Right)LowerArm)$", p["osso"]) for p in r["problemas"]):
@@ -570,5 +617,15 @@ def corrigir(arm, acoes, conf, resultados, quais=("trancos", "dobradicas", "pes"
                 log["trancos_no_fim"] = n
         if "chao" in quais and "abaixo_do_chao" in tipos:
             log["chao"] = assentar_no_chao(arm, acao, conf, conf.malhas)
+        if "pes" in quais and "escorrega" in tipos:
+            # por último: a passada final de trancos e o assentar no chão mexem nas pernas e desfaziam o pé
+            # travado (o andar do templário da IA continuava escorregando 11 cm depois de 3 rodadas)
+            for m in mods:
+                m.show_viewport = False
+            try:
+                log["pe_no_chao"] = travar_pes(arm, acao, conf)
+            finally:
+                for m, e in zip(mods, estados):
+                    m.show_viewport = e
         feito[acao.name] = log
     return feito

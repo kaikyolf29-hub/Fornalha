@@ -125,6 +125,9 @@ fn aplicar_controles(h: &mut Value, ctl: &Value, feminino_pelo_texto: bool) {
     if ctl["rosto"].is_object() {
         h["detalhes"] = ctl["rosto"].clone();
     }
+    if ctl["pele"].is_object() {
+        h["pele"] = ctl["pele"].clone();
+    }
     if let Some(r) = ctl["roupa"].as_object() {
         if let Some(e) = r.get("estilo").and_then(Value::as_str).filter(|e| ESTILOS_DE_ROUPA.contains(e)) {
             h["roupa"]["estilo"] = json!(e);
@@ -446,6 +449,11 @@ pub struct ArgsPersonagem {
     /// Roupa: {estilo (campones, mercenario, soldado, cavaleiro, cavaleiro_placas, templario, nobre,
     /// jaqueta), cores {principal, secundaria, detalhe}, capa}.
     pub roupa: Option<Value>,
+    /// Pele: {sardas, manchas, poros, rugas, bronzeado} de 0 a 1 (curtida de sol, envelhecida...).
+    pub pele: Option<Value>,
+    /// Golpes e defesa de quem luta com arma de mão: "luta" (padrão: captura real do ACCAD, quando
+    /// instalado) ou "biblioteca" (os da biblioteca CC0, estilizados).
+    pub golpes: Option<String>,
     /// Imagem de referência: no fim, o resultado sai lado a lado com ela (compare_reference).
     pub referencia: Option<String>,
 }
@@ -592,7 +600,7 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
         "cerebro": if cerebro.is_null() { Value::Null } else { json!("ignis") },
         "controles": {
             "cabelo": a.cabelo, "barba": a.barba, "idade": a.idade, "genero": a.genero, "corpo_humano": a.corpo_humano,
-            "rosto": a.rosto, "cor_olhos": a.cor_olhos, "sobrancelha": a.sobrancelha, "roupa": a.roupa,
+            "rosto": a.rosto, "cor_olhos": a.cor_olhos, "sobrancelha": a.sobrancelha, "roupa": a.roupa, "pele": a.pele,
         },
     })
 }
@@ -702,7 +710,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             img.is_file() || gerar_imagem_conceito(f, &p, &descrever_para_3d(&p, &ficha), &img, seed.wrapping_add(3), quem).await.is_ok();
         let alta = pasta.join(format!("{id}_ia_alta.glb"));
         if pronto {
-            if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, &mut avisos).await {
+            if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, nivel == crate::niveis::Nivel::Maximo, &mut avisos).await {
                 let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
                 // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
                 // feita malha própria, entra no lugar da cabeça do corpo
@@ -854,6 +862,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
             arquivos.insert(chave, json!(s));
         }
     }
+    let golpes = golpes_de_luta(f, &p, &glb, ficha["arma"].as_str().unwrap_or(""), &r, a.golpes.as_deref(), quem, &mut avisos).await;
 
     // com referência: o resultado lado a lado com ela (cores e proporção medidas) para a IA ajustar
     let mut comparacao = Value::Null;
@@ -891,7 +900,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     let mut resposta = json!({
         "comparacao": comparacao,
         "ficha": ficha, "pasta": pasta, "arquivos": arquivos, "estatisticas": r["estatisticas"], "segundos_blender": r["segundos"],
-        "modelo_3d": modelo_3d, "avisos": avisos,
+        "modelo_3d": modelo_3d, "golpes": golpes, "avisos": avisos,
     });
     if a.testar_na_engine.unwrap_or(false) {
         garantir_mundo_e_sons(f, &p, quem).await?;
@@ -987,10 +996,20 @@ async fn pode_3d_pela_ia(f: &Fornalha) -> bool {
         return false;
     }
     (crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none())
+        || crate::comfyui::instalacao_3d(&f.paths).is_some()
         || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
 }
 
-async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, seed: u64, avisos: &mut Vec<String>) -> Option<Value> {
+/// `completo` (nível Máximo): no processador, o fluxo inteiro do TRELLIS.2 (uma noite) em vez do reduzido.
+async fn malha_pela_ia(
+    f: &Fornalha,
+    imagem: &Path,
+    destino: &Path,
+    nome: &str,
+    seed: u64,
+    completo: bool,
+    avisos: &mut Vec<String>,
+) -> Option<Value> {
     // 1º a API paga, se a pessoa ligou (minutos em vez de horas)
     if let Some(p) = crate::apis::ligada_3d(&f.paths) {
         match crate::apis::gerar_3d(&f.paths, p, imagem, destino, &json!({"triangulos": 60000})).await {
@@ -1004,10 +1023,16 @@ async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, 
     if !f.estudio().licencas_aceitas.iter().any(|a| a == "meta-dinov3") {
         return None; // o 3D pela IA usa o DINOv3: só com o aceite da pessoa (Licenças)
     }
-    let porta = f.porta_comfyui();
+    // o ComfyUI principal (NVIDIA, ROCm ou processador); nas máquinas do motor Vulkan (RX 580), o ComfyUI
+    // do 3D no processador, instalado à parte
+    let mut porta = f.porta_comfyui();
     let mut e = crate::comfyui::consultar(porta).await;
     if !e.conectado && crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none() {
         e = crate::comfyui::abrir(&f.paths, porta).await.ok()?;
+    }
+    if !e.conectado && crate::comfyui::instalacao_3d(&f.paths).is_some() {
+        porta = crate::comfyui::porta_3d(f.porta_comfyui());
+        e = crate::comfyui::abrir_3d(&f.paths, f.porta_comfyui()).await.ok()?;
     }
     if !e.conectado {
         return None;
@@ -1017,8 +1042,11 @@ async fn malha_pela_ia(f: &Fornalha, imagem: &Path, destino: &Path, nome: &str, 
         return None;
     }
     let png = std::fs::read(imagem).ok()?;
-    // no processador leva horas (2,5 h no CI de 4 núcleos); numa NVIDIA, minutos
-    match com_placa(f, 12_000, 360, crate::comfyui::gerar_3d(porta, png, &format!("{nome}_conceito_3d.png"), seed, 8 * 3600)).await {
+    // no processador leva horas (2,5 h no CI de 4 núcleos no fluxo reduzido; o inteiro, uma noite); numa
+    // NVIDIA, minutos
+    let limite = if completo { 14 * 3600 } else { 8 * 3600 };
+    match com_placa(f, 12_000, 360, crate::comfyui::gerar_3d(porta, png, &format!("{nome}_conceito_3d.png"), seed, limite, completo)).await
+    {
         Ok((glb, info)) => {
             std::fs::write(destino, &glb).ok()?;
             Some(info)
@@ -1441,6 +1469,16 @@ pub struct ArgsEsqueleto {
     pub inimigo: Option<bool>,
     /// Criatura que não é humanoide (bicho, monstro de quatro patas...): esqueleto pelo UniRig.
     pub criatura: Option<bool>,
+    /// Arma na mão (espada, machado...) no esqueleto de jogo.
+    pub arma: Option<String>,
+    /// Imagem de conceito da malha (acerta a cor do metal e do pano pela imagem).
+    pub conceito: Option<String>,
+    /// Vídeo do movimento (andar, correr, atacar) junto.
+    pub video: Option<bool>,
+    /// true: o esqueleto simples de antes (23 ossos, malha reduzida a 20 mil triângulos).
+    pub simples: Option<bool>,
+    /// "luta" (padrão) ou "biblioteca": de onde vêm os golpes e a defesa (veja create_character).
+    pub golpes: Option<String>,
 }
 
 /// create_skeleton: malha de fora (TRELLIS.2, Hunyuan3D, feita à mão) ganha o esqueleto padrão e animações.
@@ -1490,18 +1528,105 @@ pub async fn criar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Resu
                 .push("Criatura sem o UniRig (precisa de placa NVIDIA e do worker instalado): usei o esqueleto padrão (humanoide).".into());
         }
     }
-    let r = forjar(
-        f,
-        &json!({"tarefa": "rig", "entrada": f.resolver_no_projeto(&p, &a.entrada), "saida": saida, "nome": nome, "altura_m": a.altura_m.unwrap_or(1.8),
-                "girar_graus": a.girar_graus, "animacoes": a.animacoes, "triangulos_max": 20000}),
-    )
-    .await?;
+    // humanoide com os pacotes instalados: o caminho de jogo (o manequim do MakeHuman encaixado dentro
+    // da malha como molde: o mesmo esqueleto com dedos, pesos e captura de movimento do humano, com a
+    // conferência e a correção do movimento e a arma na mão). Sem os pacotes, o esqueleto simples.
+    let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
+    let de_jogo = !a.simples.unwrap_or(false) && base["makehuman"].is_object() && !base["animacoes_de"].is_null();
+    let tarefa = if de_jogo {
+        json!({"tarefa": "rig", "entrada": f.resolver_no_projeto(&p, &a.entrada), "saida": saida, "nome": nome,
+               "altura_m": a.altura_m.unwrap_or(1.8), "girar_graus": a.girar_graus, "animacoes": a.animacoes, "triangulos_max": 60000,
+               "esqueleto": "jogo", "makehuman": base["makehuman"], "animacoes_de": base["animacoes_de"], "materiais": base["materiais"],
+               "ceu": base["ceu"], "arma": a.arma.clone().unwrap_or_else(|| "nenhuma".into()), "folha": true, "video": a.video.unwrap_or(false),
+               "amostras": 20, "conceito": a.conceito.as_deref().map(|c| f.resolver_no_projeto(&p, c))})
+    } else {
+        if !a.simples.unwrap_or(false) {
+            avisos.push(
+                "Sem os pacotes MakeHuman e de animações: usei o esqueleto simples (baixe em Máquina → Pacotes para o de jogo).".into(),
+            );
+        }
+        json!({"tarefa": "rig", "entrada": f.resolver_no_projeto(&p, &a.entrada), "saida": saida, "nome": nome, "altura_m": a.altura_m.unwrap_or(1.8),
+               "girar_graus": a.girar_graus, "animacoes": a.animacoes, "triangulos_max": 20000})
+    };
+    let r = forjar(f, &tarefa).await?;
     std::fs::write(pasta.join(format!("{nome}.forja.json")), serde_json::to_vec_pretty(&r).unwrap_or_default()).ok();
+    let modelo = if de_jogo { "forja-3d" } else { "rigify-blender" };
     for arq in r["arquivos"].as_object().cloned().unwrap_or_default().values().filter_map(|v| v.as_str()) {
-        recibo(f, &p, Path::new(arq), "rigify-blender", None, None, json!({"entrada": a.entrada}), quem).await?;
+        recibo(f, &p, Path::new(arq), modelo, None, None, json!({"entrada": a.entrada}), quem).await?;
     }
+    let golpes = if de_jogo {
+        golpes_de_luta(f, &p, &saida, a.arma.as_deref().unwrap_or(""), &r, a.golpes.as_deref(), quem, &mut avisos).await
+    } else {
+        None
+    };
     f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
-    Ok(json!({"arquivos": r["arquivos"], "estatisticas": r["estatisticas"], "modelo": "rigify-blender", "avisos": avisos}))
+    Ok(
+        json!({"arquivos": r["arquivos"], "estatisticas": r["estatisticas"], "modelo": modelo, "esqueleto": if de_jogo { "jogo" } else { "simples" },
+              "movimento": r["estatisticas"]["movimento"], "golpes": golpes, "avisos": avisos}),
+    )
+}
+
+/// Golpes e defesa de quem luta com arma de mão, de captura real (ACCAD, CC BY 3.0): gancho vira corte
+/// na horizontal, uppercut vira corte subindo, cruzado vira estocada e o bloqueio alto vira aparar com a
+/// espada, tudo na base de luta (peso nos pés). Os de espada da biblioteca CC0 são estilizados (braços
+/// abertos, estocada quase sentada e a defesa de braços abertos): no templário pareciam errados.
+const GOLPES_DE_LUTA: [(&str, &str); 4] = [
+    ("accad:Male2_E6_HookRight.bvh:Male2_E6_HookRight", "atacar"),
+    ("accad:Male2_E8_UppercutRight.bvh:Male2_E8_UppercutRight", "atacar_2"),
+    ("accad:Male2_E4_CrossRight.bvh:Male2_E4_CrossRight", "atacar_3"),
+    ("accad:Male2_E13_BlockRightHigh.bvh:Male2_E13_BlockRightHigh", "defender"),
+];
+
+#[allow(clippy::too_many_arguments)]
+async fn golpes_de_luta(
+    f: &Fornalha,
+    p: &Projeto,
+    glb: &Path,
+    arma: &str,
+    r: &Value,
+    pedido: Option<&str>,
+    quem: &str,
+    avisos: &mut Vec<String>,
+) -> Option<Value> {
+    if pedido == Some("biblioteca") || !matches!(arma, "espada" | "machado" | "martelo" | "adaga") || !glb.is_file() {
+        return None;
+    }
+    // só no esqueleto de jogo (o da Forja simples não recebe captura)
+    if r["estatisticas"]["ossos"].as_u64().unwrap_or(0) < 50 {
+        return None;
+    }
+    if !crate::movimento::fontes(f, Some(p)).iter().any(|x| x.id == "accad") {
+        avisos.push(
+            "Golpes e defesa da biblioteca CC0 (estilizados). Com o pacote ACCAD (Máquina → Pacotes), saem de captura real: corte, estocada e aparar com a arma.".into(),
+        );
+        return None;
+    }
+    let clipes = GOLPES_DE_LUTA
+        .iter()
+        .map(|(id, como)| crate::movimento::Clipe {
+            id: (*id).into(),
+            como: (*como).into(),
+            no_lugar: Some(true),
+            golpe: Some(true),
+            velocidade: Some(1.15),
+            ..Default::default()
+        })
+        .collect();
+    let args = crate::movimento::ArgsAplicar {
+        projeto: Some(p.raiz.to_string_lossy().into_owned()),
+        arquivo: glb.to_string_lossy().into_owned(),
+        clipes,
+        corrigir: Some(true),
+        video: None,
+    };
+    match crate::movimento::aplicar(f, args, quem).await {
+        Ok(v) => Some(json!({"fonte": "ACCAD Open Motion Project (CC BY 3.0)", "aprovado": v["aprovado"],
+                             "animacoes": GOLPES_DE_LUTA.iter().map(|(_, c)| *c).collect::<Vec<_>>(), "creditos": v["creditos"]})),
+        Err(e) => {
+            avisos.push(format!("Golpes de captura (ACCAD) não entraram ({}): ficaram os da biblioteca.", e.mensagem));
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -2159,6 +2284,8 @@ mod testes_controles {
         assert_eq!(h["detalhes"]["nariz_largura"], 0.3);
         assert_eq!(h["cor_olhos"], "green");
         assert_eq!(h["sobrancelha"], "eyebrow002");
+        let pl = super::humano_da_ficha(&ficha(json!({"pele": {"sardas": 0.7, "bronzeado": 0.3}})), crate::niveis::Nivel::Qualidade);
+        assert_eq!(pl["pele"]["sardas"], 0.7);
         let j = super::humano_da_ficha(
             &ficha(json!({"roupa": {"estilo": "jaqueta", "cores": {"principal": "#5b4632"}, "capa": false}})),
             crate::niveis::Nivel::Qualidade,

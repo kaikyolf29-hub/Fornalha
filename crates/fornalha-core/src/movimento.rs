@@ -279,6 +279,8 @@ pub struct Clipe {
     pub inicio: Option<u32>,
     pub fim: Option<u32>,
     pub velocidade: Option<f64>,
+    /// Tomada longa de luta (guarda → golpe → guarda): fica só o golpe, em volta do pico da mão.
+    pub golpe: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -348,7 +350,7 @@ pub async fn aplicar(f: &Fornalha, a: ArgsAplicar, quem: &str) -> Resultado<Valu
             modelos.push((modelo, credito));
         }
         pedidos.push(json!({"arquivo": caminho, "acao": acao, "como": c.como, "laco": c.laco, "ciclo": c.ciclo, "no_lugar": c.no_lugar,
-                            "inicio": c.inicio, "fim": c.fim, "velocidade": c.velocidade}));
+                            "inicio": c.inicio, "fim": c.fim, "velocidade": c.velocidade, "golpe": c.golpe}));
     }
     let r = forjar(
         f,
@@ -535,6 +537,210 @@ pub async fn editar_esqueleto(f: &Fornalha, a: ArgsEsqueleto, quem: &str) -> Res
     f.avisar_ponte(vec![rel(&p.raiz, &arquivo)]);
     Ok(json!({"feitas": r["feitas"], "pesos": r["pesos"], "imagem": r["arquivos"]["imagem"], "ossos": r["ossos"], "avisos": r["avisos"],
               "dica": "As animações que já existiam continuam (cada osso guarda o giro dele); confira com check_motion. Ossos novos não têm animação: use mola_<grupo>_<n> para eles balançarem no jogo."}))
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsVerMovimento {
+    pub projeto: Option<String>,
+    pub arquivo: String,
+    /// Animação a ver (padrão: parado).
+    pub animacao: Option<String>,
+    /// Quantos quadros espalhados (2 a 16, padrão 8) ou a lista exata dos quadros (30 por segundo).
+    pub quadros: Option<Value>,
+    /// tres_quartos, frente, lado, costas, cima (padrão: tres_quartos e lado).
+    pub angulos: Option<Vec<String>>,
+    /// material (o do jogo), barro (só a forma) ou anime (dois tons e contorno).
+    pub estilo: Option<String>,
+    pub rastro: Option<bool>,
+    pub esqueleto: Option<bool>,
+    pub de_perto: Option<bool>,
+}
+
+pub const ANGULOS_DE_VER: [&str; 5] = ["tres_quartos", "frente", "lado", "costas", "cima"];
+pub const ESTILOS_DE_VER: [&str; 3] = ["material", "barro", "anime"];
+
+/// show_motion: folhas do movimento em quadros grandes para a IA ver (ângulos, rastro, esqueleto, de perto).
+pub async fn ver_movimento(f: &Fornalha, a: ArgsVerMovimento) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    if !arquivo.is_file() {
+        return Err(Erro::argumento(format!("Não achei o personagem {}.", arquivo.display())));
+    }
+    let angulos = a.angulos.clone().unwrap_or_else(|| vec!["tres_quartos".into(), "lado".into()]);
+    if let Some(x) = angulos.iter().find(|x| !ANGULOS_DE_VER.contains(&x.as_str())) {
+        return Err(Erro::argumento(format!("Ângulo {x} desconhecido: use {}.", ANGULOS_DE_VER.join(", "))));
+    }
+    if angulos.is_empty() || angulos.len() > 4 {
+        return Err(Erro::argumento("Peça de 1 a 4 ângulos."));
+    }
+    let estilo = a.estilo.clone().unwrap_or_else(|| "material".into());
+    if !ESTILOS_DE_VER.contains(&estilo.as_str()) {
+        return Err(Erro::argumento(format!("Estilo {estilo} desconhecido: use {}.", ESTILOS_DE_VER.join(", "))));
+    }
+    let quadros = match &a.quadros {
+        None | Some(Value::Null) => json!(8),
+        Some(Value::Number(n)) => json!(n.as_u64().unwrap_or(8).clamp(2, 16)),
+        Some(Value::Array(v)) if !v.is_empty() && v.len() <= 16 && v.iter().all(|x| x.is_u64()) => json!(v),
+        _ => return Err(Erro::argumento("quadros: um número de 2 a 16, ou a lista dos quadros (até 16).")),
+    };
+    let r = forjar(
+        f,
+        &json!({"tarefa": "ver_movimento", "entrada": arquivo, "animacao": a.animacao, "quadros": quadros, "angulos": angulos,
+                "estilo": estilo, "rastro": a.rastro.unwrap_or(true), "esqueleto": a.esqueleto.unwrap_or(true),
+                "de_perto": a.de_perto.unwrap_or(true), "materiais": null}),
+    )
+    .await?;
+    let c = &r["conferencia"];
+    Ok(json!({
+        "animacao": c["nome"],
+        "folhas": r["folhas"],
+        "quadros": r["quadros"],
+        "estilo": r["estilo"],
+        "cores_do_rastro": r["cores_do_rastro"],
+        "aprovado_pela_regua": c["aprovado"],
+        "problemas": c["problemas"],
+        "medidas": c["medidas"],
+        "animacoes": r["animacoes"],
+        "dica": "Olhe cada folha antes de dizer que o movimento está bom: a régua mede ossos, pé, chão, mão e arma, mas não sabe se o golpe tem peso, se a pose lê bem ou se o estilo combina. Os quadros contam a 30 por segundo. Rastro: o caminho da mão, do pé e da ponta da arma na animação inteira (arco limpo = bom; zigue-zague = tremido). Chão em quadrados de 25 cm: pé parado que muda de quadrado escorrega. Para ajustar, use edit_motion (girar ou mover um osso num quadro, com o efeito espalhado nos vizinhos) e veja de novo.",
+    }))
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsEditarMovimento {
+    pub projeto: Option<String>,
+    pub arquivo: String,
+    pub animacao: String,
+    /// [{osso, quadro, giro: [x,y,z,w] no mundo do glTF (Y para cima), mover: [x,y,z] em metros, suavizar}].
+    pub edicoes: Vec<Value>,
+    /// Quadros para cada lado em que o ajuste some suavemente (padrão 6).
+    pub suavizar: Option<u32>,
+    /// Grava como outra animação (a original fica).
+    pub salvar_como: Option<String>,
+    pub corrigir: bool,
+}
+
+/// edit_motion: ajustes do estúdio (ou da IA) numa animação, conferidos de novo e gravados.
+pub async fn editar_movimento(f: &Fornalha, a: ArgsEditarMovimento, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    if !arquivo.is_file() {
+        return Err(Erro::argumento(format!("Não achei o personagem {}.", arquivo.display())));
+    }
+    if a.animacao.trim().is_empty() {
+        return Err(Erro::argumento("Diga a animação (animacao)."));
+    }
+    if a.edicoes.is_empty() {
+        return Err(Erro::argumento("Diga os ajustes (edicoes): [{osso, quadro, giro: [x,y,z,w]} ou mover: [x,y,z]]."));
+    }
+    for e in &a.edicoes {
+        let ok_osso = e["osso"].as_str().is_some_and(|s| !s.is_empty());
+        let ok_giro = e["giro"].as_array().is_some_and(|v| v.len() == 4 && v.iter().all(|x| x.is_number()));
+        let ok_mover = e["mover"].as_array().is_some_and(|v| v.len() == 3 && v.iter().all(|x| x.is_number()));
+        if !ok_osso
+            || !e["quadro"].is_u64()
+            || !(ok_giro || ok_mover)
+            || (!e["giro"].is_null() && !ok_giro)
+            || (!e["mover"].is_null() && !ok_mover)
+        {
+            return Err(Erro::argumento(format!(
+                "Ajuste inválido: {e}. Cada um precisa de osso, quadro e giro [x,y,z,w] e/ou mover [x,y,z]."
+            )));
+        }
+    }
+    if let Some(n) = &a.salvar_como {
+        if !n.trim().is_empty() && !n.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err(Erro::argumento("salvar_como: só letras, números e _ (é o nome da animação no jogo)."));
+        }
+    }
+    let r = forjar(
+        f,
+        &json!({"tarefa": "editar_movimento", "entrada": arquivo, "saida": arquivo, "animacao": a.animacao, "edicoes": a.edicoes,
+                "suavizar": a.suavizar.unwrap_or(6).min(30), "salvar_como": a.salvar_como, "corrigir": a.corrigir, "materiais": null}),
+    )
+    .await?;
+    recibo(f, &p, &arquivo, "forja-3d", None, None, json!({"bancada": "estudio", "animacao": r["animacao"], "edicoes": a.edicoes}), quem)
+        .await?;
+    f.avisar_ponte(vec![rel(&p.raiz, &arquivo)]);
+    Ok(json!({
+        "animacao": r["animacao"],
+        "edicoes": r["edicoes"],
+        "aprovado_pela_regua": r["aprovado"],
+        "conferencia": {"problemas": r["conferencia"]["problemas"], "medidas": r["conferencia"]["medidas"]},
+        "correcoes": r["correcoes"],
+        "animacoes": r["animacoes"],
+        "arquivos": r["arquivos"],
+        "dica": "Veja o resultado com show_motion antes de dar por pronto (a régua não julga se ficou bonito).",
+    }))
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsRoupa {
+    pub projeto: Option<String>,
+    /// O personagem (glb com esqueleto) que serve de manequim: a roupa nasce na pele dele.
+    pub corpo: String,
+    pub nome: Option<String>,
+    /// Partes: casca, faixa, saia, adorno (veja a descrição da ferramenta).
+    pub pecas: Vec<Value>,
+    pub materiais: Option<Value>,
+}
+
+pub const TIPOS_DE_PARTE_DA_ROUPA: [&str; 4] = ["casca", "faixa", "saia", "adorno"];
+
+/// create_garment: roupa ou armadura separada, feita no corpo do manequim, para vestir depois.
+pub async fn criar_roupa(f: &Fornalha, a: ArgsRoupa, quem: &str) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let corpo = f.resolver_no_projeto(&p, &a.corpo);
+    if !corpo.is_file() {
+        return Err(Erro::argumento(format!("Não achei o corpo {} (um personagem com esqueleto).", corpo.display())));
+    }
+    if a.pecas.is_empty() {
+        return Err(Erro::argumento("Diga as partes da roupa (pecas): casca, faixa, saia ou adorno."));
+    }
+    if a.pecas.len() > 200 {
+        return Err(Erro::argumento("No máximo 200 partes por roupa."));
+    }
+    for (i, x) in a.pecas.iter().enumerate() {
+        let tipo = x["tipo"].as_str().unwrap_or("");
+        if !TIPOS_DE_PARTE_DA_ROUPA.contains(&tipo) {
+            return Err(Erro::argumento(format!("Parte {i}: tipo \"{tipo}\" não existe. Use {}.", TIPOS_DE_PARTE_DA_ROUPA.join(", "))));
+        }
+    }
+    let nome = crate::projeto::nome_de_pasta(a.nome.as_deref().unwrap_or("roupa"));
+    let pasta = corpo.parent().map(|d| d.join("roupas")).unwrap_or_else(|| p.raiz.join("Characters").join("roupas"));
+    let saida = pasta.join(format!("{nome}.glb"));
+    let mut materiais = a.materiais.clone().unwrap_or_else(|| json!({}));
+    if materiais.as_object().is_none_or(|m| m.is_empty()) {
+        materiais = json!({"principal": {"cor": "#8a8580", "tipo": "tecido"}});
+    }
+    let r = forjar(
+        f,
+        &json!({"tarefa": "roupa", "entrada": corpo, "saida": saida, "roupa": {"id": nome, "pecas": a.pecas, "materiais": materiais}}),
+    )
+    .await?;
+    recibo(
+        f,
+        &p,
+        &saida,
+        "forja-3d",
+        None,
+        None,
+        json!({"bancada": "roupa", "corpo": rel(&p.raiz, &corpo), "partes": a.pecas.len()}),
+        quem,
+    )
+    .await?;
+    f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
+    Ok(json!({
+        "roupa": saida,
+        "arquivos": r["arquivos"],
+        "partes": r["partes"],
+        "triangulos": r["triangulos"],
+        "avisos": r["avisos"],
+        "corpo": r["corpo"],
+        "proximo": format!("Olhe as duas imagens (sozinha e no manequim de barro). Ajuste e gere de novo até ficar como a referência; depois vista com dress_character (arquivo: {}, roupa: {}) e confira o movimento com check_motion e show_motion.", rel(&p.raiz, &corpo), rel(&p.raiz, &saida)),
+    }))
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

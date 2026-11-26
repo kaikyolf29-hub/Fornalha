@@ -1048,14 +1048,40 @@ def _suavizar_fluxo(B, T, saindo, passes=4):
     return B
 
 
-ESTILO_CABELO = {"volume_cm": 1.0, "agrupamento": 0.55, "ondulacao": 0.15, "frizz": 0.15, "densidade": 1.0}
+ESTILO_CABELO = {"volume_cm": 1.0, "agrupamento": 0.55, "ondulacao": 0.15, "frizz": 0.15, "densidade": 1.0, "rente": 0.0}
 # para onde vão os fios (raiz → ponta). "caindo": do topo da cabeça para fora e para baixo (comprido, bob);
 # "para_tras": da testa para a nuca (penteado para trás); "para_frente": da coroa para a testa (franja)
 DIRECAO_PADRAO = {"short04": "para_tras", "short02": "para_frente", "short03": "para_frente"}
 DIRECOES = ("auto", "caindo", "para_tras", "para_frente")
 
 
-def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048, estilo=None, penteado=""):
+def _rente(guia, corpo, rente, minimo=0.004):
+    """Penteado mais rente à cabeça: cada vértice da malha-guia chega mais perto da pele (a distância até
+    ela encolhe na proporção `rente`, nunca abaixo de `minimo`). Tira o volume de capacete dos lados sem
+    mudar o desenho do penteado."""
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+
+    mc = corpo.matrix_world
+    vs = [mc @ v.co for v in corpo.data.vertices]
+    corpo.data.calc_loop_triangles()
+    bvh = BVHTree.FromPolygons(vs, [t.vertices[:] for t in corpo.data.loop_triangles])
+    mg = guia.matrix_world
+    inv = mg.inverted()
+    movidos = 0
+    for v in guia.data.vertices:
+        p = mg @ v.co
+        loc, _n, _i, d = bvh.find_nearest(p)
+        if loc is None or d is None or d <= minimo:
+            continue
+        novo = max(minimo, d * (1.0 - rente))
+        v.co = inv @ (loc + (p - loc) * (novo / d))
+        movidos += 1
+    guia.data.update()
+    return movidos
+
+
+def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048, estilo=None, penteado="", corpo=None):
     """Cards traçados SOBRE a malha do penteado (o cabelo do pacote), da raiz à ponta, seguindo a
     direção dos fios dada pelo UV dela. A malha vira a camada de baixo (mais escura, cobre o couro) e
     os cards por cima dão os fios e a silhueta, sem espetar para fora da forma do penteado."""
@@ -1066,6 +1092,8 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
     est.update({k: float(v) for k, v in (estilo or {}).items() if k in est})
     n_cards = max(50, int(n_cards * est["densidade"]))
     vol, agr, ond, friz = est["volume_cm"] / 100.0, est["agrupamento"], est["ondulacao"], est["frizz"]
+    if corpo is not None and est["rente"] > 0:
+        _rente(guia, corpo, float(np.clip(est["rente"], 0.0, 0.9)))
     me = guia.data
     me.calc_loop_triangles()
     M = np.array(guia.matrix_world)

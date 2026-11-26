@@ -11,6 +11,37 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Rodada da tarde (26/11): armadura detalhada no manequim, movimento coerente, Joel mais perto
+Pedido do criador (vendo o painel do Joel e a referência do templário): nada medíocre; a armadura no nível
+alto que a ferramenta já fazia (o templário do 3D pela IA de 23/11), vestida no manequim e testada em
+movimento, com as costas detalhadas; o movimento coerente; o Joel mais perto.
+- **`create_skeleton` com o caminho de jogo:** com os pacotes, a malha de fora (TRELLIS.2, API, artista)
+  recebe o **manequim do MakeHuman encaixado dentro como molde** (`fc_molde`): o mesmo esqueleto de jogo
+  com dedos (57 ossos), pesos, capa com molas, saia, captura de movimento, conferência e correção, arma na
+  mão (`arma`), vídeo. `simples: true` volta ao esqueleto de 23 ossos. Provado com o templário do 3D pela
+  IA (artefato do CI de 23/11, 200 mil → 61 mil triângulos): **15 de 15 animações aprovadas**.
+- **Pé travado que não segurava** (achado no andar do templário: 11 cm escorregando depois de 3 rodadas):
+  o travamento agora é o último passo da correção (a passada final de trancos e o "assentar no chão"
+  desfaziam) e se repete até estabilizar (a fase de apoio cresce quando o pé trava). A régua do chão
+  ignora o pano solto (barra da saia e capa, que são assadas depois).
+- **Manchas nas costas da malha da IA:** a IA vê só a frente no conceito e inventa as costas; no pano
+  claro de trás, o que é bem mais escuro que a vizinhança vira a cor do pano (a frente não é tocada).
+  No templário: 12 mil texels limpos na capa.
+- **Golpes coerentes:** os de espada da biblioteca CC0 (UAL2) são estilizados — conferido no boneco
+  original: estocada quase sentada, "defesa" de braços abertos — e no templário pareciam errados. Agora,
+  com o pacote ACCAD, quem luta com espada, machado, martelo ou adaga recebe golpes de **captura real**
+  na base de luta: gancho → corte horizontal, uppercut → corte subindo, cruzado → estocada, bloqueio alto
+  → aparar com a espada (`golpes: "luta"`, padrão; `"biblioteca"` volta aos CC0). Conferidos e aprovados.
+  Crédito ACCAD (CC BY 3.0) no recibo.
+- **Joel:** controles novos `pele` (sardas, manchas, poros, rugas, bronzeado), `cabelo.rente` (encosta o
+  penteado na cabeça medindo a distância até a pele) e `grisalho` no cabelo e na barba (antes saía 70% de
+  fio branco pela idade). Com o formato do rosto pelos alvos (rosto mais longo, olhos fundos, sobrancelha
+  pesada, nariz, maçãs) a 6ª volta ficou bem mais perto no rosto, cabelo e barba (diferença de cor 0,074
+  no meio corpo). **A jaqueta não chega:** casca sobre o corpo (sem volume, dobra, costura). O caminho
+  para roupa nesse nível é o do templário (conceito → TRELLIS.2 → manequim como molde): disparado no CI
+  (`ComfyUI 3D`, ~4 h no processador) com um pedido de texto de jaqueta de camurça, camisa jeans e barba
+  grisalha (sem copiar o personagem).
+
 ### Rodada da noite (25→26/11): cabelo realista, barba, controles finos, referência e liberdade
 Pedido do criador: cabelo e barba no nível da referência (Joel, TLOU2) sem preset; a IA com mais liberdade
 para chegar perto de qualquer referência (personagem, arma, casa, mundo); coerência entre tudo; não aprovar

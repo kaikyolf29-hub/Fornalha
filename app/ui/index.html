@@ -117,6 +117,46 @@
           <button class="botao" id="mov-esqueleto">Ver o esqueleto</button></div>
         <div id="mov-resultado"></div>
       </section>
+      <section class="painel" id="estudio">
+        <div class="titulo-painel"><h2>Estúdio 3D</h2><button class="botao quente" id="est-abrir">Abrir o personagem no estúdio</button></div>
+        <p class="nota" style="margin:0 0 12px">Veja a animação de qualquer ângulo, com os ossos (vermelho = reprovado pela régua), o rastro da mão, do pé e da ponta da arma e o chão em quadrados de 25 cm. Para ajustar: pare num quadro, escolha o osso e gire (o ajuste some suave nos quadros vizinhos). Gravar manda o Blender aplicar e conferir de novo; a IA faz o mesmo com show_motion e edit_motion.</p>
+        <p class="nota" id="est-estado" style="margin:0 0 10px"></p>
+        <div id="est-area" class="estudio" hidden>
+          <div class="est-palco"><canvas id="est-tela" tabindex="0" aria-label="Estúdio 3D: arraste para girar a câmera, roda para aproximar"></canvas>
+            <div class="est-legenda"><span style="--c:#ff7a1a">mão dir.</span><span style="--c:#2aa6ff">mão esq.</span><span style="--c:#f2d62a">pé dir.</span><span style="--c:#3ee06a">pé esq.</span><span style="--c:#fff">ponta da arma</span></div></div>
+          <div class="est-lado">
+            <label class="campo"><span>Animação</span><select id="est-animacao"></select></label>
+            <div class="campo"><span>Mostrar</span>
+              <div class="est-checks"><label><input type="checkbox" id="est-ver-ossos" checked> ossos</label><label><input type="checkbox" id="est-ver-rastro" checked> rastro</label><label><input type="checkbox" id="est-ver-chao" checked> chão</label></div></div>
+            <div class="campo"><span>Estilo</span>
+              <div class="filtros" style="margin:0"><button data-est-estilo="material" class="ativo">material</button><button data-est-estilo="barro">barro</button><button data-est-estilo="anime">anime</button></div></div>
+            <div class="campo"><span>Osso</span><select id="est-osso-lista"></select><div id="est-osso-info" class="est-osso-info"><small>Clique numa bolinha do esqueleto ou escolha na lista.</small></div></div>
+            <div class="filtros" style="margin:0"><button id="est-modo-girar" class="ativo">girar</button><button id="est-modo-mover" disabled title="Só o osso raiz (quadril) anda">mover</button></div>
+            <div class="est-giros" aria-label="Giro exato de 5 graus">
+              <button class="botao" data-girar="x-5">X −5°</button><button class="botao" data-girar="x5">X +5°</button>
+              <button class="botao" data-girar="y-5">Y −5°</button><button class="botao" data-girar="y5">Y +5°</button>
+              <button class="botao" data-girar="z-5">Z −5°</button><button class="botao" data-girar="z5">Z +5°</button></div>
+            <label class="campo"><span>Espalhar nos vizinhos</span><select id="est-suavizar"><option value="0">só este quadro</option><option value="3">±3 quadros</option><option value="6" selected>±6 quadros</option><option value="10">±10 quadros</option><option value="15">±15 quadros</option></select></label>
+            <div class="campo"><span>Ajustes</span><div id="est-ajustes" class="lista est-ajustes"></div></div>
+            <div class="acoes" style="margin:0"><button class="botao" id="est-desfazer" disabled>Desfazer</button>
+              <button class="botao quente" id="est-salvar" disabled>Gravar nesta animação</button></div>
+            <div class="acoes" style="margin:0"><input type="text" id="est-novo-nome" placeholder="nome da nova (ex.: soco_ajustado)" style="flex:1;min-width:120px">
+              <button class="botao" id="est-salvar-como" disabled>Gravar como nova</button></div>
+          </div>
+          <div class="est-tempo">
+            <button class="botao" id="est-tocar">Tocar</button>
+            <button class="botao leve" id="est-anterior" title="Quadro anterior (←)">◀</button>
+            <div class="est-trilho"><input type="range" id="est-tempo" min="0" max="1" step="1" value="0" aria-label="Quadro"><div id="est-marcas" class="est-marcas"></div></div>
+            <button class="botao leve" id="est-proximo" title="Próximo quadro (→)">▶</button>
+            <span id="est-quadro" class="mono est-quadro"></span>
+            <select id="est-velocidade" aria-label="Velocidade"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option></select>
+          </div>
+          <div class="acoes est-rodape"><button class="botao" id="est-conferir">Conferir esta animação</button>
+            <button class="botao" id="est-grande">Ver em quadros grandes (Blender)</button></div>
+          <div id="est-veredito" class="veredito" hidden></div>
+          <div id="est-folhas" class="est-folhas" hidden></div>
+        </div>
+      </section>
       <section class="painel">
         <div class="titulo-painel"><h2>Banco de movimento</h2><input type="text" id="mov-busca" placeholder="Buscar (walk, jab, sword…)" style="max-width:240px"></div>
         <div class="filtros" id="mov-etiquetas"></div>
@@ -272,6 +312,7 @@
     <p class="nota">Arraste para girar, role para aproximar. O que você vê é o arquivo que vai para a engine.</p>
   </dialog>
 <script src="app.js"></script>
+  <script type="module" src="estudio.js"></script>
   <script type="module" src="vendor/model-viewer.min.js"></script>
 </body>
 </html>

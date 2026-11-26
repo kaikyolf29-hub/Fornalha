@@ -300,12 +300,13 @@ mod nucleo {
                 let det = f.deteccao(false).await;
                 let mut c = comfyui::caminho_para(&det);
                 if c.backend == "vulkan" {
-                    // o TRELLIS.2 roda no ComfyUI (PyTorch): sem CUDA nem ROCm, no processador (lento)
-                    c.backend = "cpu";
-                    c.motivo = format!("{} — o 3D pela IA roda no processador (pode levar horas)", c.motivo);
+                    // o TRELLIS.2 roda no ComfyUI (PyTorch): sem CUDA nem ROCm, no processador (horas), numa
+                    // instalação à parte; o motor de imagem pelo Vulkan continua na placa
+                    comfyui::instalar_3d_no_processador(&f.paths, &c, f.porta_comfyui()).await
+                } else {
+                    c.tres_d = true;
+                    comfyui::instalar(&f.paths, &c, f.porta_comfyui()).await
                 }
-                c.tres_d = true;
-                comfyui::instalar(&f.paths, &c, f.porta_comfyui()).await
             }
             Some("abrir") => comfyui::abrir(&f.paths, f.porta_comfyui()).await.map(|e| json!(e)),
             _ => return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "Ação desconhecida."}}))).into_response(),

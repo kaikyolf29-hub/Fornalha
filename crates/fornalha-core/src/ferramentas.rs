@@ -215,14 +215,16 @@ pub fn lista() -> Vec<Ferramenta> {
                     "parar_no_conceito": {"type": "boolean", "description": "Por partes: para no conceito de corpo inteiro (o que vira 3D) e devolve a imagem para aceitar ou refazer; a chamada seguinte com o mesmo nome usa esse conceito."},
                     "refazer_conceito": {"type": "boolean", "description": "Apaga o conceito de corpo inteiro guardado e faz outro (mande outra seed)."},
                     "imagem": {"type": "string", "description": "Caminho de uma imagem PNG pronta (feita no Gemini, no ChatGPT, desenhada…): ela vira o 3D como está, sem ser refeita; esqueleto e animações vêm da malha."},
-                    "cabelo": {"description": "Penteado (texto) ou {penteado: short01|short02|short03|short04|bob01|bob02|long01|ponytail01|braid01|afro01|nenhum, cor, volume_cm (0–4, quanto descola do couro), agrupamento (0–1, fios juntos em mechas), ondulacao (0–1), frizz (0–1), densidade (0,5–2), direcao: auto|caindo|para_tras|para_frente}. As mechas são cards guiados pelo penteado; ajuste olhando o retrato e a comparação com a referência."},
-                    "barba": {"description": "nenhuma|rala|curta|cheia ou {tipo, cor, comprimento_cm (0,3–5), densidade (0,5–2), ondulacao (0–2), volume (0–2)} (homem, caminho realista)."},
+                    "cabelo": {"description": "Penteado (texto) ou {penteado: short01|short02|short03|short04|bob01|bob02|long01|ponytail01|braid01|afro01|nenhum, cor, volume_cm (0–4, quanto descola do couro), agrupamento (0–1, fios juntos em mechas), ondulacao (0–1), frizz (0–1), densidade (0,5–2), rente (0–0,9: encosta o penteado na cabeça, tira o volume de capacete), grisalho (0–1: fração de fios brancos; sem ele, pela idade), direcao: auto|caindo|para_tras|para_frente}. As mechas são cards guiados pelo penteado; ajuste olhando o retrato e a comparação com a referência."},
+                    "barba": {"description": "nenhuma|rala|curta|cheia ou {tipo, cor, comprimento_cm (0,3–5), densidade (0,5–2), ondulacao (0–2), volume (0–2), grisalho (0–1)} (homem, caminho realista)."},
                     "idade": {"type": "number", "description": "Idade em anos (11–90): rugas, grisalho do cabelo e da barba."},
                     "genero": {"type": "string", "enum": ["masculino", "feminino"]},
                     "corpo_humano": {"type": "object", "description": "{altura, peso, musculo, proporcoes} de 0 a 1 (humano realista)."},
                     "rosto": {"type": "object", "description": "Alvos do MakeHuman (CC0) com peso -1 a 1, ex.: {\"nose/nose-width-incr\": 0.4, \"chin/chin-prominent-incr\": 0.3, \"cheek/l-cheek-bones-incr\": 0.5}. Grupos: nose, chin, cheek, eyes, eyebrows, mouth, ears, forehead, head, neck."},
                     "cor_olhos": {"type": "string", "description": "brown, brownlight, blue, bluegreen, green, grey, lightblue..."},
                     "sobrancelha": {"type": "string", "description": "eyebrow001 a eyebrow012 (pacote MakeHuman)."},
+                    "pele": {"type": "object", "description": "{sardas, manchas, poros, rugas, bronzeado} de 0 a 1: pele curtida de sol, envelhecida, marcada (0 = o padrão pela idade)."},
+                    "golpes": {"type": "string", "enum": ["luta", "biblioteca"], "description": "Golpes e defesa de quem luta com espada, machado, martelo ou adaga: luta (padrão: captura real do ACCAD — corte, corte subindo, estocada e aparar, com o peso nos pés) ou biblioteca (os CC0 estilizados)."},
                     "roupa": {"type": "object", "description": "{estilo: campones|mercenario|soldado|cavaleiro|cavaleiro_placas|templario|nobre|jaqueta (moderno: camisa de brim, jaqueta de couro aberta com gola e bolsos, jeans, botas), cores: {principal, secundaria, detalhe}, capa}. Expressão do rosto: em `rosto`, os alvos expression/units/caucasian/* (eyebrows-left-down, eye-left-slit, mouth-compression...)."},
                     "referencia": {"type": "string", "description": "Imagem de referência: no fim o resultado sai lado a lado com ela, com paleta, diferença de cor e proporção medidas (veja compare_reference)."},
                     "corpo": {"type": "string", "enum": ["auto", "humanoide", "alado", "quadrupede", "aranha", "inseto", "serpente", "criatura"],
@@ -269,8 +271,10 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "create_skeleton",
             titulo: "Pôr esqueleto e animações numa malha",
-            descricao: "Uma malha de personagem sem esqueleto (do TRELLIS.2, Hunyuan3D ou feita à mão) ganha limpeza, o esqueleto padrão (nomes do perfil humanoide da Godot), pesos automáticos e as animações da biblioteca. Com criatura: true (bicho, monstro que não é humanoide), o esqueleto sai do UniRig (placa NVIDIA), sem as animações da biblioteca.",
-            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "entrada": {"type": "string"}, "nome": {"type": "string"}, "altura_m": {"type": "number"}, "girar_graus": {"type": "number"}, "inimigo": {"type": "boolean"}, "criatura": {"type": "boolean"}, "animacoes": {"type": "array", "items": {"type": "string"}}}, "required": ["entrada"]}),
+            descricao: "Uma malha de personagem sem esqueleto (do TRELLIS.2, Hunyuan3D, Meshy, feita à mão; armadura e roupa já na malha) vira personagem de jogo: com os pacotes MakeHuman e de animações, o manequim do humano é encaixado dentro dela como molde e passa o mesmo esqueleto de jogo (com dedos), os pesos e a captura de movimento; o movimento é conferido e corrigido (braço torcido, pé escorregando, membro atravessando o corpo) e a arma vai na mão. Sem os pacotes (ou com simples: true), o esqueleto simples. Com criatura: true (bicho, monstro que não é humanoide), o esqueleto sai do UniRig (placa NVIDIA).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "entrada": {"type": "string"}, "nome": {"type": "string"}, "altura_m": {"type": "number"}, "girar_graus": {"type": "number"}, "inimigo": {"type": "boolean"}, "criatura": {"type": "boolean"}, "animacoes": {"type": "array", "items": {"type": "string"}},
+                "arma": {"type": "string", "description": "espada, machado, lanca, martelo, adaga, cajado, escudo ou nenhuma"}, "conceito": {"type": "string", "description": "Imagem de conceito da malha (acerta a cor do metal e do pano)."},
+                "video": {"type": "boolean"}, "simples": {"type": "boolean"}, "golpes": {"type": "string", "enum": ["luta", "biblioteca"]}}, "required": ["entrada"]}),
             so_leitura: false,
         },
         Ferramenta {
@@ -309,7 +313,8 @@ pub fn lista() -> Vec<Ferramenta> {
                     "como": {"type": "string", "description": "Nome da animação no jogo (andar, correr, atacar, chute…)."},
                     "laco": {"type": "boolean"}, "ciclo": {"type": "boolean"}, "no_lugar": {"type": "boolean"},
                     "inicio": {"type": "integer", "minimum": 0}, "fim": {"type": "integer", "minimum": 0},
-                    "velocidade": {"type": "number", "minimum": 0.1, "maximum": 4}}, "required": ["id", "como"]}},
+                    "velocidade": {"type": "number", "minimum": 0.1, "maximum": 4},
+                    "golpe": {"type": "boolean", "description": "Tomada longa de luta (guarda, golpe, guarda): fica só o golpe, em volta do pico da mão."}}, "required": ["id", "como"]}},
                 "corrigir": {"type": "boolean", "description": "Corrigir sozinho o que reprovar (padrão: sim)."},
                 "video": {"type": "boolean", "description": "Vídeo das animações novas (lento no processador)."}},
                 "required": ["arquivo", "clipes"]}),
@@ -330,6 +335,51 @@ pub fn lista() -> Vec<Ferramenta> {
             descricao: "Copia para o banco de movimento do projeto (Motion/<fonte>/) capturas que a pessoa baixou: Mixamo (com a conta Adobe dela; o uso comercial depende do aceite dela pela janela), CMU, ACCAD, 100STYLE ou captura própria do estúdio. Aceita arquivos BVH, FBX e glb, ou pastas com eles.",
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivos": {"type": "array", "items": {"type": "string"}},
                 "fonte": {"type": "string", "enum": ["mixamo", "cmu", "accad", "100style", "propria"]}}, "required": ["arquivos", "fonte"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "show_motion",
+            titulo: "Ver o movimento",
+            descricao: "Mostra uma animação em quadros grandes para você VER antes de aprovar (a régua só mede): folhas de no máximo 4×2 quadros por ângulo (três quartos, frente, lado, costas, de cima), com o enquadramento fixo na animação inteira, o rastro da mão, do pé e da ponta da arma (arco do golpe), chão em quadrados de 25 cm (pé escorregando aparece), o esqueleto com os ossos reprovados em vermelho e a mão e os pés de perto. Estilos: material (o do jogo), barro (só a forma: dobra, volume e peso) e anime (dois tons e contorno, como o visual anime do jogo). Devolve as imagens e a conferência da régua (inclui arma fora da mão e mão/pé da malha que não segue o osso).",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"},
+                "animacao": {"type": "string"},
+                "quadros": {"description": "Quantos quadros (2 a 16, padrão 8) ou a lista exata (30 por segundo).", "oneOf": [{"type": "integer", "minimum": 2, "maximum": 16}, {"type": "array", "items": {"type": "integer", "minimum": 0}, "maxItems": 16}]},
+                "angulos": {"type": "array", "items": {"type": "string", "enum": ["tres_quartos", "frente", "lado", "costas", "cima"]}, "maxItems": 4},
+                "estilo": {"type": "string", "enum": ["material", "barro", "anime"]},
+                "rastro": {"type": "boolean"}, "esqueleto": {"type": "boolean"}, "de_perto": {"type": "boolean"}}, "required": ["arquivo"]}),
+            so_leitura: true,
+        },
+        Ferramenta {
+            nome: "edit_motion",
+            titulo: "Ajustar o movimento",
+            descricao: "Ajusta uma animação osso por osso (o mesmo que a pessoa faz no Estúdio 3D da janela): girar um osso num quadro (giro: quaternion [x,y,z,w] no mundo do glTF, Y para cima: o quanto ele gira a mais) e/ou mover (metros, para o quadril). O ajuste vale inteiro no quadro e some suavemente em `suavizar` quadros para cada lado (sem tranco). salvar_como grava como outra animação e mantém a original. Depois confere de novo (e corrige, com corrigir) e regrava o glb.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"}, "animacao": {"type": "string"},
+                "edicoes": {"type": "array", "items": {"type": "object", "properties": {
+                    "osso": {"type": "string"}, "quadro": {"type": "integer", "minimum": 0},
+                    "giro": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                    "mover": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "suavizar": {"type": "integer", "minimum": 0, "maximum": 30}}, "required": ["osso", "quadro"]}},
+                "suavizar": {"type": "integer", "minimum": 0, "maximum": 30}, "salvar_como": {"type": "string"}, "corrigir": {"type": "boolean"}},
+                "required": ["arquivo", "animacao", "edicoes"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "create_garment",
+            titulo: "Fazer roupa ou armadura no manequim",
+            descricao: "Faz uma roupa ou armadura SEPARADA, nascida no corpo do manequim (um personagem com esqueleto), para vestir depois com dress_character. Serve para qualquer estilo (realista, anime, cartum): a forma vem das partes, o estilo vem dos materiais e das proporções. Coordenadas do corpo como no show_skeleton (metros; x = esquerda do personagem, y = para trás, z = para cima; o personagem olha para -y); o resultado traz os marcos do corpo (cintura, peito, joelho...) para acertar as alturas. Partes: casca {regiao: tronco|peito|barriga|quadril|pescoco|cabeca|ombro_l/_r|braco_l/_r|antebraco_l/_r|braco_inteiro_l/_r|mao_l/_r|coxa_l/_r|canela_l/_r|perna_l/_r|pe_l/_r (ou lista de ossos), lado: frente|costas (opcional), de/ate (z em metros), x_min/x_max, alisar (vezes; 12 = placa lisa, 3 = pano que mostra o corpo), afastar (m da pele), espessura, borda (arredondado da beira), detalhe (0-2 subdivisões), espelhar: x} — peitoral, espaldar, ombreira, braçal, greva, camisa, calça, bota. faixa {altura (z) ou osso + ao_longo (0-1), largura, espessura, afastar, lados} — cinto, gola, bracelete, punho, cano de bota, faixa. saia {de (cintura z), ate (barra z), abrir (m a mais na barra), afastar, fendas: [graus; 0 = frente, 90 = esquerda, 180 = costas], fenda_altura (0-1), espessura} — saia, túnica, sobreveste, cota longa. adorno {forma: caixa|cilindro|esfera|torno|extrusao|tubo e os campos da montagem do generate_3d; colar: nome de uma parte anterior, ponto: [x, z], lado: frente|costas} — cruz no peito, rebite, fivela, emblema. Toda parte aceita nome e material (de `materiais`: {nome: {cor, tipo metal|couro|tecido|madeira|osso, rugosidade, metal}}). Devolve a roupa (glb), a imagem dela sozinha e no manequim de barro (frente, lado, costas) e os triângulos de cada parte.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(),
+                "corpo": {"type": "string", "description": "Personagem (glb) com esqueleto que serve de manequim."},
+                "nome": {"type": "string"},
+                "pecas": {"type": "array", "maxItems": 200, "items": {"type": "object", "properties": {
+                    "tipo": {"type": "string", "enum": ["casca", "faixa", "saia", "adorno"]}, "nome": {"type": "string"}, "material": {"type": "string"},
+                    "regiao": {"type": ["string", "array"]}, "lado": {"type": "string", "enum": ["frente", "costas"]},
+                    "de": {"type": "number"}, "ate": {"type": "number"}, "alisar": {"type": "integer", "minimum": 0, "maximum": 60},
+                    "afastar": {"type": "number"}, "espessura": {"type": "number"}, "borda": {"type": "number"}, "detalhe": {"type": "integer", "minimum": 0, "maximum": 2},
+                    "espelhar": {"type": "string", "enum": ["x"]}, "altura": {"type": "number"}, "osso": {"type": "string"}, "ao_longo": {"type": "number"},
+                    "largura": {"type": "number"}, "abrir": {"type": "number"}, "fendas": {"type": "array", "items": {"type": "number"}},
+                    "fenda_altura": {"type": "number"}, "forma": {"type": "string"}, "colar": {"type": "string"},
+                    "ponto": {"type": "array", "items": {"type": "number"}}}, "required": ["tipo"]}},
+                "materiais": {"type": "object"}}, "required": ["corpo", "pecas"]}),
             so_leitura: false,
         },
         Ferramenta {
@@ -597,8 +647,10 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 let vulkan = crate::comfyui::motor_vulkan(&f.paths).map(
                     |m| json!({"id_do_modelo": m.id(), "dispositivos": crate::comfyui::dispositivos_vulkan_guardados(&m), "motor": m}),
                 );
+                let tres_d_no_processador = (caminho.backend == "vulkan" || crate::comfyui::instalacao_3d(&f.paths).is_some())
+                    .then(|| crate::comfyui::estado_instalacao_3d(&f.paths));
                 json!({"estado": e, "modelo_de_imagem": modelo, "instalacao": crate::comfyui::estado_instalacao(&f.paths),
-                       "caminho": caminho, "vulkan": vulkan})
+                       "caminho": caminho, "vulkan": vulkan, "tres_d_no_processador": tres_d_no_processador})
             };
             let sugestao = f.sugestao().await;
             let mut programas = serde_json::Map::new();
@@ -816,6 +868,9 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "check_motion" => crate::movimento::conferir(f, args(a)?, quem).await,
         "import_motion" => crate::movimento::importar(f, args(a)?).await,
         "show_skeleton" => crate::movimento::ver_esqueleto(f, args(a)?).await,
+        "show_motion" => crate::movimento::ver_movimento(f, args(a)?).await,
+        "create_garment" => crate::movimento::criar_roupa(f, args(a)?, quem).await,
+        "edit_motion" => crate::movimento::editar_movimento(f, args(a)?, quem).await,
         "edit_skeleton" => crate::movimento::editar_esqueleto(f, args(a)?, quem).await,
         "dress_character" => crate::movimento::vestir(f, args(a)?, quem).await,
         "retarget_animation" => {

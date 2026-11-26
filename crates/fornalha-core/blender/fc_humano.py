@@ -617,7 +617,10 @@ def criar_humano(dados, assets, ficha):
 
     # cabelo curto: penteado fio a fio + cards (pipeline AAA); médio/comprido: ainda o do pacote,
     # até a queda com colisão nos ombros ficar pronta (plano, etapa 1.2)
-    cards = bool(res_pele) and tem_cabelo and (fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto" or bool(ficha.get("cabelo_em_cards")))
+    cards = bool(res_pele) and tem_cabelo and fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto"
+    # médio e comprido em cards: o cabelo do pacote guia a forma e vira a camada de baixo
+    # (padrão no caminho de qualidade; "cabelo_em_cards": false deixa só o do pacote)
+    guiado = bool(res_pele) and tem_cabelo and not cards and ficha.get("cabelo_em_cards") is not False
     if tem_cabelo and not cards:
         acessorios.append(("hair", ficha.get("cabelo", "short02"), True, ficha.get("cor_cabelo")))
     for roupa in ficha.get("roupas_makehuman", []):
@@ -680,6 +683,13 @@ def criar_humano(dados, assets, ficha):
             pecas.extend(fc_cabelo.cabelo_em_cards(nome, corpo, pontos, peso, cor_cab, fc_cabelo.estilo_de(ficha.get("cabelo")), arm,
                                                    escala_n=1.0 if res_pele >= 4096 else 0.7,
                                                    grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
+    if guiado:
+        guia = next((o for o in pecas if o.name.endswith("_hair")), None)
+        if guia is not None:
+            idade = float(ficha.get("macro", {}).get("idade", 0.5))
+            pecas.extend(fc_cabelo.cards_guiados(nome, guia, ficha.get("cor_cabelo") or "#3b2a1e", arm,
+                                                 n_cards=900 if res_pele >= 4096 else (700 if res_pele >= 2048 else 500),
+                                                 grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":
         import fc_armas_pbr

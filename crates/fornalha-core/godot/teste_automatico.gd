@@ -141,7 +141,7 @@ func _fotos_do_mapa() -> Array:
 	var anterior := get_viewport().get_camera_3d()
 	var escondidas := []  # a foto do mapa sai sem a interface do jogo
 	for c in get_tree().current_scene.find_children("*", "CanvasLayer", true, false):
-		if (c as CanvasLayer).visible:
+		if not c.is_queued_for_deletion() and (c as CanvasLayer).visible:
 			(c as CanvasLayer).visible = false
 			escondidas.append(c)
 	var cam := Camera3D.new()
@@ -165,7 +165,8 @@ func _fotos_do_mapa() -> Array:
 			fotos.append({"id": nome, "imagem": caminho, "fps": snappedf(soma / float(quadros - quadros / 3), 0.1)})
 	cam.queue_free()
 	for c in escondidas:
-		c.visible = true
+		if is_instance_valid(c):  # a legenda da cena curta pode ter saído enquanto isso
+			c.visible = true
 	if anterior:
 		anterior.make_current()
 	return fotos

@@ -63,14 +63,24 @@ fn iniciar_registro(paths: &Paths, nome: &str) {
     }
 }
 
+/// Pilha das threads que rodam as ferramentas (o despachante assíncrono delas é grande).
+const PILHA: usize = 32 * 1024 * 1024;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let paths = Paths::from_env();
     if args.iter().any(|a| a == ARG_MCP) {
         // Saída padrão só para o protocolo; registros vão para arquivo.
         iniciar_registro(&paths, "mcp.log");
-        let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime do MCP");
-        let r = rt.block_on(fornalha_core::mcp::servir_stdio(Fornalha::new(paths)));
+        // pilha grande: o despachante das ferramentas é um future grande (no Windows a principal tem 1 MB)
+        let t = std::thread::Builder::new()
+            .stack_size(PILHA)
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_stack_size(PILHA).build().expect("runtime do MCP");
+                rt.block_on(fornalha_core::mcp::servir_stdio(Fornalha::new(paths)))
+            })
+            .expect("thread do MCP");
+        let r = t.join().map_err(|_| ()).and_then(|r| r.map_err(|_| ()));
         std::process::exit(if r.is_ok() { 0 } else { 1 });
     }
     if args.iter().any(|a| a == ARG_JANELA) {
@@ -410,6 +420,10 @@ mod nucleo {
 
     pub fn rodar(paths: Paths, minimizado: bool) {
         tracing::info!("{APP_NAME} {APP_VERSION} iniciando (minimizado: {minimizado})");
+        // as ferramentas (API e MCP por HTTP) rodam em threads com pilha grande
+        let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_stack_size(PILHA).build().expect("runtime da Fornalha");
+        tauri::async_runtime::set(rt.handle().clone());
+        let _rt = rt;
         let app = tauri::Builder::default()
             .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| abrir_janela(app)))
             .setup(move |app| {

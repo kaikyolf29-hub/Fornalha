@@ -37,8 +37,27 @@ fn registro_no_stderr() {
     let _ = tracing_subscriber::fmt().with_env_filter(filtro).with_writer(std::io::stderr).with_ansi(false).try_init();
 }
 
-#[tokio::main]
-async fn main() {
+/// Pilha das threads que rodam as ferramentas: o despachante assíncrono delas é grande (no Windows a
+/// thread principal tem só 1 MB e o MCP estourava a pilha ao chamar uma ferramenta).
+const PILHA: usize = 32 * 1024 * 1024;
+
+fn main() {
+    let t = std::thread::Builder::new()
+        .name("fornalha".into())
+        .stack_size(PILHA)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_stack_size(PILHA)
+                .build()
+                .expect("runtime da Fornalha")
+                .block_on(principal())
+        })
+        .expect("thread da Fornalha");
+    let _ = t.join();
+}
+
+async fn principal() {
     registro_no_stderr();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let paths = Paths::from_env();

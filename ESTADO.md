@@ -104,6 +104,24 @@ Cycles não usa a placa; avaliar EEVEE com placa); assinatura dos executáveis (
 App Control. **Resolvido:** QA do templário com 7 faces degeneradas e pés −2,7 cm (o `acabar_malhas` tira
 as faces de área zero e põe o personagem no chão antes do QA; conferido aqui: QA tudo ok).
 
+### Etapa 2 — cabelo médio e comprido: cards guiados (25/11, noite)
+- **Caminho novo** (`fc_cabelo.cards_guiados`): o cabelo do pacote MakeHuman (CC0) guia a forma e a direção
+  dos fios (pelo UV dele) e vira a camada de baixo (mais escura e densa); por cima, cards traçados SOBRE a
+  superfície dele, da raiz à ponta, com o atlas de mechas da Fornalha (3 camadas, raiz fina na risca, leve
+  torção, ponta afinando). Nada espeta para fora do penteado; a costura do UV (a risca) não vira emaranhado.
+  Os pesos vêm da malha-guia, limpos (só cabeça, pescoço, costas e clavícula: o pacote punha braço, quadril e
+  coxa nas pontas do comprido). Padrão no caminho de qualidade para médio e comprido
+  (`"cabelo_em_cards": false` volta ao do pacote); o curto segue o caminho fio a fio de antes.
+- **Medidas novas na régua (QA):** "cabelo preso só à cabeça, pescoço e costas" e **couro aparecendo pela
+  opacidade** (cada raio atravessa as camadas somando o alfa da textura até a pele, só onde o penteado cobre).
+  Conferida a régua: cabelo ralo de propósito reprova (90% de couro aparecendo); o do pacote sozinho 0,7%;
+  com os cards 0%. Comprido: 500 cards, 61 mil triângulos, 73 cm de média; médio (bob01): 21 mil.
+- **Visto:** render do Blender (frente, lado, costas) parece cabelo de verdade; na Godot (compatibilidade,
+  sem placa) forma e cor certas, mas granulado pelo alfa por pontilhado (sem TAA). **Falta:** ver no
+  Forward+ com TAA numa placa, cabelo em movimento (mola nas mechas), barba pelo mesmo caminho, e a
+  **aprovação do criador** (curto, médio, comprido e barba) — regra do plano. O bob01 do pacote cobre um olho
+  (é o penteado dele); para personagem de jogo, o bob02 ou outro.
+
 ### Etapa 2 — bancada de mapa (25/11)
 - **`generate_map`** (MCP e CLI): a IA escreve o plano (tamanho, relevo, clima, hora, regiões com centro ou
   posição, rio, estradas, início); sem plano usa o último (`World/mapa/plano.json`) ou as áreas da bíblia.

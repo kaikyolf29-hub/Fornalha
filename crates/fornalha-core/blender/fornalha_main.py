@@ -182,7 +182,7 @@ def tarefa_humano(t):
     import fc_lookdev
 
     qa = fc_lookdev.qa([arm] + pecas, arm, corpo=pecas[0] if pecas else None,
-                       cabelo=[o for o in pecas if o.name.endswith("_hair") or "couro_cabeludo" in o.name] or None)
+                       cabelo=[o for o in pecas if o.name.endswith(("_hair", "_hair_cards")) or "couro_cabeludo" in o.name] or None)
     tamanho = c.exportar_glb(saida, [arm] + pecas, animacoes=bool(acoes))
     arquivos = {"modelo": saida}
     arquivos.update(previas(t, pecas, saida, arm if acoes else None, acoes))
@@ -200,6 +200,9 @@ def tarefa_humano(t):
     st["qa"] = qa
     st["movimento"] = movimento
     st["acabamento"] = acabamento
+    cab = next((o for o in pecas if "medidas_cabelo" in o.keys()), None)
+    if cab is not None:
+        st["cabelo"] = cab["medidas_cabelo"].to_dict()
     r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
     if arm is not None and "jaw" in arm.data.bones:
         # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do

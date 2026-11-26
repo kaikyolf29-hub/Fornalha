@@ -204,11 +204,18 @@ def qa(objs, arm=None, corpo=None, cabelo=None):
             dist = [kd.find(cap.matrix_world @ v.co)[2] for v in cap.data.vertices]
             mx = float(np.percentile(dist, 99)) if dist else 0.0
             item("couro cabeludo a menos de 2 mm do crânio", mx < 0.002, f"{mx * 1000:.2f} mm")
-        cards = next((o for o in cabelo if o.name.endswith("_hair")), None)
-        if cards is not None:
-            g = cards.vertex_groups.get("head")
-            ok = g is not None and all(any(ge.group == g.index and ge.weight > 0.999 for ge in v.groups) for v in cards.data.vertices)
-            item("cabelo todo preso ao osso da cabeça", ok)
+        # curto: só a cabeça; médio e comprido: cabeça, pescoço e costas (nunca braço, perna ou quadril)
+        permitidos = ("head", "neck", "spine", "clavicle")
+        fora = []
+        for o in cabelo:
+            if not o.name.endswith(("_hair", "_hair_cards")):
+                continue
+            nomes = {g.index: g.name for g in o.vertex_groups}
+            ruins = {nomes[ge.group] for v in o.data.vertices for ge in v.groups
+                     if ge.weight > 0.01 and not nomes.get(ge.group, "").startswith(permitidos)}
+            if not o.vertex_groups or ruins:
+                fora.append(f"{o.name}: {', '.join(sorted(ruins)) or 'sem pesos'}")
+        item("cabelo preso só à cabeça, pescoço e costas", not fora, "; ".join(fora))
         item("cobertura do couro cabeludo (raios de fora para dentro)", *_cobertura(corpo, cabelo))
     # 3. texturas: mapas de dados em Non-Color, albedo de dielétrico na faixa física
     cor_errada, albedo_fora = [], []
@@ -268,7 +275,44 @@ def _cobertura(corpo, cabelo, n=600):
     cena = bpy.context.scene
     cap = next((o for o in cabelo if "couro_cabeludo" in o.name), None)
     if cap is None:
-        return False, "sem couro cabeludo"
+        # cabelo guiado (médio/comprido): o couro é a pele da cabeça que o penteado cobre
+        guia = next((o for o in cabelo if o.name.endswith("_hair")), None)
+        if guia is None:
+            return False, "sem couro cabeludo"
+        from mathutils.kdtree import KDTree
+
+        gv = [guia.matrix_world @ v.co for v in guia.data.vertices]
+        kd = KDTree(len(gv))
+        for i, q in enumerate(gv):
+            kd.insert(q, i)
+        kd.balance()
+        g = corpo.vertex_groups.get("head")
+        cabeca = [corpo.matrix_world @ v.co for v in corpo.data.vertices
+                  if g is not None and any(e.group == g.index and e.weight > 0.9 for e in v.groups)]
+        topo = max((q.z for q in cabeca), default=0.0)
+        # o couro de verdade: topo da cabeça (sem orelha nem testa) por baixo do penteado
+        cab = [q[:] for q in cabeca if q.z > topo - 0.10 and kd.find(q)[2] < 0.015]
+        if len(cab) < 30:
+            return False, "o penteado não cobre a cabeça"
+        vs = np.array(cab)
+        c = vs.mean(0) - np.array([0, 0, 0.06])
+        # só a pele que tem o penteado por cima (a testa abaixo da franja é pele mesmo)
+        guia_ev = guia.evaluated_get(dg)
+        inv = guia.matrix_world.inverted()
+        coberta = []
+        for p in vs:
+            d = p - c
+            d /= np.linalg.norm(d) + 1e-9
+            o_ = inv @ Vector(p + d * 0.001)
+            ok, *_ = guia_ev.ray_cast(o_, inv.to_3x3() @ Vector(d), distance=0.06)
+            if ok:
+                coberta.append(p)
+        if len(coberta) < 30:
+            return False, "o penteado não cobre a cabeça"
+        vs = np.array(coberta)
+        rng = np.random.default_rng(1)
+        alvo = vs[rng.choice(len(vs), min(n, len(vs)), replace=False)]
+        return _opacidade_do_cabelo(alvo, c, corpo, cabelo, dg, cena, guia)
     vs = np.array([(cap.matrix_world @ v.co)[:] for v in cap.data.vertices])
     if not len(vs):
         return False, "couro cabeludo vazio"
@@ -286,6 +330,86 @@ def _cobertura(corpo, cabelo, n=600):
         vs = vs[miolo]
     rng = np.random.default_rng(1)
     alvo = vs[rng.choice(len(vs), min(n, len(vs)), replace=False)]
+    return _raios_de_cobertura(alvo, c, corpo, cabelo, dg, cena)
+
+
+def _alfa_da_textura(obj):
+    """Alfa da textura do material do cabelo (numpy H×W) e as UVs por canto de polígono."""
+    for ms in obj.material_slots:
+        m = ms.material
+        if m is None or not m.use_nodes:
+            continue
+        for n_ in m.node_tree.nodes:
+            if n_.type == "TEX_IMAGE" and n_.image is not None and n_.outputs["Alpha"].is_linked:
+                img = n_.image
+                w, h = img.size
+                px = np.empty(w * h * 4, np.float32)
+                img.pixels.foreach_get(px)
+                alfa = px.reshape(h, w, 4)[..., 3]
+                # o mesmo reforço que o material aplica antes do BSDF (multiplicar com limite em 1)
+                for l_ in n_.outputs["Alpha"].links:
+                    if l_.to_node.type == "MATH" and l_.to_node.operation == "MULTIPLY":
+                        alfa = np.clip(alfa * l_.to_node.inputs[1].default_value, 0, 1)
+                return alfa
+    return None
+
+
+def _opacidade_do_cabelo(alvo, c, corpo, cabelo, dg, cena, guia, maximo=12):
+    """Couro aparecendo de verdade: cada raio atravessa as camadas de cabelo somando o alfa da textura
+    no ponto (mechas ralas deixam ver o couro) até chegar à pele da cabeça."""
+    from mathutils.geometry import barycentric_transform
+
+    nomes = {o.name: o for o in cabelo}
+    cache = {}
+
+    def alfa_no_ponto(obj, poly_i, loc):
+        if obj.name not in cache:
+            ev = obj.evaluated_get(dg)
+            me = ev.to_mesh()
+            uvl = me.uv_layers.active
+            cache[obj.name] = (me, uvl, _alfa_da_textura(obj), obj.matrix_world.inverted())
+        me, uvl, alfa, inv = cache[obj.name]
+        if alfa is None or uvl is None or poly_i >= len(me.polygons):
+            return 1.0
+        pol = me.polygons[poly_i]
+        p_loc = inv @ loc
+        ids = list(pol.loop_indices)
+        for k in range(1, len(ids) - 1):
+            tri = [ids[0], ids[k], ids[k + 1]]
+            vs = [me.vertices[me.loops[li].vertex_index].co for li in tri]
+            uv = [Vector((*uvl.data[li].uv, 0.0)) for li in tri]
+            b = barycentric_transform(p_loc, vs[0], vs[1], vs[2], uv[0], uv[1], uv[2])
+            h, w = alfa.shape
+            x, y = int((b.x % 1.0) * (w - 1)), int((b.y % 1.0) * (h - 1))
+            return float(alfa[y, x])
+        return 1.0
+
+    cobertura = []
+    for p in alvo:
+        d = p - c
+        d /= np.linalg.norm(d) + 1e-9
+        origem = Vector(p + d * 0.12)
+        dirr = Vector(-d)
+        passa = 1.0  # quanto da luz ainda passa (1 = couro todo à mostra)
+        for _ in range(maximo):
+            ok, loc, nrm, idx, obj, mat = cena.ray_cast(dg, origem, dirr)
+            if not ok or obj == corpo or obj.name not in nomes:
+                break
+            passa *= 1.0 - alfa_no_ponto(obj, idx, loc)
+            origem = loc + dirr * 1e-4
+            if passa < 0.01:
+                break
+        cobertura.append(1.0 - passa)
+    for me, *_ in cache.values():
+        pass
+    if not cobertura:
+        return False, "nenhum raio"
+    cob = np.array(cobertura)
+    aparece = float((cob < 0.6).mean())
+    return aparece <= 0.03, f"couro aparecendo em {aparece * 100:.1f}% (opacidade média {cob.mean() * 100:.0f}%)"
+
+
+def _raios_de_cobertura(alvo, c, corpo, cabelo, dg, cena):
     acertos = total = 0
     nomes_cabelo = {o.name for o in cabelo}
     # só conta raio que acerta cabelo ou a pele da cabeça (gola, orelha de fora etc. não contam);

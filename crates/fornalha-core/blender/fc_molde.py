@@ -581,7 +581,9 @@ def _manopla_firme(obj, arm, raio=0.11):
     total = 0
     grupos = {g.name: g for g in obj.vertex_groups}
     for lado in ("l", "r"):
-        mao, braco = arm.data.bones.get(f"hand_{lado}"), arm.data.bones.get(f"lowerarm_{lado}")
+        L = "Left" if lado == "l" else "Right"
+        mao = arm.data.bones.get(f"hand_{lado}") or arm.data.bones.get(f"{L}Hand")
+        braco = arm.data.bones.get(f"lowerarm_{lado}") or arm.data.bones.get(f"{L}LowerArm") or arm.data.bones.get(f"{L}ForeArm")
         if mao is None or braco is None or braco.name not in grupos:
             continue
         g_mao = grupos.get(mao.name) or obj.vertex_groups.new(name=mao.name)
@@ -616,7 +618,10 @@ def _pes_firmes(obj, arm):
     total = 0
     grupos = {g.name: g for g in obj.vertex_groups}
     for lado in ("l", "r"):
-        pe, canela, dedo = (arm.data.bones.get(f"{n}_{lado}") for n in ("foot", "calf", "ball"))
+        L = "Left" if lado == "l" else "Right"
+        pe = arm.data.bones.get(f"foot_{lado}") or arm.data.bones.get(f"{L}Foot")
+        canela = arm.data.bones.get(f"calf_{lado}") or arm.data.bones.get(f"{L}LowerLeg") or arm.data.bones.get(f"{L}Leg")
+        dedo = arm.data.bones.get(f"ball_{lado}") or arm.data.bones.get(f"{L}Toes") or arm.data.bones.get(f"{L}ToeBase")
         if pe is None or canela is None:
             continue
         g_pe = grupos.get(pe.name) or obj.vertex_groups.new(name=pe.name)

@@ -516,7 +516,12 @@ def assentar_no_chao(arm, acao, conf, malhas, raiz="pelvis"):
     falta = []
     for q in qs:
         cena.frame_set(q)
-        z = min(float(fc_conferir._co_do_chao(o)[:, 2].min()) for o in malhas)
+        zs = [fc_conferir._co_do_chao(o) for o in malhas]
+        zs = [float(x[:, 2].min()) for x in zs if len(x)]
+        if not zs:
+            falta.append(0.0)
+            continue
+        z = min(zs)
         falta.append(max(0.0, conf.chao - z))
     falta = np.array(falta)
     if falta.max() < 0.01:

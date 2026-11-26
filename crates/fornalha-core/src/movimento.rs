@@ -281,6 +281,8 @@ pub struct Clipe {
     pub velocidade: Option<f64>,
     /// Tomada longa de luta (guarda → golpe → guarda): fica só o golpe, em volta do pico da mão.
     pub golpe: Option<bool>,
+    /// Mão fechada (soco, mão na arma). Padrão: fecha nos golpes, quando a captura não traz os dedos.
+    pub punho: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -350,7 +352,7 @@ pub async fn aplicar(f: &Fornalha, a: ArgsAplicar, quem: &str) -> Resultado<Valu
             modelos.push((modelo, credito));
         }
         pedidos.push(json!({"arquivo": caminho, "acao": acao, "como": c.como, "laco": c.laco, "ciclo": c.ciclo, "no_lugar": c.no_lugar,
-                            "inicio": c.inicio, "fim": c.fim, "velocidade": c.velocidade, "golpe": c.golpe}));
+                            "inicio": c.inicio, "fim": c.fim, "velocidade": c.velocidade, "golpe": c.golpe, "punho": c.punho}));
     }
     let r = forjar(
         f,

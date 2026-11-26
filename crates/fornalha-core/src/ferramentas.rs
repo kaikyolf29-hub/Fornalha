@@ -225,7 +225,7 @@ pub fn lista() -> Vec<Ferramenta> {
                     "sobrancelha": {"type": "string", "description": "eyebrow001 a eyebrow012 (pacote MakeHuman)."},
                     "pele": {"type": "object", "description": "{sardas, manchas, poros, rugas, bronzeado} de 0 a 1: pele curtida de sol, envelhecida, marcada (0 = o padrão pela idade)."},
                     "golpes": {"type": "string", "enum": ["luta", "biblioteca"], "description": "Golpes e defesa de quem luta com espada, machado, martelo ou adaga: luta (padrão: captura real do ACCAD — corte, corte subindo, estocada e aparar, com o peso nos pés) ou biblioteca (os CC0 estilizados)."},
-                    "roupa": {"type": "object", "description": "{estilo: campones|mercenario|soldado|cavaleiro|cavaleiro_placas|templario|nobre|jaqueta (moderno: camisa de brim, jaqueta de couro aberta com gola e bolsos, jeans, botas), cores: {principal, secundaria, detalhe}, capa}. Expressão do rosto: em `rosto`, os alvos expression/units/caucasian/* (eyebrows-left-down, eye-left-slit, mouth-compression...)."},
+                    "roupa": {"type": "object", "description": "{estilo: campones|mercenario|soldado|cavaleiro|cavaleiro_placas|templario|nobre|jaqueta (moderno: camisa de brim, jaqueta de couro aberta com gola e bolsos, jeans, botas)|manequim (sem roupa, pele inteira: a base do create_garment), cores: {principal, secundaria, detalhe}, capa}. Expressão do rosto: em `rosto`, os alvos expression/units/caucasian/* (eyebrows-left-down, eye-left-slit, mouth-compression...)."},
                     "referencia": {"type": "string", "description": "Imagem de referência: no fim o resultado sai lado a lado com ela, com paleta, diferença de cor e proporção medidas (veja compare_reference)."},
                     "corpo": {"type": "string", "enum": ["auto", "humanoide", "alado", "quadrupede", "aranha", "inseto", "serpente", "criatura"],
                               "description": "Tipo de corpo: decide o esqueleto e as animações. auto mede na malha (padrão quando há imagem). humanoide: esqueleto do humano com dedos e captura de movimento; alado: asas, pescoço e cauda; os outros: patas achadas na malha (qualquer número), passada com IK, coluna e cauda em onda, bote."}
@@ -314,7 +314,8 @@ pub fn lista() -> Vec<Ferramenta> {
                     "laco": {"type": "boolean"}, "ciclo": {"type": "boolean"}, "no_lugar": {"type": "boolean"},
                     "inicio": {"type": "integer", "minimum": 0}, "fim": {"type": "integer", "minimum": 0},
                     "velocidade": {"type": "number", "minimum": 0.1, "maximum": 4},
-                    "golpe": {"type": "boolean", "description": "Tomada longa de luta (guarda, golpe, guarda): fica só o golpe, em volta do pico da mão."}}, "required": ["id", "como"]}},
+                    "golpe": {"type": "boolean", "description": "Tomada longa de luta (guarda, golpe, guarda): fica só o golpe, em volta do pico da mão."},
+                    "punho": {"type": "boolean", "description": "Mão fechada (soco, mão na arma). Padrão: fecha nos golpes quando a captura não tem dedos."}}, "required": ["id", "como"]}},
                 "corrigir": {"type": "boolean", "description": "Corrigir sozinho o que reprovar (padrão: sim)."},
                 "video": {"type": "boolean", "description": "Vídeo das animações novas (lento no processador)."}},
                 "required": ["arquivo", "clipes"]}),

@@ -116,6 +116,17 @@ geradores de sala e masmorra.
    Etapa 2, luta sem braço quebrado, música, efeitos, dublagem, cena curta), rodando na Erethea
    quando ela estiver pronta e na Godot no CI. Depois, o teste do criador no PC (TESTE_DO_CRIADOR.md).
 
+## Rodada de 26/11 à noite: duas etapas (pedido do criador)
+- **Etapa 1 — o que não existia:** régua visual (arma na mão, mão/pé da malha seguindo o osso), `show_motion`
+  (a IA vê em quadros grandes, estilos material/barro/anime), `edit_motion` e o Estúdio 3D na janela (ver e
+  mexer no movimento, o mesmo giro que o Blender grava), `create_garment` (roupa e armadura separadas, no
+  corpo do manequim) com o vestir de verdade (peça inteira, placa rígida, pano solto, pele coberta escondida,
+  adorno que copia os pesos), punho fechado nos golpes, 3D pela IA no processador ao lado do Vulkan (Máximo:
+  fluxo inteiro), Blender 5.3 baixado para a prova.
+- **Etapa 2 — a cadeia inteira pelas ferramentas:** manequim → templário da referência (23 partes) →
+  vestido → 15/15 animações conferidas → soco e gancho de captura real (ACCAD) com o punho fechado → vistos
+  quadro a quadro, em material e em anime. Teste do criador: seção 9e do TESTE_DO_CRIADOR.md.
+
 ## Fica para depois
 Retopologia de verdade, mapa grande por regiões, aranha e outros corpos que só geram malha com placa
 (até lá: Forja ou API), captura de duas mãos própria, nível máximo das referências (RE4 Remake,

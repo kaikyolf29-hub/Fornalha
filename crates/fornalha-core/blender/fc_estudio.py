@@ -352,14 +352,22 @@ def _carimbo(texto, tamanho=18):
     r.stamp_background = (0.0, 0.0, 0.0, 0.55)
 
 
-def _render(arq, objs, direcao, largura, altura, amostras, caixa=None, margem=1.12):
+def _render(arq, objs, direcao, largura, altura, amostras, caixa=None, margem=1.12, orto=False):
     cena = bpy.context.scene
     c._preparar_render(largura, altura, amostras)
     mn, mx = caixa if caixa else c.caixa_envolvente(objs)
     if not bpy.data.objects.get("sol"):
         c._luzes((mn + mx) / 2, (mx - mn).length)
     cam = cena.camera or c._camera()
-    c.enquadrar(cam, mn, mx, direcao, margem=margem)
+    c.enquadrar(cam, mn, mx, direcao, margem=margem, orto=orto)
+    if orto:
+        # vista de modelo: cabe a altura (ou a largura vista nesse ângulo) com a margem
+        d = Vector(direcao).normalized()
+        lado = Vector((-d.y, d.x, 0)).normalized() if abs(d.z) < 0.9 else Vector((1, 0, 0))
+        ext = mx - mn
+        largura_vista = abs(ext.x * lado.x) + abs(ext.y * lado.y)
+        cam.data.sensor_fit = "AUTO"
+        cam.data.ortho_scale = max(ext.z * largura / altura if largura > altura else ext.z, largura_vista * (altura / largura if altura > largura else 1.0)) * margem
     cena.render.filepath = arq
     os.makedirs(os.path.dirname(os.path.abspath(arq)), exist_ok=True)
     bpy.ops.render.render(write_still=True)

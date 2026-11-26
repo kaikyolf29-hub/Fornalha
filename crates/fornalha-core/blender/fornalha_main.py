@@ -9,6 +9,7 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import bmesh  # noqa: E402
 import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
@@ -1182,6 +1183,13 @@ def tarefa_vestir(t):
         o.matrix_world = mundo
         o.modifiers.clear()
         o.vertex_groups.clear()
+        # o glTF separa os vértices nas costuras da textura: sem juntar de novo, cada pedaço de costura
+        # virava uma "ilha" (uma placa) com o próprio osso, e o braçal virava cunha no cotovelo
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+        bm.to_mesh(o.data)
+        bm.free()
     if not roupa:
         raise ValueError("o arquivo da roupa não tem malha")
     escala = fc_vestir.encaixar(roupa, corpo) if t.get("encaixar") else None
@@ -1272,7 +1280,9 @@ def tarefa_ver_movimento(t):
     for p in r["problemas"]:
         vermelhos.setdefault(p["quadro"], []).append(p["osso"])
         vermelhos.setdefault("todos", []).append(p["osso"])
-    base = os.path.splitext(t.get("saida") or t["entrada"])[0] + f".ver_{acao.name}"
+    estilo = t.get("estilo") or "material"
+    # o estilo entra no nome: ver em anime não apaga a folha em material
+    base = os.path.splitext(t.get("saida") or t["entrada"])[0] + f".ver_{acao.name}" + ("" if estilo == "material" else f"_{estilo}")
     v = fc_estudio.ver(arm, acao, base, quadros=t.get("quadros") or 8, angulos=tuple(t.get("angulos") or ("tres_quartos", "lado")),
                        estilo=t.get("estilo") or "material", rastro=t.get("rastro", True), ossos=t.get("esqueleto", True),
                        zoom=t.get("de_perto", True), vermelhos_por_quadro=vermelhos, amostras=int(t.get("amostras", 14)))
@@ -1351,22 +1361,47 @@ def tarefa_roupa(t):
     base = os.path.splitext(saida)[0]
     arquivos = {"modelo": saida}
     if t.get("previa", True):
-        # sozinha (o que vai ser vestido) e no manequim de barro (assenta? cobre o que devia?)
-        corpo_objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in partes]
+        # folhas de modelo (ortográficas: frente, lado, costas) e o tronco de perto em três quartos: sozinha
+        # (o que vai ser vestido) e no manequim de barro (assenta? cobre o que devia?)
+        import fc_estudio
+
+        corpo_objs = [o for o in corpo_malhas if o not in partes]
+        arm.data.pose_position = "REST"
+        bpy.context.view_layer.update()
+        amostras = int(t.get("amostras", 16))
+
+        def folha(caminho, objs):
+            for o in bpy.data.objects:
+                if o.name == "chao_previa":
+                    bpy.data.objects.remove(o, do_unlink=True)
+            mn, mx = c.caixa_envolvente(objs)
+            mn.z = min(mn.z, 0.0)
+            fc_estudio._chao_xadrez(mn, mx, max(mx.z - mn.z, 0.5))
+            celulas = []
+            for i, (d, nome) in enumerate((((0, -1, 0.0), "frente"), ((1, 0, 0.0), "lado"), ((0, 1, 0.0), "costas"))):
+                fc_estudio._carimbo(nome, 16)
+                arq = f"{caminho}.tmp{i}.png"
+                fc_estudio._render(arq, objs, d, 400, 760, amostras, caixa=(mn, mx), margem=1.06, orto=True)
+                celulas.append(fc_estudio._pixels(arq, 400, 760))
+            altura = mx.z - mn.z
+            meio = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z + 0.62 * altura))
+            r = 0.2 * altura
+            fc_estudio._carimbo("tronco de perto", 16)
+            arq = f"{caminho}.tmp3.png"
+            fc_estudio._render(arq, objs, (0.7, -1.0, 0.25), 400, 760, amostras, caixa=(meio - Vector((r, r, r * 1.4)), meio + Vector((r, r, r * 1.4))), margem=1.0)
+            celulas.append(fc_estudio._pixels(arq, 400, 760))
+            fc_estudio._juntar(caminho, celulas, 4, 400, 760)
+            bpy.context.scene.render.use_stamp = False
+
         for o in corpo_objs:
             o.hide_render = True
-        c.folha_de_modelo(base + ".ver_sozinha.png", partes, largura=420, altura=640, amostras=int(t.get("amostras", 16)))
-        chao = bpy.data.objects.get("chao_previa")
-        if chao is not None:
-            bpy.data.objects.remove(chao, do_unlink=True)  # a primeira folha pôs o chão embaixo da roupa, não dos pés
+        folha(base + ".ver_sozinha.png", partes)
         barro = c.material("fc_barro_manequim", (0.55, 0.53, 0.5), 0.75)
         for o in corpo_objs:
             o.hide_render = False
             o.data.materials.clear()
             o.data.materials.append(barro)
-        arm.data.pose_position = "REST"
-        bpy.context.view_layer.update()
-        c.folha_de_modelo(base + ".ver_no_corpo.png", corpo_objs + partes, largura=420, altura=640, amostras=int(t.get("amostras", 16)))
+        folha(base + ".ver_no_corpo.png", corpo_objs + partes)
         arquivos["sozinha"] = base + ".ver_sozinha.png"
         arquivos["no_corpo"] = base + ".ver_no_corpo.png"
     lista = []

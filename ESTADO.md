@@ -11,6 +11,58 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Rodada da noite (26/11): as duas etapas — estúdio, régua visual, roupa no manequim, soco
+Pedido do criador: separar o que falta em duas etapas e ir até o fim; a IA (e a pessoa) **verem** o
+movimento e mexerem nele; roupa feita separada, com detalhe, depois vestida no manequim, depois o
+movimento (um soco das bibliotecas); qualidade que cresce com mais recurso (API paga, placa melhor),
+anime ou qualquer estilo; nada aprovado na mediocridade.
+**Etapa 1 — o que não existia:**
+- **Régua visual** na conferência (`fc_conferir`): reprova a **arma fora da mão** (a pegada tem de cair no
+  volume da mão da malha) e a **mão/pé da malha que não segue o osso** (peso errado: a manopla ficava no
+  antebraço). A correção conserta as duas (pesos firmes como no molde; arma presa de novo pela pegada, no
+  repouso). Provado no templário: a espada 30 cm fora reprova e volta para a mão; a manopla com 55% no
+  antebraço reprova e é firmada. Achou um defeito antigo: no personagem simples da Forja o cabo do machado
+  ficava ~6 cm além do punho (agora a pegada vai no meio da mão da malha).
+- **`show_motion`** (a IA vê): folhas em quadros grandes (no máximo 4 por linha, para a imagem não
+  encolher), enquadramento fixo na animação inteira, rastro da mão, do pé e da ponta da arma, chão de 25 cm,
+  esqueleto com o osso reprovado em vermelho, mão e pés de perto; estilos **material**, **barro** (só a
+  forma) e **anime** (dois tons e contorno).
+- **`edit_motion`** e o **Estúdio 3D** na janela (estação Movimento, three.js dentro do app, sem
+  internet): ver de qualquer ângulo, tocar, quadro a quadro, ossos e rastro, girar um osso (arrastando ou
+  de 5 em 5°), espalhar o ajuste nos vizinhos, gravar por cima ou como animação nova; o Blender aplica e
+  confere de novo. **Provado de ponta a ponta** (Chromium + API + Blender): o que o estúdio mostra antes de
+  gravar é o que o Blender grava, diferença máxima **0,04°** nos quadros 6 a 18.
+- **`create_garment`** (roupa e armadura separadas, nascidas no corpo do manequim): casca (da pele da
+  região, alisada, afastada, com espessura, borda e subdivisão; `convexa` para elmo, ombreira, braçal,
+  greva, joelheira, sabatão e capuz), faixa (cinto, gola, punho pelo contorno real), saia (pelo contorno,
+  abrindo, com fendas, abertura de capa, dobras e barra em ponta) e adorno colado na superfície (cruz,
+  fivela, visor). Cota de malha com textura de anéis de verdade (imagem, vai no glb). Orçamento de
+  triângulos por parte e no total (220 mil). Imagens: sozinha e no manequim de barro (frente, lado, costas
+  em ortográfica e o tronco de perto). `create_character` com `roupa: {estilo: "manequim"}` faz o corpo sem
+  roupa e com a pele inteira.
+- **Vestir de verdade** (`dress_character`): cada parte da roupa é uma peça inteira (as ilhas do UV no
+  mundo picavam a peça em centenas de "placas": era a cunha no cotovelo); placas convexas ficam rígidas no
+  osso; saia e capa são pano solto (seguem o quadril, 40% das pernas; a barra que roça o chão não conta
+  como "corpo no chão"); adorno colado copia os pesos da peça dele (a cruz anda com a saia); **a pele
+  coberta pela roupa justa sai** (como nos jogos: não fura a cota no movimento).
+- **Punho fechado** nos golpes (`apply_motion` `punho`, padrão nos golpes): a captura do ACCAD não tem
+  dedos e o soco saía de mão aberta.
+- **3D pela IA no processador** ao lado do motor Vulkan (RX 580): pasta e porta próprias (antes um
+  apagava o outro). No nível **Máximo**, o TRELLIS.2 roda o fluxo inteiro no processador (até 14 h, uma
+  noite); nos outros, o reduzido (2 a 4 h).
+- **Blender 5.3.0** saiu (5.2.5 LTS também): baixado e conferido pela soma; a troca só entra depois da
+  suíte inteira passar nele (veja abaixo).
+**Etapa 2 — a cadeia pelas ferramentas de verdade (CLI/MCP):** manequim (`create_character`, manequim) →
+templário da referência em 23 partes (`create_garment`: cota, mangas e calça de malha, coifa, saia de
+malha, sobreveste com fendas e barra em ponta, dois cintos com fivela, cruzes, ombreira, braçais,
+manoplas, joelheiras, grevas, sabatões, elmo com visor, capuz, capa) → `dress_character` (12 placas
+rígidas, 13 panos, 12,7 mil vértices de pele escondidos) → `check_motion` com correção (**15 de 15**) →
+`apply_motion` com o cruzado e o gancho de captura real do ACCAD (golpe recortado, punho fechado,
+**aprovados**) → `show_motion` (material e anime). Olhado quadro a quadro: sem pele furando, cruz e
+placas inteiras, punho fechado, pés no chão. **Falta em relação à foto:** lâminas da ombreira, cintos
+cruzados, rebites e o metal com marcas de uso (a forma está lá; o detalhe fino é o próximo passo, e no
+caminho do 3D pela IA/API).
+
 ### Rodada da tarde (26/11): armadura detalhada no manequim, movimento coerente, Joel mais perto
 Pedido do criador (vendo o painel do Joel e a referência do templário): nada medíocre; a armadura no nível
 alto que a ferramenta já fazia (o templário do 3D pela IA de 23/11), vestida no manequim e testada em

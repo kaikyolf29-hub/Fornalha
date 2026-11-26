@@ -43,7 +43,12 @@ REGIOES = {
     "canela_l": ["calf_l", "LeftLeg", "LeftLowerLeg"], "canela_r": ["calf_r", "RightLeg", "RightLowerLeg"],
     "pe_l": ["foot_l", "ball_l", "LeftFoot", "LeftToeBase"], "pe_r": ["foot_r", "ball_r", "RightFoot", "RightToeBase"],
 }
-for _k in ("ombro", "braco", "antebraco", "mao", "coxa", "canela", "pe", "clavicula"):
+for _l in ("l", "r"):
+    _dedos = [f"{d}_0{i}_{_l}" for d in ("thumb", "index", "middle", "ring", "pinky") for i in (1, 2, 3)]
+    _L = "Left" if _l == "l" else "Right"
+    _dedos += [f"{_L}Hand{d}{i}" for d in ("Thumb", "Index", "Middle", "Ring", "Pinky") for i in (1, 2, 3)]
+    REGIOES[f"mao_inteira_{_l}"] = REGIOES[f"mao_{_l}"] + _dedos
+for _k in ("ombro", "braco", "antebraco", "mao", "mao_inteira", "coxa", "canela", "pe", "clavicula"):
     REGIOES[_k] = REGIOES[_k + "_l"] + REGIOES[_k + "_r"]
 REGIOES["braco_inteiro_l"] = REGIOES["braco_l"] + REGIOES["antebraco_l"]
 REGIOES["braco_inteiro_r"] = REGIOES["braco_r"] + REGIOES["antebraco_r"]
@@ -86,6 +91,14 @@ class Corpo:
         self.z0 = float(self.co[:, 2].min())
         self.z1 = float(self.co[:, 2].max())
         self.H = self.z1 - self.z0
+
+    def arvore(self):
+        """Busca do ponto mais perto da pele (com a normal de fora)."""
+        if getattr(self, "_arvore", None) is None:
+            from mathutils.bvhtree import BVHTree
+
+            self._arvore = BVHTree.FromPolygons([tuple(x) for x in self.co], [tuple(int(i) for i in t) for t in self.tri])
+        return self._arvore
 
     def ossos(self, regiao):
         nomes = regiao if isinstance(regiao, list) else REGIOES.get(regiao, [regiao])
@@ -175,9 +188,18 @@ def _reamostrar(laco, n, inicio=None):
     centro = laco.mean(0)
     desloc = 0.0
     if inicio is not None:
-        ang = np.arctan2(laco[:, 1] - centro[1], laco[:, 0] - centro[0])
-        i0 = int(np.argmin(np.abs(((ang - inicio) + np.pi) % (2 * np.pi) - np.pi)))
-        desloc = acc[i0]
+        # onde a reta do centro nesse ângulo cruza o laço (no meio de um lado, se for o caso): a frente da
+        # saia fica no meio mesmo entre as duas pernas, não no canto do joelho mais perto
+        d = np.array([math.cos(inicio), math.sin(inicio)])
+        for i in range(len(laco)):
+            a, b = fech[i], fech[i + 1]
+            m = np.array([[d[0], a[0] - b[0]], [d[1], a[1] - b[1]]])
+            if abs(np.linalg.det(m)) < 1e-12:
+                continue
+            r, f = np.linalg.solve(m, a - centro)
+            if r > 0 and -1e-9 <= f <= 1 + 1e-9:
+                desloc = acc[i] + f * seg[i]
+                break
     alvo = (desloc + np.linspace(0, total, n, endpoint=False)) % total
     xs = np.interp(alvo, acc, fech[:, 0])
     ys = np.interp(alvo, acc, fech[:, 1])
@@ -201,8 +223,70 @@ def _afastar_2d(laco, d):
 
 # ------------------------------------------------------------------ peças
 
+def _textura_de_malha(nome, cor, lado=1024, aneis=48):
+    """Cota de malha de verdade: anéis entrelaçados (fileiras desencontradas), em imagem (vai no glb para o
+    jogo): cor (metal com o vão escuro) e normal (o relevo do anel). 1 metro = 2 voltas da textura."""
+    s = lado / aneis
+    yy, xx = np.mgrid[0:lado, 0:lado].astype(np.float32) + 0.5
+    R, t = 0.36 * s, 0.13 * s
+    h = np.zeros((lado, lado), dtype=np.float32)
+    passo_y = s * 0.5
+    j0 = np.floor(yy / passo_y)
+    for dj in (-1, 0, 1, 2):
+        j = j0 + dj
+        cy = j * passo_y
+        desloc = (np.mod(j, 2)) * s * 0.5
+        i0 = np.round((xx - desloc) / s)
+        for di in (-1, 0, 1):
+            cx = (i0 + di) * s + desloc
+            dx = (xx - cx + lado / 2) % lado - lado / 2
+            dy = (yy - cy + lado / 2) % lado - lado / 2
+            d = np.sqrt(dx * dx + dy * dy)
+            anel = np.sqrt(np.clip(t * t - (d - R) ** 2, 0, None)) / t
+            h = np.maximum(h, anel)
+    gy, gx = np.gradient(h)
+    forca = 2.2
+    nx, ny, nz = -gx * forca, -gy * forca, np.ones_like(h)
+    n = np.sqrt(nx * nx + ny * ny + nz * nz)
+    normal = np.stack([nx / n * 0.5 + 0.5, ny / n * 0.5 + 0.5, nz / n * 0.5 + 0.5, np.ones_like(h)], -1)
+    vao = np.clip(h * 3.0, 0, 1)[..., None]
+    base = np.array(cor[:3], dtype=np.float32)
+    cor_px = base * (0.25 + 0.75 * vao) * (0.85 + 0.15 * h[..., None])
+    cor_img = np.concatenate([cor_px, np.ones((lado, lado, 1), dtype=np.float32)], -1)
+    imgs = []
+    for sufixo, px, dados in (("cor", cor_img, False), ("normal", normal, True)):
+        img = bpy.data.images.new(f"{nome}_{sufixo}", lado, lado, alpha=False)
+        if dados:
+            img.colorspace_settings.name = "Non-Color"
+        img.pixels.foreach_set(px.astype(np.float32).ravel())
+        img.pack()
+        imgs.append(img)
+    m = bpy.data.materials.new(nome)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tc = nt.nodes.new("ShaderNodeTexImage")
+    tc.image = imgs[0]
+    tn = nt.nodes.new("ShaderNodeTexImage")
+    tn.image = imgs[1]
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(tc.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(tn.outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    bsdf.inputs["Metallic"].default_value = 1.0
+    bsdf.inputs["Roughness"].default_value = 0.42
+    m["uv_mundo"] = True
+    return m
+
+
 def _materiais(id_, spec):
+    spec = dict(spec or {})
+    malhas = {k: v for k, v in spec.items() if isinstance(v, dict) and str(v.get("tipo", "")).lower() in ("malha", "cota")}
+    for k in malhas:
+        spec.pop(k)
     mats = fc_pecas._materiais(id_, spec)
+    for k, v in malhas.items():
+        mats[k] = _textura_de_malha(f"{id_}_{k}_malha", c.cor_hex(v.get("cor", "#7b7e83")))
     return mats, (next(iter(mats.values()), None) or c.material(f"{id_}_padrao", c.cor_hex("#8a8580"), 0.6))
 
 
@@ -235,7 +319,8 @@ def _acabamento(o, espessura, borda, detalhe, para_dentro=True):
         s = o.modifiers.new("espessura", "SOLIDIFY")
         s.thickness = espessura
         s.offset = -1.0 if para_dentro else 1.0
-        s.use_even_offset = True
+        # espessura simples: a "igual" joga vértice longe nas dobras fechadas (espinhos de 1 m no elmo)
+        s.use_even_offset = False
         s.use_rim = True
         s.use_quality_normals = True
         mods.append(s)
@@ -283,8 +368,39 @@ def _casca(corpo, nome, p, mat):
         ny = -nrm[:, 1] / np.maximum(np.linalg.norm(nrm, axis=1), 1e-12)
         tri = tri[ny >= corte] if p["lado"] == "frente" else tri[ny <= -corte]
         del frente
+    if p.get("convexa"):
+        # o fecho usa os vértices da região inteira (com de/ate e x_min/x_max), sem o filtro de lado:
+        # o lado abre depois, no casco
+        idx = np.nonzero(sel)[0]
+        if len(idx) < 12:
+            raise ValueError(f"a casca {nome!r} não achou pele nessa região/altura")
+        o = _convexa(corpo, nome, p, mat, corpo.co[idx], ossos)
+        # placa (elmo, ombreira, braçal, greva, joelheira, sabatão): vestida, fica rígida no osso dela
+        o["rigido"] = bool(p.get("rigido", True))
+        return o
     if len(tri) < 8:
         raise ValueError(f"a casca {nome!r} pegou pele demais pouca ({len(tri)} triângulos): confira regiao, de/ate e lado")
+    # só a pele de fora: tira o que aponta para dentro do osso (boca, órbita do olho, orelha por dentro)
+    segs = [corpo.osso(n) for n in ossos if corpo.arm.data.bones.get(n) is not None]
+    if segs:
+        a, b, cc = (corpo.co[tri[:, i]] for i in range(3))
+        centro = (a + b + cc) / 3
+        nrm = np.cross(b - a, cc - a)
+        nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-12)
+        melhor = np.full(len(tri), np.inf)
+        dirs = np.zeros_like(centro)
+        for h, t in segs:
+            h, t = np.array(h), np.array(t)
+            seg = t - h
+            k = np.clip(((centro - h) @ seg) / max(seg @ seg, 1e-12), 0, 1)
+            perto = h + k[:, None] * seg
+            d = centro - perto
+            dist = np.linalg.norm(d, axis=1)
+            troca = dist < melhor
+            melhor[troca] = dist[troca]
+            dirs[troca] = d[troca]
+        dirs /= np.maximum(np.linalg.norm(dirs, axis=1, keepdims=True), 1e-12)
+        tri = tri[(nrm * dirs).sum(1) > -0.1]
     usados, inv = np.unique(tri, return_inverse=True)
     bm = bmesh.new()
     vs = [bm.verts.new(Vector(corpo.co[i])) for i in usados]
@@ -295,20 +411,178 @@ def _casca(corpo, nome, p, mat):
         except ValueError:
             pass
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    _limpar_e_fechar(bm)
     # triângulos do corpo viram quadrados onde der (subdivisão mais limpa)
     bmesh.ops.join_triangles(bm, faces=bm.faces, angle_face_threshold=math.radians(40), angle_shape_threshold=math.radians(40))
+    _alisar_borda(bm, 6)
     # alisar: tira a anatomia (músculo, mamilo, dedos) e deixa a forma de placa ou pano
     for _ in range(int(p.get("alisar", 12))):
         bmesh.ops.smooth_vert(bm, verts=[v for v in bm.verts if not v.is_boundary], factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
     bm.normal_update()
-    # a pele vira roupa: para fora, pela normal (média com a direção do osso mais perto não precisa: alisada já basta)
+    # a pele vira roupa: para fora, pela normal
     afastar = float(p.get("afastar", 0.012))
     for v in bm.verts:
         v.co += v.normal * afastar
+    # alisar encolhe a casca (no músculo da coxa ela afundava dentro da pele e a pele aparecia por cima da
+    # cota no movimento): o que ficou dentro do corpo volta para fora, até a distância pedida
+    arv = corpo.arvore()
+    for v in bm.verts:
+        perto, nrm, _, _ = arv.find_nearest(v.co)
+        if perto is None:
+            continue
+        d = (v.co - perto).dot(nrm)
+        if d < afastar * 0.9:
+            v.co += nrm * (afastar - d)
     # borda solta da casca: um pouco para dentro (a ponta não fica rente à pele)
     o = _objeto_de_bmesh(nome, bm, mat)
     _acabamento(o, float(p.get("espessura", 0.006)), float(p.get("borda", 0.003)), int(p.get("detalhe", 1)))
     return o
+
+
+def _limpar_e_fechar(bm):
+    """Tira pedacinhos soltos e fecha os furos pequenos (olho, boca, narina) da casca; a abertura grande
+    (pescoço, punho, cintura) fica."""
+    # pedaços: fica só o que tem pelo menos 5% das faces do maior
+    vistos, pedacos = set(), []
+    for f in bm.faces:
+        if f in vistos:
+            continue
+        pilha, grupo = [f], []
+        vistos.add(f)
+        while pilha:
+            x = pilha.pop()
+            grupo.append(x)
+            for e in x.edges:
+                for y in e.link_faces:
+                    if y not in vistos:
+                        vistos.add(y)
+                        pilha.append(y)
+        pedacos.append(grupo)
+    if len(pedacos) > 1:
+        maior = max(len(g) for g in pedacos)
+        soltos = [f for g in pedacos if len(g) < 0.05 * maior for f in g]
+        if soltos:
+            bmesh.ops.delete(bm, geom=soltos, context="FACES")
+    # laços de borda
+    borda = {e for e in bm.edges if e.is_boundary}
+    lacos = []
+    while borda:
+        e0 = borda.pop()
+        laco, pilha = [e0], [e0]
+        while pilha:
+            e = pilha.pop()
+            for v in e.verts:
+                for e2 in v.link_edges:
+                    if e2 in borda:
+                        borda.discard(e2)
+                        laco.append(e2)
+                        pilha.append(e2)
+        lacos.append(laco)
+    if len(lacos) > 1:
+        comp = [sum(e.calc_length() for e in laco) for laco in lacos]
+        maior = max(comp)
+        for laco, L in zip(lacos, comp):
+            if L < 0.35 * maior:
+                r = bmesh.ops.holes_fill(bm, edges=laco, sides=0)
+                novas = r.get("faces", [])
+                if novas:
+                    bmesh.ops.triangulate(bm, faces=novas)
+
+
+def _alisar_borda(bm, vezes=6):
+    """A beira da casca sai em dente (o corte segue os triângulos do corpo): alisa a beira ao longo dela."""
+    borda = [v for v in bm.verts if v.is_boundary]
+    for _ in range(vezes):
+        novo = {}
+        for v in borda:
+            viz = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+            if len(viz) == 2:
+                novo[v] = v.co * 0.5 + (viz[0].co + viz[1].co) * 0.25
+        for v, co in novo.items():
+            v.co = co
+
+
+def _convexa(corpo, nome, p, mat, pontos, ossos):
+    """Casca convexa (elmo, ombreira, joelheira, sabatão, capuz): o fecho dos pontos da região, refeito em
+    malha uniforme, alisado e aberto do lado pedido. Não copia nariz, boca nem dedos."""
+    bm = bmesh.new()
+    for q in pontos:
+        bm.verts.new(Vector(q))
+    r = bmesh.ops.convex_hull(bm, input=list(bm.verts))
+    sobra = list({g for g in r.get("geom_interior", []) + r.get("geom_unused", []) if isinstance(g, bmesh.types.BMVert) and g.is_valid})
+    if sobra:
+        bmesh.ops.delete(bm, geom=sobra, context="VERTS")
+    o = _objeto_de_bmesh(nome + "_casco", bm, None)
+    rm = o.modifiers.new("uniforme", "REMESH")
+    rm.mode = "VOXEL"
+    rm.voxel_size = float(p.get("resolucao", 0.008 * corpo.H / 1.8))
+    sm = o.modifiers.new("liso", "SMOOTH")
+    sm.factor = 0.6
+    sm.iterations = int(p.get("alisar", 6))
+    _aplicar(o, [rm, sm])
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bpy.data.objects.remove(o, do_unlink=True)
+    bm.normal_update()
+    # afasta pela normal (o fecho já passa por fora da pele nas pontas)
+    afastar = float(p.get("afastar", 0.012))
+    for v in bm.verts:
+        v.co += v.normal * afastar
+    bm.normal_update()
+    # abrir: tira o lado pedido (frente aberta do capuz, dentro da ombreira, sola do sabatão); abrir_pontas
+    # abre as duas pontas pelo eixo do osso (braçal, greva, manga: serve em braço inclinado também)
+    eixo = None
+    if p.get("abrir_pontas") and ossos:
+        h, t = corpo.osso(ossos[0])
+        if (t - h).length > 1e-6:
+            eixo = (t - h).normalized()
+    tirar = []
+    lado = p.get("lado")
+    for f in bm.faces:
+        n = f.normal
+        c0 = f.calc_center_median()
+        if lado == "frente" and n.y > -float(p.get("corte", 0.0)):
+            tirar.append(f)
+        elif lado == "costas" and n.y < float(p.get("corte", 0.0)):
+            tirar.append(f)
+        elif p.get("so_fora") and (Vector((c0.x, c0.y, 0)) - Vector((0, 0, 0))).length > 1e-6:
+            fora = Vector((c0.x, c0.y, 0)).normalized()
+            if n.dot(fora) < float(p.get("so_fora", 0.0)):
+                tirar.append(f)
+        elif eixo is not None and abs(n.dot(eixo)) > 0.75:
+            tirar.append(f)
+        elif p.get("abrir_embaixo") and n.z < -0.6:
+            tirar.append(f)
+        elif p.get("abrir_em_cima") and n.z > 0.6:
+            tirar.append(f)
+        if p.get("de") is not None and c0.z < float(p["de"]) and f not in tirar:
+            tirar.append(f)
+        if p.get("ate") is not None and c0.z > float(p["ate"]) and f not in tirar:
+            tirar.append(f)
+    if tirar and len(tirar) < len(bm.faces):
+        bmesh.ops.delete(bm, geom=tirar, context="FACES")
+    _alisar_borda(bm, 8)
+    o = _objeto_de_bmesh(nome, bm, mat)
+    _acabamento(o, float(p.get("espessura", 0.004)), float(p.get("borda", 0.003)), int(p.get("detalhe", 1)))
+    return o
+
+
+def _limitar_triangulos(o, maximo):
+    """Diminui a malha (colapso, que guarda a forma) até o máximo de triângulos."""
+    o.data.calc_loop_triangles()
+    n = len(o.data.loop_triangles)
+    if maximo <= 0 or n <= maximo:
+        return n
+    d = o.modifiers.new("limite", "DECIMATE")
+    d.decimate_type = "COLLAPSE"
+    d.ratio = max(0.01, maximo / n)
+    d.use_collapse_triangulate = False
+    _aplicar(o, [d])
+    o.data.calc_loop_triangles()
+    return len(o.data.loop_triangles)
+
+
+LIMITE_POR_TIPO = {"casca": 24000, "saia": 24000, "faixa": 6000, "adorno": 6000}
 
 
 def _laco_do_corpo(corpo, ponto, normal, raio, afastar, lados, inicio=None, so=None):
@@ -396,6 +670,10 @@ def _saia(corpo, nome, p, mat):
     afastar = float(p.get("afastar", 0.015))
     fendas = p.get("fendas") or []
     fenda_altura = float(p.get("fenda_altura", 0.5))
+    # abertura: graus abertos de cima a baixo, centrados em `abertura_centro` (0 = frente): capa (aberta na
+    # frente), avental (aberto atrás), tabardo (os dois lados)
+    abertura = float(p.get("abertura", 0.0))
+    abertura_centro = float(p.get("abertura_centro", 0.0))
     centro = Vector((0, 0, 0))
     pelve = corpo.arm.data.bones.get("pelvis") or corpo.arm.data.bones.get("Hips")
     if pelve is not None:
@@ -423,10 +701,31 @@ def _saia(corpo, nome, p, mat):
     pts = np.array([[list(q) for q in laco] for laco in linhas])
     for _ in range(int(p.get("alisar", 3))):
         pts[1:-1] = 0.25 * pts[:-2] + 0.5 * pts[1:-1] + 0.25 * pts[2:]
+    # dobras do pano (crescem para a barra) e barra em ponta na frente/atrás (sobreveste, tabardo)
+    dobras = int(p.get("dobras", 0))
+    fundo = float(p.get("dobra_profundidade", 0.012))
+    ponta_f, ponta_c = float(p.get("ponta_frente", 0.0)), float(p.get("ponta_costas", 0.0))
+    n_aneis = len(pts)
+    for i in range(n_aneis):
+        t = i / max(1, n_aneis - 1)
+        meio = pts[i].mean(0)
+        for j in range(lados):
+            ang = 2 * math.pi * j / lados
+            if dobras:
+                radial = pts[i, j, :2] - meio[:2]
+                nr = np.linalg.norm(radial)
+                if nr > 1e-6:
+                    pts[i, j, :2] += radial / nr * fundo * (t ** 1.3) * math.sin(dobras * ang)
+            if ponta_f or ponta_c:
+                cf = max(0.0, math.cos(ang))
+                pts[i, j, 2] -= t * (ponta_f * cf ** 3 + ponta_c * max(0.0, -math.cos(ang)) ** 3)
     bm = bmesh.new()
     vs = [[bm.verts.new(Vector(q)) for q in linha] for linha in pts]
     # fendas: ângulos (graus; 0 = frente, 90 = esquerda do personagem, 180 = costas) abertas da barra até fenda_altura
     def aberta(i, j):
+        meio = ((j + 0.5) / lados) * 360.0
+        if abertura > 0 and abs(((meio - abertura_centro) + 180) % 360 - 180) < abertura / 2:
+            return True
         if not fendas:
             return False
         t = i / (len(vs) - 1)
@@ -455,7 +754,7 @@ def _saia(corpo, nome, p, mat):
 
 
 def _adorno(corpo, nome, p, mats, padrao, feitos):
-    spec = dict(p)
+    spec = {k: v for k, v in p.items() if k not in ("material", "nome", "colar", "ponto", "lado")}
     spec["tipo"] = p.get("forma", "caixa")
     obj, avisos = fc_pecas.montar({"id": nome, "pecas": [spec], "materiais": {}})
     m = mats.get(p.get("material")) or padrao
@@ -481,6 +780,7 @@ def _adorno(corpo, nome, p, mats, padrao, feitos):
         loc = dono.matrix_world @ loc
         nrm = (dono.matrix_world.to_3x3() @ nrm).normalized()
         # a peça foi descrita de frente (como na foto): o -y dela vira a normal da superfície
+        obj["colado_em"] = dono.name
         R = nrm.to_track_quat("-Y", "Z").to_matrix().to_4x4()
         afundar = float(p.get("afundar", 0.0))
         obj.matrix_world = Matrix.Translation(loc - nrm * afundar) @ R @ obj.matrix_world
@@ -519,6 +819,13 @@ def montar(arm, malhas, spec):
         except (KeyError, ValueError, TypeError) as e:
             raise ValueError(f"parte {i} ({nome}, {tipo}): {e}") from e
         o.name = f"{id_}_{nome}"
+        # cada parte já é uma peça inteira (as ilhas do UV no mundo são pedaços da projeção, não peças)
+        o["peca_inteira"] = True
+        if tipo == "saia":
+            # pano solto (saia, sobreveste, capa): vestido, segue mais o quadril que as pernas, e a barra que
+            # roça o chão não conta como "o corpo entrou no chão"
+            o["pano_solto"] = True
+        _limitar_triangulos(o, int(p.get("triangulos", LIMITE_POR_TIPO[tipo])))
         espelho = p.get("espelhar") if tipo != "adorno" else None
         if espelho == "x":
             copia = o.copy()
@@ -535,6 +842,18 @@ def montar(arm, malhas, spec):
             ordem.append(copia)
         feitos[nome] = o
         ordem.append(o)
+    # orçamento da roupa inteira (o jogo precisa caber): divide igual entre as partes grandes
+    total = 0
+    for o in ordem:
+        o.data.calc_loop_triangles()
+        total += len(o.data.loop_triangles)
+    orcamento = int(spec.get("triangulos_max", 220000))
+    if total > orcamento:
+        r = orcamento / total
+        for o in ordem:
+            n = len(o.data.loop_triangles)
+            if n > 4000:
+                _limitar_triangulos(o, int(n * r))
     for o in ordem:
         c.uv_mundo([o], escala=float(spec.get("escala_uv", 2.0)))
     corpo.arm.data.pose_position = "POSE"

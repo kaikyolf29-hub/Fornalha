@@ -70,9 +70,21 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    lado a lado e as medidas (paleta, diferença de cor, silhueta), ajuste e gere de novo até chegar o mais perto
    possível. Fique sempre com o melhor resultado; não entregue o que está visivelmente pior que a referência.
 3. **Movimento antes da roupa**: `check_motion` (com `corrigir`), `list_motions` → `apply_motion` (banco
-   Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos com `import_motion`); `show_skeleton` / `edit_skeleton`
-   para qualquer corpo (ossos `mola_<grupo>_1..N` viram mola no jogo).
-4. **Roupa por cima**: `dress_character` (placas rígidas no osso, pano dobra).
+   Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos com `import_motion`; `golpe: true` recorta a tomada
+   longa de luta no golpe); `show_skeleton` / `edit_skeleton` para qualquer corpo (ossos
+   `mola_<grupo>_1..N` viram mola no jogo). A régua também reprova arma fora da mão e mão/pé da malha que
+   não segue o osso. **Veja antes de aprovar**: `show_motion` (quadros grandes de 3/4 e de lado, rastro da
+   mão, do pé e da ponta da arma, chão de 25 cm, esqueleto com o osso reprovado em vermelho, mão e pés de
+   perto; estilos material, barro e anime). Para ajustar um quadro: `edit_motion` (girar/mover um osso,
+   espalhado suave nos vizinhos; `salvar_como` guarda a original) e veja de novo. A pessoa faz o mesmo no
+   Estúdio 3D da janela (estação Movimento).
+4. **Roupa separada, depois vestida**: com referência de roupa ou armadura, faça um manequim
+   (`create_character` com `roupa: {{estilo: "manequim"}}`), faça a roupa no corpo dele com
+   `create_garment` (casca do corpo para peitoral, espaldar, ombreira, braçal, greva e camisa; faixa para
+   cinto, gola e punho; saia para túnica e sobreveste; adorno para cruz, rebite e fivela), olhe as imagens
+   (sozinha e no manequim de barro, frente, lado e costas) e ajuste até ficar como a referência; depois
+   `dress_character` (placas rígidas no osso, pano dobra) e confira o movimento vestido (`check_motion` e
+   `show_motion`).
 5. **Armas, objetos e casas**: `generate_3d`. Para chegar perto de uma referência, monte a forma por
    peças (`pecas`: caixa com chanfro, cilindro, esfera, torno pelo perfil, extrusão do contorno com gume,
    tubo por pontos; `materiais` com cor e tipo) olhando a imagem, passe `referencia` e ajuste até ficar

@@ -127,6 +127,10 @@ def _mascara_do_chao(obj):
     isso a barra que passa do chão subia o quadril quadro a quadro e desfazia o pé travado."""
     if obj.name in _PANO_SOLTO:
         return _PANO_SOLTO[obj.name]
+    if obj.get("pano_solto"):
+        # saia/sobreveste/capa feitas no create_garment: a peça inteira é pano solto
+        _PANO_SOLTO[obj.name] = np.zeros(len(obj.data.vertices), dtype=bool)
+        return _PANO_SOLTO[obj.name]
     pano = {g.index for g in obj.vertex_groups if g.name == "saia" or g.name.startswith(("capa", "saia_"))}
     mask = None
     if pano:
@@ -336,9 +340,17 @@ class Conferencia:
                 fim = L + (0.03 if mao else 0.0)
                 raio = (0.05 if mao else 0.065) * self.H
                 cand = np.nonzero((s_ > ini) & (s_ < fim) & (r < raio))[0]
+                # e o que é da mão pelo peso, perto do osso (mão em caixa de 8 vértices, mão pequena: a janela
+                # depois do pulso não pega a mão inteira)
+                perto = np.nonzero((s_ > -0.1 * L) & (s_ < fim + 0.05) & (r < raio * 1.5))[0]
+                gm_dono = {idx_grupo[x] for x in ({nome} | {c.name for c in b.children_recursive}) if x in idx_grupo}
+                if gm_dono and len(perto):
+                    dono = [int(i) for i in perto if sum(ge.weight for ge in obj.data.vertices[int(i)].groups if ge.group in gm_dono) >= 0.5]
+                    if dono:
+                        cand = np.union1d(cand, np.array(dono, dtype=np.int64))
                 if pano is not None and len(pano) == n:
                     cand = cand[pano[cand]]
-                if len(cand) < 12:
+                if len(cand) < 4:
                     continue
                 # só o que é do braço/da perna pelo peso (mão, dedos, antebraço): perto da mão em repouso
                 # também passa a coxa e a túnica, que não seguem a mão. Os dedos saem (dobram de verdade).
@@ -353,7 +365,7 @@ class Conferencia:
                         ficam.append(int(i))
                         firme.append(sum(ge.weight for ge in gs if ge.group in gf) < 0.5)
                 cand, firme = np.array(ficam, dtype=np.int64), np.array(firme, dtype=bool)
-                if firme.sum() < 12:
+                if firme.sum() < 4:
                     continue
                 if len(cand) > 3000:
                     k = np.linspace(0, len(cand) - 1, 3000).astype(np.int64)
@@ -653,8 +665,8 @@ class Conferencia:
         regua = getattr(self, "_ultima_regua", None) or {"solta": {}, "arma": {}}
         for n, (v, q) in regua["solta"].items():
             if v > MALHA_SOLTA_CM:
-                parte = "mão" if MAOS.match(n) else "pé"
-                add("malha_solta", n, v, MALHA_SOLTA_CM, q, "cm", f"a {parte} da malha sai {v:.1f} cm do osso {n} (peso errado: ela fica para trás quando o osso gira)")
+                parte = "a mão" if MAOS.match(n) else "o pé"
+                add("malha_solta", n, v, MALHA_SOLTA_CM, q, "cm", f"{parte} da malha sai {v:.1f} cm do osso {n} (peso errado: fica para trás quando o osso gira)")
         for chave, (v, q, osso) in regua["arma"].items():
             if v > ARMA_FORA_CM:
                 add("arma_fora_da_mao", osso, v, ARMA_FORA_CM, q, "cm", f"a pegada da arma ({chave}) fica {v:.0f} cm fora da mão da malha")

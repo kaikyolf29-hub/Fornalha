@@ -127,7 +127,12 @@ async function abrir(arquivo, animacao) {
         o.frustumCulled = false;
         e.malhas.push(o);
         e.originais.set(o, o.material);
-        if (!o.isSkinnedMesh && o.parent && o.parent.isBone) e.armas.push(o);
+      }
+      // arma presa no osso da mão: o nó filho do osso (malha, ou grupo de malhas quando tem vários materiais)
+      if (!o.isBone && !o.isSkinnedMesh && o.parent && o.parent.isBone) {
+        let temMalha = false;
+        o.traverse((x) => { if (x.isMesh && !x.isSkinnedMesh) temMalha = true; });
+        if (temMalha) e.armas.push(o);
       }
       if (o.isSkinnedMesh) for (const b of o.skeleton.bones) if (!vistos.has(b)) { vistos.add(b); }
     });
@@ -387,11 +392,23 @@ function refazerRastro() {
     if (!e.clipe || !el("est-ver-rastro").checked) return pedirQuadro();
     const t0 = e.tempo;
     const alvos = Object.entries(PONTAS).map(([k, nomes]) => [k, nomes.map((n) => e.porNome[n]).find(Boolean)]).filter(([, b]) => b);
+    // ponta da arma: o vértice mais longe da pegada (a origem do nó preso na mão), no espaço desse nó
     const pontas = e.armas.map((a) => {
-      const p = a.geometry.attributes.position;
-      let melhor = 0, idx = 0;
-      for (let i = 0; i < p.count; i++) { const d = p.getX(i) ** 2 + p.getY(i) ** 2 + p.getZ(i) ** 2; if (d > melhor) { melhor = d; idx = i; } }
-      return [a, new THREE.Vector3(p.getX(idx), p.getY(idx), p.getZ(idx))];
+      a.updateWorldMatrix(true, true);
+      const inv = a.matrixWorld.clone().invert();
+      const v = new THREE.Vector3(), melhor = new THREE.Vector3();
+      let dist = -1;
+      a.traverse((m) => {
+        if (!m.isMesh) return;
+        const p = m.geometry.attributes.position;
+        const M = inv.clone().multiply(m.matrixWorld);
+        for (let i = 0; i < p.count; i++) {
+          v.fromBufferAttribute(p, i).applyMatrix4(M);
+          const d = v.lengthSq();
+          if (d > dist) { dist = d; melhor.copy(v); }
+        }
+      });
+      return [a, melhor.clone()];
     });
     const linhas = Object.fromEntries([...alvos.map(([k]) => [k, []]), ...pontas.map((_, i) => ["arma" + i, []])]);
     const total = Math.max(1, Math.round(e.clipe.duration * FPS));
@@ -430,7 +447,7 @@ function aplicarEstilo(estilo) {
     const novos = lista.map((o) => {
       if (estilo === "material") return o;
       const alfa = { transparent: o.transparent, alphaTest: o.alphaTest, side: o.side };
-      if (estilo === "barro") return new THREE.MeshStandardMaterial({ color: e.armas.includes(m) ? 0x707276 : 0x9a948c, roughness: 0.68, map: o.alphaTest > 0 || o.transparent ? o.map : null, ...alfa });
+      if (estilo === "barro") return new THREE.MeshStandardMaterial({ color: ehDaArma(m) ? 0x707276 : 0x9a948c, roughness: 0.68, map: o.alphaTest > 0 || o.transparent ? o.map : null, ...alfa });
       return new THREE.MeshToonMaterial({ color: o.color ? o.color.clone() : new THREE.Color(0xffffff), map: o.map || null, gradientMap: degraus, ...alfa });
     });
     m.material = Array.isArray(orig) ? novos : novos[0];
@@ -445,6 +462,11 @@ function aplicarEstilo(estilo) {
   }
   for (const b of document.querySelectorAll("[data-est-estilo]")) b.classList.toggle("ativo", b.dataset.estEstilo === estilo);
   pedirQuadro();
+}
+
+function ehDaArma(m) {
+  for (let o = m; o; o = o.parent) if (e.armas.includes(o)) return true;
+  return false;
 }
 
 function contornoMaterial(espessura) {

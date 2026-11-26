@@ -369,6 +369,93 @@ def virar_para_frente(S, alvo, rt, acao, quadro, ate=None):
     return math.degrees(ang)
 
 
+DEDOS = ("thumb", "index", "middle", "ring", "pinky")
+# graus de cada junta no punho fechado (base, meio, ponta); o polegar fecha menos e por cima
+PUNHO = {"thumb": (20.0, 35.0, 30.0), "index": (75.0, 95.0, 60.0), "middle": (80.0, 95.0, 60.0), "ring": (82.0, 95.0, 60.0), "pinky": (85.0, 95.0, 60.0)}
+
+
+def _curvas(acao):
+    """(coleção, curva) de cada curva da ação (ações em camadas do Blender 4.4+ ou as antigas)."""
+    out = []
+    for camada in getattr(acao, "layers", []) or []:
+        for faixa in camada.strips:
+            for cb in getattr(faixa, "channelbags", []) or []:
+                out += [(cb.fcurves, fc) for fc in cb.fcurves]
+    if not out and hasattr(acao, "fcurves"):
+        out = [(acao.fcurves, fc) for fc in acao.fcurves]
+    return out
+
+
+def _ossos_animados(acao, minimo=0.03):
+    """Ossos que mexem de verdade na ação (a retarget grava todos, até os parados no descanso)."""
+    nomes = set()
+    for _, fc in _curvas(acao):
+        if not fc.data_path.startswith('pose.bones["') or len(fc.keyframe_points) < 2:
+            continue
+        vals = [k.co[1] for k in fc.keyframe_points]
+        if max(vals) - min(vals) > minimo:
+            nomes.add(fc.data_path.split('"')[1])
+    return nomes
+
+
+def _tirar_curvas(acao, nomes):
+    for colecao, fc in _curvas(acao):
+        if fc.data_path.startswith('pose.bones["') and fc.data_path.split('"')[1] in nomes:
+            colecao.remove(fc)
+
+
+def fechar_punho(arm, acao, forca=1.0):
+    """Mão fechada nos quadros todos (soco, e a mão que segura a arma): a captura de luta (BVH do ACCAD)
+    não tem dedos e a mão ficava aberta, de dedos esticados, no meio do soco. O eixo de cada junta sai do
+    próprio descanso (atravessando a palma) e o lado da palma é o do polegar. Dedos que a animação já
+    mexe ficam como estão. Devolve quantos ossos fechou."""
+    animados = _ossos_animados(acao)
+    ad = arm.animation_data or arm.animation_data_create()
+    ad.action = acao
+    if hasattr(ad, "action_slot") and getattr(acao, "slots", None):
+        try:
+            ad.action_slot = acao.slots[0]
+        except Exception:
+            pass
+    ini, fim = (int(round(x)) for x in acao.frame_range)
+    feitos = 0
+    parados = [b.name for b in arm.data.bones
+               if len(b.name.split("_")) == 3 and b.name.split("_")[0] in DEDOS and b.name not in animados]
+    _tirar_curvas(acao, set(parados))
+    for lado in ("l", "r"):
+        mao = arm.data.bones.get(f"hand_{lado}")
+        ind, mind = arm.data.bones.get(f"index_01_{lado}"), arm.data.bones.get(f"pinky_01_{lado}")
+        pol = arm.data.bones.get(f"thumb_01_{lado}")
+        if mao is None or ind is None or mind is None:
+            continue
+        ao_longo = (mao.tail_local - mao.head_local).normalized()
+        atraves = (mind.head_local - ind.head_local).normalized()
+        palma = ao_longo.cross(atraves).normalized()
+        if pol is not None and (pol.tail_local - mao.head_local).dot(palma) < 0:
+            palma = -palma
+        for b in arm.data.bones:
+            partes = b.name.split("_")
+            if len(partes) != 3 or partes[0] not in DEDOS or partes[2] != lado or b.name in animados:
+                continue
+            junta = int(partes[1]) - 1
+            if not 0 <= junta <= 2:
+                continue
+            d = (b.tail_local - b.head_local).normalized()
+            eixo = d.cross(palma)
+            if eixo.length < 1e-6:
+                continue
+            R = Matrix.Rotation(math.radians(PUNHO[partes[0]][junta] * forca), 3, eixo.normalized())
+            B = b.matrix_local.to_3x3()
+            q = (B.inverted() @ R @ B).to_quaternion()
+            pb = arm.pose.bones[b.name]
+            pb.rotation_mode = "QUATERNION"
+            pb.rotation_quaternion = q
+            for quadro in (ini, fim):
+                pb.keyframe_insert("rotation_quaternion", frame=quadro, group=b.name)
+            feitos += 1
+    return feitos
+
+
 def gravar(rt, acao_fonte, nome, laco, quadros_fonte, no_lugar):
     S, T = rt.S, rt.T
     _usar(S, acao_fonte)
@@ -503,6 +590,9 @@ def aplicar(alvo, pedidos):
             no_lugar = bool(p["no_lugar"]) if p.get("no_lugar") is not None else laco
             criadas.append(gravar(rt, a, p["como"], laco, quadros, no_lugar))
             nota.update({"quadros": n, "laco": laco, "no_lugar": no_lugar})
+            # soco e golpe de arma: mão fechada (a captura sem dedos deixava a mão aberta)
+            if p.get("punho") or (p.get("golpe") and p.get("punho") is None):
+                nota["punho_fechado"] = fechar_punho(alvo, criadas[-1])
             notas.append(nota)
         _limpar(novos, acoes)
     for pb in alvo.pose.bones:

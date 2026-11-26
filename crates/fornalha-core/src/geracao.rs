@@ -128,7 +128,14 @@ fn aplicar_controles(h: &mut Value, ctl: &Value, feminino_pelo_texto: bool) {
     if ctl["pele"].is_object() {
         h["pele"] = ctl["pele"].clone();
     }
-    if let Some(r) = ctl["roupa"].as_object() {
+    if ctl["roupa"]["estilo"] == "manequim" {
+        // manequim: o corpo sem roupa e com a pele inteira (nada apagado por baixo), para fazer a roupa
+        // separada no corpo dele (create_garment) e vestir depois (dress_character)
+        if let Some(o) = h.as_object_mut() {
+            o.remove("roupa");
+        }
+        h["manequim"] = json!(true);
+    } else if let Some(r) = ctl["roupa"].as_object() {
         if let Some(e) = r.get("estilo").and_then(Value::as_str).filter(|e| ESTILOS_DE_ROUPA.contains(e)) {
             h["roupa"]["estilo"] = json!(e);
         }
@@ -2293,6 +2300,8 @@ mod testes_controles {
         assert_eq!(j["roupa"]["estilo"], "jaqueta");
         assert_eq!(j["roupa"]["cores"]["principal"], "#5b4632");
         assert_eq!(j["roupa"]["capa"], false);
+        let m = super::humano_da_ficha(&ficha(json!({"roupa": {"estilo": "manequim"}})), crate::niveis::Nivel::Qualidade);
+        assert!(m.get("roupa").is_none() && m["manequim"] == true, "manequim sai sem roupa");
         let x = super::humano_da_ficha(&ficha(json!({"roupa": {"estilo": "astronauta"}})), crate::niveis::Nivel::Qualidade);
         assert_ne!(x["roupa"]["estilo"], "astronauta", "estilo que o alfaiate não faz não entra");
     }

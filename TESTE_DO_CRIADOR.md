@@ -148,6 +148,24 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
    pequeno inteiro só pelo MCP (herói com barba, três inimigos, espada e casa por peças, mapa com vila,
    floresta e cripta, música, efeitos, cena curta) e testa na engine. **Esperado:** "Jogo de prova completo".
 
+## 9e. Estúdio 3D, roupa no manequim e soco (novo na noite de 26/11)
+1. **Estúdio 3D** (janela → Movimento → *Abrir o personagem no estúdio*). **Esperado:** o personagem gira com
+   o mouse, *Tocar* anima, a régua do tempo anda quadro a quadro (← →), as bolinhas dos ossos aparecem (as
+   reprovadas em vermelho depois de *Conferir esta animação*), o rastro colorido da mão e do pé e da ponta
+   da arma, chão em quadrados. Escolha um osso, gire (arrastando ou nos botões de 5°), *Gravar como nova*.
+   **Me diga:** se ficou leve na RX 580 (girar e tocar sem engasgar), se o giro gravado bate com o que você
+   viu, e o que falta para você ajustar um movimento sozinho.
+2. *"Faça um manequim e, em cima dele, a armadura do templário desta imagem; vista e ponha um soco."* (com a
+   referência). **Esperado:** `create_character` (roupa `manequim`) → `create_garment` (partes, imagens
+   sozinha e no manequim de barro) → `dress_character` → `check_motion` → `apply_motion` (soco do ACCAD,
+   punho fechado) → `show_motion` (quadros grandes). **Olhe:** pele furando a roupa, placa esticando no
+   cotovelo, cruz descolando da saia, mão aberta no soco. **Nota de 0 a 100** para a armadura e para o soco.
+3. *"Mostre o soco em anime."* **Esperado:** `show_motion` com `estilo: "anime"` (dois tons e contorno).
+4. **3D pela IA no processador** (Máquina → Motor de imagem → *Instalar o 3D pela IA (no processador)*, depois
+   do aceite do DINOv3 em Licenças). **Esperado:** o motor de imagem pelo Vulkan continua (a imagem segue
+   rápida na RX 580) e aparece a linha "3D pela IA no processador: instalado". Peça um personagem no nível
+   **Máximo** na fila da noite. **Me diga:** quanto tempo levou no Ryzen 5 5500 e como ficou a malha.
+
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.
 Meta de referência (a do Ignis): perto de 60 MB e processador perto de 0%. Me diga o número.

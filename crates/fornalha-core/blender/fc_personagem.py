@@ -180,8 +180,14 @@ def criar_personagem(p):
     tipo_arma = p.get("arma")
     if tipo_arma and tipo_arma != "nenhuma":
         arma = fc_armas.criar_arma({"tipo": tipo_arma, "id": f"{nome}_{tipo_arma}", "cor_metal": p.get("cor_metal"), "cor_couro": p.get("cor_couro"), "escala": H / 1.8})
-        # Na T-pose a mão direita aponta para -X; a lâmina fica para a frente (-Y).
+        # Na T-pose a mão direita aponta para -X; a lâmina fica para a frente (-Y). A pegada vai no meio da
+        # mão da malha (antes era um ponto fixo e o cabo ficava ~6 cm além do punho: a régua visual pegou)
         mao = Vector((-0.468 * H, 0, 0.80 * H))
+        g = corpo.vertex_groups.get("RightHand")
+        if g is not None:
+            pts = [corpo.matrix_world @ v.co for v in corpo.data.vertices if any(ge.group == g.index and ge.weight > 0.5 for ge in v.groups)]
+            if len(pts) >= 4:
+                mao = sum(pts, Vector()) / len(pts)
         # Queremos a arma para a frente e um pouco para baixo com o braço caído (girado -72° em Y);
         # na T-pose isso é a direção desfeita por essa rotação.
         final = Vector((0.0, -0.75, -0.66)).normalized()

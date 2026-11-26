@@ -17,7 +17,7 @@ passo diz o que fazer e o que deve acontecer. Se algo der diferente, tire um pri
      placa sem o `cargo test`, use `fornalha-cli chamar run_test` (ou o botão Testar da janela).
    - **Esperado:** não pede administrador; ao terminar, a Fornalha abre.
 4. Para gerar 3D e testar o jogo, a Fornalha usa programas de fora (grátis): o **Blender** e a **Godot**
-   (ou a sua **Erethea Engine**). Em **Máquina → Programas**, clique em **Baixar 5.2.4 (≈ 420 MB)** no
+   (ou a sua **Erethea Engine**). Em **Máquina → Programas**, clique em **Baixar 5.3.0 (≈ 430 MB)** no
    Blender e **Baixar 4.6.1 (≈ 70 MB)** na Godot. **Esperado:** "Baixando… N MB" e, no fim, o caminho
    em `…\Fornalha\dados\ferramentas\…` com a versão. A Fornalha confere a soma publicada pelo Blender
    e pela Godot antes de usar. Se você já tem os dois instalados, ela acha sozinha; se não achar,

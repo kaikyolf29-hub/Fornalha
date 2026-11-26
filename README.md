@@ -14,7 +14,7 @@ e uma API e servidor MCP para o Claude Code, o Codex ou qualquer agente.</p>
 
 ## Onde está
 **Fases 0 a 4 do Plano 1**, testadas sem placa de vídeo e com as gerações de verdade rodando no CI do
-Windows e do Linux (Blender 5.2.4 e Godot 4.6.1): personagem com esqueleto e animações, armas,
+Windows e do Linux (Blender 5.3.0 e Godot 4.6.1): personagem com esqueleto e animações, armas,
 objetos, mundo, efeitos, música, código do jogo, cenas montadas na engine e o jogo testado sozinho.
 Veja [ESTADO.md](ESTADO.md) para o que foi provado e o que falta provar.
 

@@ -38,7 +38,7 @@ pub struct Download {
     pub tamanho: &'static str,
 }
 
-pub const BLENDER_VERSAO: &str = "5.2.4";
+pub const BLENDER_VERSAO: &str = "5.3.0";
 pub const GODOT_VERSAO: &str = "4.6.1";
 
 /// O download do programa para o sistema (só Blender e Godot; a Erethea é do criador).
@@ -47,26 +47,26 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
         (Programa::Blender, true) => Download {
             programa,
             versao: BLENDER_VERSAO,
-            url: "https://download.blender.org/release/Blender5.2/blender-5.2.4-windows-x64.zip",
+            url: "https://download.blender.org/release/Blender5.3/blender-5.3.0-windows-x64.zip",
             espelhos: &[
-                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.4-windows-x64.zip",
-                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.2/blender-5.2.4-windows-x64.zip",
+                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.3/blender-5.3.0-windows-x64.zip",
+                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.3/blender-5.3.0-windows-x64.zip",
             ],
-            arquivo: "blender-5.2.4-windows-x64.zip",
-            soma: Soma::Sha256("bbd78f8931dc940444da4ff2983374930f9f5c092ae0e330588e9760bb9d967c"),
-            tamanho: "≈ 420 MB",
+            arquivo: "blender-5.3.0-windows-x64.zip",
+            soma: Soma::Sha256("3ac567a63d59d9934f7b9213bfb27ba05760e1fb366f8f55c381573ec3eabfa8"),
+            tamanho: "≈ 430 MB",
         },
         (Programa::Blender, false) => Download {
             programa,
             versao: BLENDER_VERSAO,
-            url: "https://download.blender.org/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
+            url: "https://download.blender.org/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz",
             espelhos: &[
-                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
-                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.2/blender-5.2.4-linux-x64.tar.xz",
+                "https://mirrors.ocf.berkeley.edu/blender/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz",
+                "https://ftp.nluug.nl/pub/graphics/blender/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz",
             ],
-            arquivo: "blender-5.2.4-linux-x64.tar.xz",
-            soma: Soma::Sha256("2fd14c50987426897ba60237ee996edf2b4151f4b1a72a460ca20be58c1d2d86"),
-            tamanho: "≈ 380 MB",
+            arquivo: "blender-5.3.0-linux-x64.tar.xz",
+            soma: Soma::Sha256("dacb8264197a3f7fda6001285a5a506fc97ee943881261c2c3bd63c882f22e05"),
+            tamanho: "≈ 410 MB",
         },
         (Programa::Godot, true) => Download {
             programa,

@@ -50,8 +50,10 @@ anime ou qualquer estilo; nada aprovado na mediocridade.
 - **3D pela IA no processador** ao lado do motor Vulkan (RX 580): pasta e porta próprias (antes um
   apagava o outro). No nível **Máximo**, o TRELLIS.2 roda o fluxo inteiro no processador (até 14 h, uma
   noite); nos outros, o reduzido (2 a 4 h).
-- **Blender 5.3.0** saiu (5.2.5 LTS também): baixado e conferido pela soma; a troca só entra depois da
-  suíte inteira passar nele (veja abaixo).
+- **Blender 5.3.0** (o mais novo; saiu também o 5.2.5 LTS): baixado e conferido pela soma; a suíte `forja`
+  (14/14) e a cadeia inteira da Etapa 2 passaram nele com o mesmo resultado do 5.2.4. **A Fornalha agora
+  baixa o 5.3.0** (Máquina → Programas; soma SHA-256 publicada conferida); o CI baixa e prova no Windows e
+  no Linux. Os scripts continuam rodando no 5.2 (quem já tem não precisa trocar).
 **Etapa 2 — a cadeia pelas ferramentas de verdade (CLI/MCP):** manequim (`create_character`, manequim) →
 templário da referência em 23 partes (`create_garment`: cota, mangas e calça de malha, coifa, saia de
 malha, sobreveste com fendas e barra em ponta, dois cintos com fivela, cruzes, ombreira, braçais,

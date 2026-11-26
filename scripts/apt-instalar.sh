@@ -14,6 +14,19 @@ trocar_espelho() {
   done
 }
 
+# repositórios de fora do Ubuntu que vêm na máquina do GitHub (Microsoft, etc.): a Fornalha não usa nenhum,
+# e quando um deles cai (o da Microsoft passou a responder 403 em 26/11) o "apt-get update" inteiro falha
+desligar_repositorios_de_fora() {
+  for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    if grep -qE "packages\.microsoft\.com|ppa\.launchpadcontent\.net|apt\.postgresql\.org|dl\.google\.com" "$f"; then
+      echo "Desligando $f (repositório de fora, não usado aqui)"
+      sudo mv "$f" "$f.desligado"
+    fi
+  done
+}
+desligar_repositorios_de_fora
+
 for t in 1 2 3; do
   [ "$t" -ge 2 ] && trocar_espelho
   sudo dpkg --configure -a || true

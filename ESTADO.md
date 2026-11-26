@@ -593,8 +593,10 @@ A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.
 algum desses, avise aqui.
 
 ## Próximo passo
-0. [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): Etapa 1 feita; guia para qualquer IA feito. Agora:
-   bancada de mapa (Etapa 2), cabelo comprido aceitável, depois cutscene e o jogo de prova (Etapa 3).
+0. [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): Etapa 1 feita; guia para qualquer IA, bancada de mapa,
+   masmorra por peças, cena curta e cabelo médio/comprido em cards guiados feitos. Falta: **aprovação do
+   criador no cabelo** (ver no Forward+ com TAA no PC), barba em cards, mola nas mechas, o **jogo de prova**
+   feito pela IA (Etapa 3, item 4) e o teste do criador no PC (mapa, cena curta e cabelo na placa).
 1. Criador: rodar o TESTE_DO_CRIADOR.md no Windows (e, se quiser, no Linux).
 2. Com a placa NVIDIA nova: instalar os modelos de placa em Máquina e rodar a parte 9 do teste.
 3. Fase 5 só quando o criador pedir.

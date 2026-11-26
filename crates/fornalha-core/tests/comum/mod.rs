@@ -92,3 +92,20 @@ pub fn wav_de_teste(segundos: f64) -> Vec<u8> {
     w.extend(dados);
     w
 }
+
+/// Referência de teste: um retângulo de cor `rgb` (o "objeto") no meio de um fundo claro.
+pub fn referencia_png(caminho: &std::path::Path, rgb: [u8; 3], largura: u32, altura: u32) {
+    let (lx, ly) = (largura / 4, altura / 8);
+    let mut px = Vec::with_capacity((largura * altura * 3) as usize);
+    for y in 0..altura {
+        for x in 0..largura {
+            let dentro = x >= lx && x < largura - lx && y >= ly && y < altura - ly;
+            px.extend_from_slice(&if dentro { rgb } else { [235, 235, 230] });
+        }
+    }
+    let arq = std::fs::File::create(caminho).unwrap();
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(arq), largura, altura);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.write_header().unwrap().write_image_data(&px).unwrap();
+}

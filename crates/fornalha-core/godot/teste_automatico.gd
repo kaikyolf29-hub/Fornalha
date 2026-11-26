@@ -209,6 +209,21 @@ func _cena_curta() -> Dictionary:
 	return r
 
 
+## O visual em uso (bíblia) e quantas peças estão com o material anime (o teste confere que trocou).
+func _visual() -> Dictionary:
+	var fisica = load("res://Scripts/fornalha/fisica.gd")
+	var n := 0
+	var cena := get_tree().current_scene
+	if cena:
+		for no in cena.find_children("*", "MeshInstance3D", true, false):
+			var mi := no as MeshInstance3D
+			for i in mi.get_surface_override_material_count():
+				var m := mi.get_surface_override_material(i) as ShaderMaterial
+				if m and m.shader and m.shader.resource_path.ends_with("anime.gdshader"):
+					n += 1
+	return {"render": fisica.render(), "materiais_anime": n}
+
+
 func _terminar() -> void:
 	ativo = false
 	var cena_curta := await _cena_curta()
@@ -227,6 +242,7 @@ func _terminar() -> void:
 		"capturas": _capturas,
 		"fotos_mapa": fotos_mapa,
 		"cena_curta": cena_curta,
+		"visual": _visual(),
 		"jogador": {},
 		"inimigos": {"total": _total_inimigos, "vivos": 0, "perseguiram": _perseguiram.size()},
 	}

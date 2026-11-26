@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::erro::{Erro, Resultado};
 use crate::externas::{self, Achado};
 
-const SCRIPTS: [(&str, &str); 31] = [
+const SCRIPTS: [(&str, &str); 33] = [
     ("fornalha_main.py", include_str!("../blender/fornalha_main.py")),
     ("fc_comum.py", include_str!("../blender/fc_comum.py")),
     ("fc_personagem.py", include_str!("../blender/fc_personagem.py")),
@@ -20,6 +20,8 @@ const SCRIPTS: [(&str, &str); 31] = [
     ("fc_mundo.py", include_str!("../blender/fc_mundo.py")),
     ("fc_mapa.py", include_str!("../blender/fc_mapa.py")),
     ("fc_masmorra.py", include_str!("../blender/fc_masmorra.py")),
+    ("fc_comparar.py", include_str!("../blender/fc_comparar.py")),
+    ("fc_pecas.py", include_str!("../blender/fc_pecas.py")),
     ("fc_placa.py", include_str!("../blender/fc_placa.py")),
     ("fc_humano.py", include_str!("../blender/fc_humano.py")),
     ("fc_roupa.py", include_str!("../blender/fc_roupa.py")),

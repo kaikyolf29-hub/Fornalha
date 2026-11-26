@@ -18,7 +18,10 @@
   numa placa de verdade e a masmorra por peças.
 - **Etapa 3:** o guia para qualquer IA nasce em cada projeto (AGENTS.md + ponteiros para Claude, Gemini,
   Copilot, Cursor, Windsurf e os arquivos de MCP); a **cena curta** virou receita (`create_cutscene` +
-  `CenasCurtas.tocar`). Falta o jogo de prova feito pela IA e o teste do criador.
+  `CenasCurtas.tocar`). **26/11:** liberdade com referência (controles finos no `create_character`, roupa
+  moderna, `compare_reference`, montagem livre por peças no `generate_3d`, casas da IA na vila do mapa,
+  visual anime pela bíblia) e o roteiro do jogo de prova (`testes/mcp-e2e/jogo_de_prova.mjs`). Falta o
+  teste do criador no PC e a aprovação dele (cabelo, barba, manequim do Joel).
 
 ## A ideia em uma frase
 Quem faz o jogo é a **IA** (Claude Code, Codex, Gemini, Cursor, Copilot ou outra) junto com a **Erethea Engine** (a principal) e a

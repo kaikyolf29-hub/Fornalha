@@ -411,6 +411,7 @@ func _luz_do_mapa(raiz: Node3D, luz: Dictionary, hora: String, hdri: String) -> 
 	sol.shadow_enabled = true
 	sol.shadow_blur = 1.5
 	sol.light_angular_distance = 0.6
+	sol.directional_shadow_blend_splits = true  # sem emenda entre as cascatas num mapa de 500 m (pedido 12 da Erethea)
 	sol.directional_shadow_max_distance = 220.0
 	raiz.add_child(sol)
 	_dono(sol, raiz)

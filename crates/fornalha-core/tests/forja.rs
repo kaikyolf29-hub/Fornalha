@@ -2,6 +2,8 @@
 //! objeto, mundo em blockout, limpeza e esqueleto em malha de fora.
 //! Roda quando o Blender está nesta máquina (o CI instala); senão avisa e pula.
 
+mod comum;
+
 use std::time::Duration;
 
 use fornalha_core::externas::{self, Programa};
@@ -159,12 +161,34 @@ async fn mapa_pelo_plano_com_medidas() {
     let blender = blender_ou_pula!();
     let tmp = tempfile::tempdir().unwrap();
     let pasta = tmp.path().join("World/mapa");
+    // a casa que a IA montou por peças vira a casa da vila
+    let casa = json!({"id": "casa_teste", "materiais": {"parede": {"cor": "#9a948a", "tipo": "pedra"}, "telha": {"cor": "#4e5258", "tipo": "telha"}},
+        "pecas": [{"tipo": "caixa", "material": "parede", "centro": [0, 0, 1.6], "tamanho": [8, 6, 3.2]},
+                  {"tipo": "extrusao", "plano": "lado", "material": "telha", "espessura": 8.6, "contorno": [[-3.4, 3.2], [3.4, 3.2], [0, 5.8]]}]});
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "objeto", "saida": tmp.path().join("Items/casa_teste.glb"), "previa": false, "objeto": casa}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
     let plano = json!({"tamanho_m": 256, "seed": 3, "rio": true, "hora": "por_do_sol",
-        "regioes": [{"id": "vila", "tipo": "vila"}, {"id": "mata", "tipo": "floresta", "posicao": "norte"},
+        "regioes": [{"id": "vila", "tipo": "vila", "casas": ["Items/casa_teste.glb", "Items/nao_existe.glb"]}, {"id": "mata", "tipo": "floresta", "posicao": "norte"},
                     {"id": "cripta", "tipo": "masmorra", "posicao": "leste"}, {"id": "x", "tipo": "nave_espacial"}]});
-    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "fotos": false}), TEMPO)
-        .await
-        .unwrap();
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "fotos": false, "projeto_raiz": tmp.path()}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert!(r["avisos"].to_string().contains("nao_existe.glb"), "casa que falta vira aviso");
+    let est = String::from_utf8_lossy(&std::fs::read(pasta.join("estruturas.glb")).unwrap()).into_owned();
+    assert!(est.contains("vila_casa_0-col") && est.contains("casa_teste_parede"), "a vila usa a casa montada");
+    assert_eq!(r["plano"]["regioes"][0]["casas"][0], "Items/casa_teste.glb");
+    assert!(r["plano"]["regioes"][0].get("_casas_arq").is_none(), "caminho da máquina não fica no plano");
     let med = &r["medidas"];
     assert_eq!(med["aprovado"], true, "{med}");
     assert!(r["avisos"].as_array().unwrap().iter().any(|a| a.as_str().unwrap().contains("nave_espacial")), "tipo errado vira aviso");
@@ -448,4 +472,110 @@ async fn roupa_por_cima_com_placas_rigidas() {
     let carrega =
         |n: &str| r["ossos"].as_array().unwrap().iter().find(|o| o["nome"] == n).unwrap()["vertices_que_carrega"].as_u64().unwrap();
     assert!(carrega("LeftLowerArm") > 0 && carrega("Chest") > 0);
+}
+
+#[tokio::test]
+async fn comparacao_com_a_referencia_lado_a_lado() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let glb = tmp.path().join("barril.glb");
+    forja::rodar(&blender, tmp.path(), &json!({"tarefa": "objeto", "saida": glb, "amostras": 6, "objeto": {"tipo": "barril"}}), TEMPO)
+        .await
+        .unwrap();
+    let mut difs = vec![];
+    for (nome, cor) in [("perto", [120u8, 80, 45]), ("longe", [40u8, 90, 220])] {
+        let refe = tmp.path().join(format!("ref_{nome}.png"));
+        comum::referencia_png(&refe, cor, 300, 400);
+        let saida = tmp.path().join(format!("ai/comparacoes/barril_{nome}.png"));
+        let r = forja::rodar(
+            &blender,
+            tmp.path(),
+            &json!({"tarefa": "comparar", "referencia": refe, "arquivo": glb, "saida": saida, "vista": "frente", "amostras": 6}),
+            TEMPO,
+        )
+        .await
+        .unwrap();
+        assert!(saida.is_file(), "a imagem lado a lado sai em ai/comparacoes");
+        assert_eq!(r["enquadramento"], "corpo", "objeto baixo: enquadra inteiro");
+        assert!(r["paleta_referencia"].as_array().is_some_and(|p| !p.is_empty()));
+        assert!(r["paleta_resultado"].as_array().is_some_and(|p| !p.is_empty()));
+        assert!(r["silhueta_referencia"]["altura_sobre_largura"].as_f64().is_some());
+        assert!(r["silhueta_resultado"]["altura_sobre_largura"].as_f64().is_some());
+        let dif = r["diferenca_de_cor"].as_f64().unwrap();
+        if nome == "longe" {
+            assert!(r["dica"].as_str().unwrap().contains("cores"), "{r}");
+        }
+        difs.push(dif);
+    }
+    assert!(difs[1] > difs[0] + 0.05, "o azul fica mais longe do barril que o marrom: {difs:?}");
+}
+
+#[tokio::test]
+async fn montagem_livre_por_pecas() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("Weapons/espada_longa.glb");
+    let arma = json!({"id": "espada_longa",
+    "materiais": {"aco": {"cor": "#c9ced4", "tipo": "metal"}, "couro": {"cor": "#3a2416", "tipo": "couro"}},
+    "pecas": [
+        {"tipo": "extrusao", "material": "aco", "espessura": 0.007, "gume": 0.016,
+         "contorno": [[-0.026, 0.11], [0.026, 0.11], [0.024, 0.55], [0.02, 0.86], [0.0, 0.98], [-0.02, 0.86], [-0.024, 0.55]]},
+        {"tipo": "caixa", "material": "aco", "centro": [0.07, 0, 0.1], "tamanho": [0.12, 0.03, 0.02], "chanfro": 0.004, "espelhar": "x"},
+        {"tipo": "torno", "material": "couro", "perfil": [[0.0, -0.11], [0.016, -0.11], [0.018, -0.05], [0.016, 0.085], [0.0, 0.085]]},
+        {"tipo": "tubo", "material": "nao_existe", "raio": [0.004, 0.003], "pontos": [[0.02, 0, -0.1], [0.0, 0.02, -0.05], [-0.02, 0, 0.0]]},
+        {"tipo": "esfera", "material": "aco", "centro": [0, 0, -0.13], "raio": 0.025},
+        {"tipo": "cilindro", "material": "aco", "de": [0, 0, 0.09], "para": [0, 0, 0.11], "raio": 0.02}
+    ]});
+    let r =
+        forja::rodar(&blender, tmp.path(), &json!({"tarefa": "arma", "saida": saida, "amostras": 4, "arma": arma}), TEMPO).await.unwrap();
+    assert!(saida.is_file());
+    let st = &r["estatisticas"];
+    assert!(st["triangulos"].as_u64().unwrap() > 150, "{st}");
+    let mats: Vec<String> = st["materiais"].as_array().unwrap().iter().map(|m| m.as_str().unwrap().to_string()).collect();
+    assert!(mats.iter().any(|m| m.starts_with("espada_longa_aco")) && mats.iter().any(|m| m.starts_with("espada_longa_couro")), "{mats:?}");
+    // a lâmina fica de pé, com a ponta perto de 0,98 m e a guarda espelhada dos dois lados
+    assert!((st["altura_m"].as_f64().unwrap() - 1.135).abs() < 0.03, "{st}");
+    assert!((st["largura_m"].as_f64().unwrap() - 0.26).abs() < 0.02, "guarda espelhada: {st}");
+    assert!(r["avisos"].to_string().contains("nao_existe"), "material que falta vira aviso: {r}");
+    let glb = std::fs::read(&saida).unwrap();
+    assert!(String::from_utf8_lossy(&glb).contains("-colonly"));
+    // peça errada: erro que diz qual
+    let ruim = json!({"id": "x", "pecas": [{"tipo": "piramide"}]});
+    let e = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "objeto", "saida": tmp.path().join("x.glb"), "previa": false, "objeto": ruim}),
+        TEMPO,
+    )
+    .await
+    .unwrap_err();
+    assert!(e.to_string().contains("piramide"), "{e}");
+}
+
+#[tokio::test]
+async fn roupa_moderna_de_jaqueta() {
+    let blender = blender_ou_pula!();
+    let Some(mh) = std::env::var_os("FORNALHA_PACOTE_MAKEHUMAN").map(std::path::PathBuf::from) else {
+        eprintln!("pacote MakeHuman não encontrado: teste pulado (defina FORNALHA_PACOTE_MAKEHUMAN)");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("Characters/andarilho/andarilho.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "humano", "saida": saida, "previa": false, "animacoes": null,
+                "makehuman": {"dados": mh.join("dados"), "assets": mh.join("assets")},
+                "humano": {"id": "andarilho", "macro": {"genero": 1.0, "idade": 0.7}, "cabelo": "short02", "arma": "nenhuma",
+                           "roupa": {"estilo": "jaqueta", "capa": false, "cores": {"principal": "#3f3024", "secundaria": "#58606a", "detalhe": "#241a14"}}}}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert!(saida.is_file());
+    let pecas: Vec<String> = r["estatisticas"]["pecas"].as_array().unwrap().iter().map(|p| p.as_str().unwrap().to_string()).collect();
+    for p in ["_camisa", "_colarinho", "_botoes", "_jaqueta", "_gola", "_bolso_e", "_bolso_d", "_calcas", "_botas"] {
+        assert!(pecas.iter().any(|x| x.ends_with(p)), "falta {p}: {pecas:?}");
+    }
+    assert_eq!(r["estatisticas"]["qa"]["passou"], true, "{}", r["estatisticas"]["qa"]);
 }

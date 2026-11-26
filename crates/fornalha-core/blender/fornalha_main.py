@@ -203,6 +203,9 @@ def tarefa_humano(t):
     cab = next((o for o in pecas if "medidas_cabelo" in o.keys()), None)
     if cab is not None:
         st["cabelo"] = cab["medidas_cabelo"].to_dict()
+    barba = next((o for o in pecas if "medidas_barba" in o.keys()), None)
+    if barba is not None:
+        st["barba"] = barba["medidas_barba"].to_dict()
     r = {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st}
     if arm is not None and "jaw" in arm.data.bones:
         # a engine (Erethea/Godot) abre a boca pela curva da fala: girar o osso em torno do eixo X do
@@ -223,7 +226,13 @@ def tarefa_arma(t):
     import fc_armas
 
     p = t.get("arma", {})
-    obj = fc_armas.criar_arma(p)
+    avisos = []
+    if p.get("pecas"):
+        import fc_pecas
+
+        obj, avisos = fc_pecas.montar(p)
+    else:
+        obj = fc_armas.criar_arma(p)
     encaixe = bpy.data.objects.new("encaixe_mao", None)
     bpy.context.scene.collection.objects.link(encaixe)
     col = fc_armas.colisao_simples(obj)
@@ -232,21 +241,27 @@ def tarefa_arma(t):
     arquivos = {"modelo": saida}
     col.hide_set(True)
     arquivos.update(previas(t, [obj], saida))
-    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas([obj])}
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas([obj]), "avisos": avisos}
 
 
 def tarefa_objeto(t):
     import fc_armas
 
     p = t.get("objeto", {})
-    obj = fc_armas.criar_objeto(p)
+    avisos = []
+    if p.get("pecas"):
+        import fc_pecas
+
+        obj, avisos = fc_pecas.montar({**p, "no_chao": p.get("no_chao", True)})
+    else:
+        obj = fc_armas.criar_objeto(p)
     col = fc_armas.colisao_simples(obj)
     saida = t["saida"]
     tamanho = c.exportar_glb(saida, [obj, col], animacoes=False)
     arquivos = {"modelo": saida}
     col.hide_set(True)
     arquivos.update(previas(t, [obj], saida))
-    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas([obj])}
+    return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": estatisticas([obj]), "avisos": avisos}
 
 
 def tarefa_mundo(t):
@@ -301,6 +316,12 @@ def tarefa_mundo(t):
     st["objetos"] = len(objs)
     st["colisoes"] = sum(1 for o in objs if o.name.endswith("-col"))
     return {"arquivos": arquivos, "tamanho_bytes": tamanho, "estatisticas": st, "info": info}
+
+
+def tarefa_comparar(t):
+    import fc_comparar
+
+    return fc_comparar.tarefa(t)
 
 
 def tarefa_mapa(t):
@@ -1165,6 +1186,7 @@ TAREFAS = {
     "objeto": tarefa_objeto,
     "mundo": tarefa_mundo,
     "mapa": tarefa_mapa,
+    "comparar": tarefa_comparar,
     "limpar": tarefa_limpar,
     "rig": tarefa_rig,
     "retarget": tarefa_retarget,

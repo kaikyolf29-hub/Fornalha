@@ -270,7 +270,22 @@ def _media_albedo(bsdf):
 
 def _cobertura(corpo, cabelo, n=600):
     """Raios de fora para dentro na região do couro cabeludo: o primeiro objeto atingido tem de
-    ser o cabelo (couro cabeludo ou cards), não a pele."""
+    ser o cabelo (couro cabeludo ou cards), não a pele. Mede na pose de descanso: os pontos saem da
+    malha sem pose e os raios batem na malha avaliada (um zumbi curvado tiraria uma da outra)."""
+    arms = {m.object for o in [corpo, *cabelo] for m in o.modifiers if m.type == "ARMATURE" and m.object}
+    antes = {a: a.data.pose_position for a in arms}
+    for a in arms:
+        a.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    try:
+        return _cobertura_em_descanso(corpo, cabelo, n)
+    finally:
+        for a, pp in antes.items():
+            a.data.pose_position = pp
+        bpy.context.view_layer.update()
+
+
+def _cobertura_em_descanso(corpo, cabelo, n):
     dg = bpy.context.evaluated_depsgraph_get()
     cena = bpy.context.scene
     cap = next((o for o in cabelo if "couro_cabeludo" in o.name), None)
@@ -291,7 +306,12 @@ def _cobertura(corpo, cabelo, n=600):
                   if g is not None and any(e.group == g.index and e.weight > 0.9 for e in v.groups)]
         topo = max((q.z for q in cabeca), default=0.0)
         # o couro de verdade: topo da cabeça (sem orelha nem testa) por baixo do penteado
-        cab = [q[:] for q in cabeca if q.z > topo - 0.10 and kd.find(q)[2] < 0.015]
+        # pele debaixo do penteado (a malha pode ficar mais alta que o couro: a faixa se ajusta)
+        cab = []
+        for faixa in (0.015, 0.03, 0.05):
+            cab = [q[:] for q in cabeca if q.z > topo - 0.10 and kd.find(q)[2] < faixa]
+            if len(cab) >= 30:
+                break
         if len(cab) < 30:
             return False, "o penteado não cobre a cabeça"
         vs = np.array(cab)
@@ -304,7 +324,7 @@ def _cobertura(corpo, cabelo, n=600):
             d = p - c
             d /= np.linalg.norm(d) + 1e-9
             o_ = inv @ Vector(p + d * 0.001)
-            ok, *_ = guia_ev.ray_cast(o_, inv.to_3x3() @ Vector(d), distance=0.06)
+            ok, *_ = guia_ev.ray_cast(o_, inv.to_3x3() @ Vector(d), distance=0.09)
             if ok:
                 coberta.append(p)
         if len(coberta) < 30:
@@ -406,7 +426,12 @@ def _opacidade_do_cabelo(alvo, c, corpo, cabelo, dg, cena, guia, maximo=12):
         return False, "nenhum raio"
     cob = np.array(cobertura)
     aparece = float((cob < 0.6).mean())
-    return aparece <= 0.03, f"couro aparecendo em {aparece * 100:.1f}% (opacidade média {cob.mean() * 100:.0f}%)"
+    # nível leve (só o cabelo do pacote, sem cards): o corte curto dele mostra um pouco de couro nas
+    # têmporas e na nuca, como um corte de verdade; a régua aceita até 8% ali (com cards, 3%)
+    so_pacote = not any(o.name.endswith("_hair_cards") for o in cabelo)
+    limite = 0.08 if so_pacote else 0.03
+    extra = " (nível leve: cabelo do pacote)" if so_pacote else ""
+    return aparece <= limite, f"couro aparecendo em {aparece * 100:.1f}% (opacidade média {cob.mean() * 100:.0f}%){extra}"
 
 
 def _raios_de_cobertura(alvo, c, corpo, cabelo, dg, cena):

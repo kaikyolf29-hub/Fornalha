@@ -439,7 +439,7 @@ class Alfaiate:
 
 
 # peças de tecido (ganham sujeira/lama assada no nível de qualidade); couro e metal têm o caminho deles
-PECAS_DE_PANO = ("_sobreveste", "_capa", "_gibao", "_tunica", "_calcas_pano", "_manto", "_vestido", "_saia", "_capuz")
+PECAS_DE_PANO = ("_sobreveste", "_capa", "_gibao", "_tunica", "_calcas_pano", "_manto", "_vestido", "_saia", "_capuz", "_camisa", "_jaqueta")
 
 
 def normalizar_pesos(obj, arm):
@@ -504,12 +504,12 @@ def _frente_do_corpo(a, z, ossos=TRONCO, folga=0.0):
 
 
 
-def _mat(nome, tipo, tom=None, escala=None):
-    return fc_pbr.material(nome, tipo, tom, escala)
+def _mat(nome, tipo, tom=None, escala=None, rugosidade_extra=0.0):
+    return fc_pbr.material(nome, tipo, tom, escala, rugosidade_extra=rugosidade_extra)
 
 
 def vestir(h, prefixo, estilo, cores, capa=True, pano=False, sujo=False):
-    """estilo: cavaleiro, soldado, campones, nobre, mercenario. cores: principal, secundaria, detalhe.
+    """estilo: cavaleiro, soldado, campones, nobre, mercenario, jaqueta (moderno). cores: principal, secundaria, detalhe.
     pano: caimento simulado (sobreveste franzida no cinto, capa caindo pelas costas)."""
     a = Alfaiate(h, prefixo)
     a.pano = bool(pano)
@@ -645,6 +645,56 @@ def vestir(h, prefixo, estilo, cores, capa=True, pano=False, sujo=False):
             a.elmo(aco)
         if capa:
             a.capa(_mat(f"{prefixo}_capa", "tecido", p))
+    elif estilo == "jaqueta":
+        # moderno: camisa de brim por baixo (gola em volta do pescoço), jaqueta de couro aberta na frente
+        # (abertura em V até o pescoço), gola larga de tecido grosso, dois bolsos no peito com aba, calça
+        # jeans e botas. cores: principal = jaqueta, secundaria = camisa, detalhe = gola
+        ossos = h.arm.data.bones
+        pesc = ossos["neck_01"].head_local.z
+        peito = ossos["spine_03"].head_local.z
+        meio_y = ossos["spine_02"].head_local.y
+        frente = lambda co: co[1] < meio_y - 0.02  # noqa: E731 (no Blender a frente é -Y)
+
+        def abertura(z):
+            t = min(1.0, max(0.0, (z - cintura) / max(pesc - cintura, 1e-3)))
+            return 0.012 + 0.03 * t ** 2.5
+
+        def decote(co):  # a camisa aberta no pescoço (V raso), como camisa de botão com o primeiro aberto
+            k = (co[2] - (pesc - 0.075)) / 0.075
+            return frente(co) and k > 0 and abs(co[0]) < 0.006 + 0.03 * k
+
+        camisa = _mat(f"{prefixo}_camisa", "tecido", cores.get("secundaria") or "#767b82")
+        a.casca("camisa", TRONCO + BRACOS + ["neck_01"], 0.006, 0.003, camisa, limiar=0.45,
+                filtro=lambda co: cintura - 0.3 < co[2] < pesc + 0.02 and not decote(co), suavizar=6)
+        # colarinho virado (aberto na frente) e os botões de pressão na carcela
+        a.casca("colarinho", TRONCO + ["neck_01"], 0.013, 0.004, camisa, limiar=0.3,
+                filtro=lambda co: pesc - 0.03 < co[2] < pesc + 0.025 and abs(co[0]) < 0.1 and not (frente(co) and abs(co[0]) < 0.035),
+                cobrir=0, suavizar=4)
+        a.casca("botoes", TRONCO, 0.009, 0.003, _mat(f"{prefixo}_botoes", "aco", "#c9c9c4"),
+                filtro=lambda co: frente(co) and abs(co[0]) < 0.007 and cintura - 0.2 < co[2] < pesc - 0.04 and (co[2] % 0.085) < 0.011, cobrir=0)
+        # camurça: couro fosco (sem o brilho de couro envernizado)
+        jaq = _mat(f"{prefixo}_jaqueta", "couro", p, rugosidade_extra=0.35)
+        # jaqueta larga (não marca peito nem barriga: alisada bem mais que a camisa)
+        a.casca("jaqueta", TRONCO + BRACOS, 0.026, 0.006, jaq, limiar=0.5,
+                filtro=lambda co: cintura - 0.2 < co[2] < pesc - 0.01 and not (frente(co) and abs(co[0]) < abertura(co[2])), suavizar=14)
+        # gola deitada: só em volta da base do pescoço (sem escorrer pelos ombros), aberta na frente
+        a.casca("gola", TRONCO + ["neck_01", "clavicle_l", "clavicle_r"], 0.036, 0.01,
+                _mat(f"{prefixo}_gola", "tecido_grosso", cores.get("detalhe") or "#3b2a20"), limiar=0.3,
+                filtro=lambda co: pesc - 0.06 < co[2] < pesc + 0.012 and abs(co[0]) < 0.13 and not (frente(co) and abs(co[0]) < abertura(co[2]) + 0.012),
+                cobrir=0, suavizar=6)
+        for lado in (-1, 1):
+            # bolso no peito (placa um pouco por fora da jaqueta) e a aba por cima
+            x0, x1 = 0.035, 0.135
+            zb = peito + 0.09  # altura do bolso: no peito, não na barriga
+            a.casca(f"bolso_{'e' if lado > 0 else 'd'}", TRONCO, 0.031, 0.004, jaq,
+                    filtro=lambda co, lado=lado: frente(co) and x0 < co[0] * lado < x1 and zb - 0.12 < co[2] < zb, cobrir=0)
+            a.casca(f"aba_{'e' if lado > 0 else 'd'}", TRONCO, 0.036, 0.005, jaq,
+                    filtro=lambda co, lado=lado: frente(co) and x0 - 0.005 < co[0] * lado < x1 + 0.005 and zb - 0.035 < co[2] < zb + 0.005, cobrir=0)
+        a.casca("calcas", PERNAS + ["pelvis"], 0.006, 0.003, _mat(f"{prefixo}_calcas", "tecido", "#3d4450"),
+                filtro=lambda co: co[2] < cintura - 0.04)
+        a.casca("botas", PES + ["calf_l", "calf_r"], 0.012, 0.005, _mat(f"{prefixo}_botas", "couro_escuro", "#3a2a1e"),
+                filtro=lambda co: co[2] < chao_joelho - 0.14, suavizar=12)
+        a.casca("cinto", TRONCO, 0.012, 0.006, _mat(f"{prefixo}_cinto", "couro_escuro"), filtro=lambda co: abs(co[2] - (cintura - 0.05)) < 0.02, cobrir=0)
     elif estilo == "nobre":
         a.casca("gibao", TRONCO + BRACOS, 0.008, 0.005, _mat(f"{prefixo}_gibao", "tecido", p), grupos_extra=["helper-skirt"])
         a.casca("calcas", PERNAS, 0.005, 0.003, _mat(f"{prefixo}_calcas", "tecido", "#2b2b30"))

@@ -21,7 +21,7 @@ use crate::projeto::Projeto;
 
 /// Scripts do jogo que a Fornalha escreve em `Scripts/fornalha/`.
 /// (caminho no projeto, conteúdo). A ponte é um plugin do editor (vale na Godot e na Erethea).
-const SCRIPTS: [(&str, &str); 17] = [
+const SCRIPTS: [(&str, &str); 19] = [
     ("Scripts/fornalha/jogador.gd", include_str!("../godot/jogador.gd")),
     ("Scripts/fornalha/inimigo.gd", include_str!("../godot/inimigo.gd")),
     ("Scripts/fornalha/movimento.gd", include_str!("../godot/movimento.gd")),
@@ -32,6 +32,8 @@ const SCRIPTS: [(&str, &str); 17] = [
     ("Scripts/fornalha/montar.gd", include_str!("../godot/montar.gd")),
     ("Scripts/fornalha/fisica.gd", include_str!("../godot/fisica.gd")),
     ("Scripts/fornalha/cabelo.gdshader", include_str!("../godot/cabelo.gdshader")),
+    ("Scripts/fornalha/anime.gdshader", include_str!("../godot/anime.gdshader")),
+    ("Scripts/fornalha/contorno.gdshader", include_str!("../godot/contorno.gdshader")),
     ("Scripts/fornalha/couro_cabeludo.gdshader", include_str!("../godot/couro_cabeludo.gdshader")),
     ("Scripts/fornalha/terreno.gdshader", include_str!("../godot/terreno.gdshader")),
     ("Scripts/fornalha/agua.gdshader", include_str!("../godot/agua.gdshader")),

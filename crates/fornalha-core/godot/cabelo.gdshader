@@ -7,7 +7,8 @@ render_mode cull_disabled, depth_draw_opaque;
 
 uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic;
 uniform sampler2D dados : hint_default_white, filter_linear_mipmap;  // R oclusão, G profundidade, B raiz→ponta
-uniform float rugosidade : hint_range(0.0, 1.0) = 0.45;
+uniform sampler2D normais : hint_normal, filter_linear_mipmap;  // normal de cada fio (cilindro)
+uniform float rugosidade : hint_range(0.0, 1.0) = 0.55;
 uniform float brilho_primario : hint_range(0.0, 1.0) = 0.06;
 uniform float brilho_secundario : hint_range(0.0, 1.0) = 0.1;
 
@@ -34,7 +35,9 @@ void fragment() {
 	vec3 d = texture(dados, UV).rgb;
 	raiz_v = d.b;
 	desvio_v = d.g - 0.5;  // cada fio do atlas com o seu valor: o brilho quebra fio a fio
-	ALBEDO = c.rgb;
+	ALBEDO = c.rgb * COLOR.rgb;  // tom de cada mecha (cor de vértice; branco quando não tem)
+	NORMAL_MAP = texture(normais, UV).rgb;
+	NORMAL_MAP_DEPTH = 0.9;
 	// transparência por pontilhado (Bayer 4x4 + ruído por fragmento): o mesmo efeito do alpha hash,
 	// mas funciona também no renderizador de compatibilidade (placas antigas, sem Vulkan)
 	if (c.a < limiar_pontilhado(FRAGCOORD.xy)) {

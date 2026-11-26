@@ -115,6 +115,58 @@ async fn do_zero_ao_jogo_rodando_na_engine() {
     assert_eq!(rel["passou"], Value::Bool(true));
 }
 
+/// Visual anime pela bíblia: personagem e construções com faixas e contorno, sem erro de shader.
+#[tokio::test]
+async fn visual_anime_pela_biblia() {
+    let (Some(blender), Some(godot)) = (externas::achar_para_teste(Programa::Blender).await, achar_engine().await) else {
+        eprintln!("Blender ou Godot/Erethea não encontrados: teste pulado");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let p = projeto::criar(&NovoProjeto { nome: "Brasa Anime".into(), ..Default::default() }, tmp.path()).unwrap();
+    projeto::atualizar(&p.raiz, &json!({"guia_visual": {"render": "anime"}})).unwrap();
+    let p = projeto::abrir(&p.raiz).unwrap();
+    assert_eq!(p.biblia.guia_visual.extras["render"], "anime");
+    let raiz = p.raiz.clone();
+    let t = Duration::from_secs(600);
+    for (saida, pers) in [
+        ("Characters/aren/aren.glb", json!({"id": "aren", "tipo": "humano", "arma": "espada"})),
+        ("Enemies/orc/orc.glb", json!({"id": "orc", "tipo": "orc", "arma": "martelo"})),
+    ] {
+        let arq = raiz.join(saida);
+        let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "personagem", "saida": arq, "previa": false, "personagem": pers}), t)
+            .await
+            .unwrap();
+        std::fs::write(arq.with_extension("forja.json"), serde_json::to_vec(&r).unwrap()).unwrap();
+    }
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "mundo", "saida": raiz.join("World/blockout.glb"), "previa": false, "mundo": {"seed": 2, "areas": [{"id": "vila", "tipo": "vila"}]}}),
+        t,
+    )
+    .await
+    .unwrap();
+    engine::preparar_projeto(&p, godot.versao.as_deref().unwrap_or("")).unwrap();
+    assert!(raiz.join("Scripts/fornalha/anime.gdshader").is_file() && raiz.join("Scripts/fornalha/contorno.gdshader").is_file());
+    engine::escrever_manifesto(&raiz, None, true).unwrap();
+    engine::montar(&godot, &raiz).await.unwrap();
+    let tem_tela = std::env::var_os("DISPLAY").is_some() || cfg!(windows);
+    let op = OpcoesTeste {
+        segundos: 5.0,
+        sem_janela: !tem_tela,
+        sem_placa: std::env::var_os("FORNALHA_TESTE_COM_PLACA").is_none(),
+        video: false,
+    };
+    let pasta = std::env::var_os("FORNALHA_TESTE_SAIDA").map(std::path::PathBuf::from).unwrap_or_else(|| tmp.path().join("teste"));
+    let rel = engine::testar(&godot, &raiz, &pasta, &op).await.unwrap();
+    eprintln!("visual: {} · capturas: {}", rel["visual"], rel["capturas"]);
+    assert_eq!(rel["erros"], json!([]), "shader anime sem erro na engine");
+    assert_eq!(rel["visual"]["render"], "anime");
+    assert!(rel["visual"]["materiais_anime"].as_u64().unwrap() >= 4, "{}", rel["visual"]);
+    assert_eq!(rel["passou"], Value::Bool(true));
+}
+
 /// O mapa da bancada de mapa substitui o blockout: o manifesto aponta para ele, com o início dele.
 #[test]
 fn manifesto_usa_o_mapa_quando_existe() {

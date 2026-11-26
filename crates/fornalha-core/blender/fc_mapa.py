@@ -111,7 +111,14 @@ def normalizar(plano, areas=None):
         elif r.get("posicao") in POSICOES:
             dx, dz = POSICOES[r["posicao"]]
             centro = [dx * L * 0.3, dz * L * 0.3]
-        regioes.append({"id": ident, "tipo": tipo, "nome": r.get("nome") or ident, "raio_m": raio, "centro": centro})
+        reg = {"id": ident, "tipo": tipo, "nome": r.get("nome") or ident, "raio_m": raio, "centro": centro}
+        if r.get("casas"):
+            # casas que a IA montou (generate_3d por peças): a vila usa esses modelos, revezando
+            casas = r["casas"] if isinstance(r["casas"], list) else [r["casas"]]
+            reg["casas"] = [str(x) for x in casas if str(x).lower().endswith((".glb", ".gltf"))]
+            if KIT.get(tipo) != "vila":
+                avisos.append(f"região \"{ident}\": casas só valem em vila, cidade ou aldeia.")
+        regioes.append(reg)
     ids = [r["id"] for r in regioes]
     spawn = p.get("spawn")
     if spawn not in ids:
@@ -1103,6 +1110,42 @@ def _estruturas(P, R, paleta):
     return objs, inimigos
 
 
+_CASAS_IMPORTADAS = {}
+
+
+def _modelo_de_casa(caminho):
+    """Malha da casa feita pela IA (glb do projeto), uma vez só por arquivo, sem a caixa -colonly
+    (na vila a casa inteira vira colisão pelo -col). A porta olha para -Y, como a casa padrão."""
+    if caminho in _CASAS_IMPORTADAS:
+        return _CASAS_IMPORTADAS[caminho]
+    if not os.path.isfile(caminho):
+        _CASAS_IMPORTADAS[caminho] = None
+        return None
+    antes = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=caminho)
+    novos = [o for o in bpy.data.objects if o not in antes]
+    malhas = [o for o in novos if o.type == "MESH" and not o.name.endswith("-colonly")]
+    modelo = None
+    if malhas:
+        bpy.context.view_layer.update()
+        for o in malhas:
+            o.data.transform(o.matrix_world)
+            o.parent = None
+            o.matrix_world = Matrix.Identity(4)
+        if len(malhas) > 1:
+            with bpy.context.temp_override(active_object=malhas[0], selected_editable_objects=malhas):
+                bpy.ops.object.join()
+        modelo = malhas[0]
+    for o in novos:
+        if o is not modelo and o.name in bpy.data.objects:
+            bpy.data.objects.remove(o, do_unlink=True)
+    if modelo is not None:
+        for col in list(modelo.users_collection):
+            col.objects.unlink(modelo)  # o molde fica fora da cena; as casas são cópias dele
+    _CASAS_IMPORTADAS[caminho] = modelo
+    return modelo
+
+
 def _vila(r, centro, rnd, mats, objs, R, larg):
     """Vila de verdade: praça com poço no meio e casas dos dois lados das ruas, de frente para elas."""
     raio = r["raio_m"]
@@ -1117,17 +1160,33 @@ def _vila(r, centro, rnd, mats, objs, R, larg):
         ruas.append([p_ for p_ in pts if (p_ - c2).length < raio * 0.9])
     casas = []
 
-    def livre(pos, folga=9.5):
+    modelos = [_modelo_de_casa(m) for m in r.get("_casas_arq") or []]
+    modelos = [m for m in modelos if m is not None]
+    if modelos:
+        # casa maior que a padrão (7 m): mais espaço entre elas e da rua
+        maior = max(max(m.dimensions.x, m.dimensions.y) for m in modelos)
+        folga_padrao = max(9.5, maior + 2.5)
+    else:
+        folga_padrao = 9.5
+
+    def livre(pos, folga=None):
+        folga = folga or folga_padrao
         if (pos - c2).length > raio * 0.82 or (pos - c2).length < 10.5:
             return False
         if any((pos - q).length < folga for q in casas):
             return False
-        return all(min(((pos - q).length for q in rua), default=99) > larg / 2 + 3.6 for rua in ruas)
+        return all(min(((pos - q).length for q in rua), default=99) > larg / 2 + folga_padrao * 0.38 for rua in ruas)
 
     def casa(pos, frente):
         i = len(casas)
-        o = fc_armas.criar_objeto({"tipo": "casa", "id": f"{r['id']}_casa_{i}-col", "seed": rnd.randint(0, 9999),
-                                   "cor_parede": mats["parede"], "cor_telhado": mats["telhado"]})
+        if modelos:
+            base = modelos[i % len(modelos)]
+            o = base.copy()  # a mesma malha (linked): leve no glb e na engine
+            o.name = f"{r['id']}_casa_{i}-col"
+            bpy.context.scene.collection.objects.link(o)
+        else:
+            o = fc_armas.criar_objeto({"tipo": "casa", "id": f"{r['id']}_casa_{i}-col", "seed": rnd.randint(0, 9999),
+                                       "cor_parede": mats["parede"], "cor_telhado": mats["telhado"]})
         o.location = (pos.x, pos.y, centro.z)
         o.rotation_euler.z = math.atan2(frente.y, frente.x) + math.pi / 2  # a porta (-Y) olha para a rua
         objs.append(o)
@@ -1345,6 +1404,14 @@ def tarefa(t):
     pasta = t["saida"]
     os.makedirs(pasta, exist_ok=True)
     P, avisos = normalizar(t.get("plano"), t.get("areas"))
+    raiz = t.get("projeto_raiz") or ""
+    for r in P["regioes"]:
+        if r.get("casas"):
+            achadas = [os.path.join(raiz, x) if raiz and not os.path.isabs(x) else x for x in r["casas"]]
+            for x, a in zip(r["casas"], achadas):
+                if not os.path.isfile(a):
+                    avisos.append(f"região \"{r['id']}\": a casa {x} não existe (ficou a casa padrão).")
+            r["_casas_arq"] = [a for a in achadas if os.path.isfile(a)]
     paleta = t.get("paleta") or []
     R = gerar(P, paleta)
     medidas = medir(P, R)
@@ -1421,6 +1488,8 @@ def tarefa(t):
         "spawn_jogador": spawn_jogador, "spawn_inimigos": [G(v) for v in inimigos], "fotos": fotos, "medidas": medidas,
         "plano": P, "avisos": avisos,
     }
+    for r in P["regioes"]:
+        r.pop("_casas_arq", None)  # caminho desta máquina: no plano ficam os do projeto
     with open(os.path.join(pasta, "mapa.json"), "w", encoding="utf-8") as f:
         json.dump(info, f, ensure_ascii=False, indent=1)
     arquivos["info"] = os.path.join(pasta, "mapa.json")

@@ -107,9 +107,59 @@ static func cair(sim: PhysicalBoneSimulator3D, anim: AnimationPlayer, empurrao :
 	return true
 
 
+static var _render := ""
+
+
+## O visual do jogo pela bíblia (game.project.json → guia_visual.render): "realista" (padrão) ou "anime".
+static func render() -> String:
+	if _render == "":
+		_render = "realista"
+		var b = JSON.parse_string(FileAccess.get_file_as_string("res://game.project.json")) if FileAccess.file_exists("res://game.project.json") else null
+		if typeof(b) == TYPE_DICTIONARY and typeof(b.get("guia_visual")) == TYPE_DICTIONARY:
+			var r := String(b["guia_visual"].get("render", "realista")).to_lower()
+			if r in ["anime", "toon", "cel", "cel_shading"]:
+				_render = "anime"
+	return _render
+
+
+## Visual anime: troca o material de cada peça pelo de faixas (com a textura e a cor dele) e põe o
+## contorno; cabelo em cards recorta pelo alfa e não leva contorno (seria uma linha em cada card).
+static func materiais_anime(no: Node) -> int:
+	var feitos := 0
+	var mi := no as MeshInstance3D
+	if mi != null and mi.mesh != null:
+		for i in mi.mesh.get_surface_count():
+			var base := mi.get_active_material(i) as BaseMaterial3D
+			if base == null:
+				continue
+			var nome := String(base.resource_name)
+			var cards := nome.contains("cabelo_cards") or nome.contains("couro_cabeludo") or nome.contains("eyelash") or nome.contains("eyebrow")
+			var sm := ShaderMaterial.new()
+			sm.shader = load("res://Scripts/fornalha/anime.gdshader")
+			sm.set_shader_parameter("cor", base.albedo_color)
+			if base.albedo_texture:
+				sm.set_shader_parameter("textura", base.albedo_texture)
+				sm.set_shader_parameter("tem_textura", true)
+			sm.set_shader_parameter("usa_alfa", cards or base.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED)
+			sm.set_shader_parameter("cor_do_vertice", nome.contains("cabelo_cards"))
+			if not cards and not nome.contains("olho") and not nome.contains("eyes"):
+				var linha := ShaderMaterial.new()
+				linha.shader = load("res://Scripts/fornalha/contorno.gdshader")
+				sm.next_pass = linha
+			mi.set_surface_override_material(i, sm)
+			feitos += 1
+	for f in no.get_children():
+		feitos += materiais_anime(f)
+	return feitos
+
+
 ## Materiais especiais: os cards de cabelo ganham o shader de cabelo (hash, brilho anisotrópico), o
 ## couro cabeludo vira hash e a pele ganha espalhamento sob a superfície (orelha contra a luz).
+## No visual anime, todos viram o material de faixas com contorno.
 static func materiais(no: Node) -> void:
+	if render() == "anime":
+		materiais_anime(no)
+		return
 	var mi := no as MeshInstance3D
 	if mi != null and mi.mesh != null:
 		for i in mi.mesh.get_surface_count():
@@ -124,6 +174,8 @@ static func materiais(no: Node) -> void:
 				sm.set_shader_parameter("atlas", base.albedo_texture)
 				if base.ao_texture:
 					sm.set_shader_parameter("dados", base.ao_texture)
+				if base.normal_texture:
+					sm.set_shader_parameter("normais", base.normal_texture)
 				mi.set_surface_override_material(i, sm)
 				mi.lod_bias = 8.0  # a simplificação de longe não pode comer as mechas finas
 			elif nome.contains("couro_cabeludo") and base != null:

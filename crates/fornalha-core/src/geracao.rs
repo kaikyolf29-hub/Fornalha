@@ -43,6 +43,108 @@ async fn modelo_de_placa(f: &Fornalha, p: &Projeto, funcao: &str, avisos: &mut V
     }
 }
 
+/// Penteados do pacote MakeHuman (CC0) que a bancada de cabelo sabe guiar.
+pub const PENTEADOS: [&str; 11] =
+    ["short01", "short02", "short03", "short04", "bob01", "bob02", "long01", "ponytail01", "braid01", "afro01", "nenhum"];
+
+/// Estilos que o alfaiate da Fornalha sabe vestir (fc_roupa.py).
+pub const ESTILOS_DE_ROUPA: [&str; 8] =
+    ["campones", "mercenario", "soldado", "cavaleiro", "cavaleiro_placas", "templario", "nobre", "jaqueta"];
+
+/// Idade em anos → o "idade" do MakeHuman (0,1875 = 11 anos, 0,5 = 25, 1 = 90).
+fn idade_mh(anos: f64) -> f64 {
+    let a = anos.clamp(11.0, 90.0);
+    if a <= 25.0 {
+        0.1875 + (a - 11.0) / 14.0 * (0.5 - 0.1875)
+    } else {
+        0.5 + (a - 25.0) / 65.0 * 0.5
+    }
+}
+
+/// Os controles finos da IA por cima do que a ficha decidiu (cabelo, barba, idade, corpo, rosto, olhos).
+fn aplicar_controles(h: &mut Value, ctl: &Value, feminino_pelo_texto: bool) {
+    let feminino = match ctl["genero"].as_str() {
+        Some(g) if g.starts_with('f') => true,
+        Some(g) if g.starts_with('m') => false,
+        _ => feminino_pelo_texto,
+    };
+    if ctl["genero"].is_string() {
+        h["macro"]["genero"] = json!(if feminino { 0.0 } else { 1.0 });
+        if ctl["cabelo"].is_null() && h["cabelo"] != "nenhum" {
+            h["cabelo"] = json!(if feminino { "long01" } else { "short04" });
+        }
+    }
+    if let Some(anos) = ctl["idade"].as_f64() {
+        h["macro"]["idade"] = json!(idade_mh(anos));
+    }
+    if let Some(o) = ctl["corpo_humano"].as_object() {
+        for chave in ["altura", "peso", "musculo", "proporcoes"] {
+            if let Some(v) = o.get(chave).and_then(Value::as_f64) {
+                h["macro"][chave] = json!(v.clamp(0.0, 1.0));
+            }
+        }
+    }
+    // penteado fora da lista do pacote não existe na bancada: fica o que a ficha escolheu
+    let penteado = |p: &str| PENTEADOS.contains(&p).then(|| json!(p));
+    match &ctl["cabelo"] {
+        Value::String(p) => {
+            if let Some(v) = penteado(p) {
+                h["cabelo"] = v;
+            }
+        }
+        Value::Object(o) => {
+            if let Some(v) = o.get("penteado").and_then(Value::as_str).and_then(penteado) {
+                h["cabelo"] = v;
+            }
+            if let Some(cor) = o.get("cor").and_then(Value::as_str) {
+                h["cor_cabelo"] = json!(cor);
+            }
+            let estilo: serde_json::Map<String, Value> =
+                o.iter().filter(|(k, _)| !matches!(k.as_str(), "penteado" | "cor")).map(|(k, v)| (k.clone(), v.clone())).collect();
+            if !estilo.is_empty() {
+                h["cabelo_estilo"] = Value::Object(estilo);
+            }
+        }
+        _ => {}
+    }
+    match &ctl["barba"] {
+        Value::String(t) => h["barba"] = json!(t),
+        Value::Object(o) => {
+            h["barba"] = json!(o.get("tipo").and_then(Value::as_str).unwrap_or("cheia"));
+            if let Some(cor) = o.get("cor").and_then(Value::as_str) {
+                h["cor_barba"] = json!(cor);
+            }
+            let estilo: serde_json::Map<String, Value> =
+                o.iter().filter(|(k, _)| !matches!(k.as_str(), "tipo" | "cor")).map(|(k, v)| (k.clone(), v.clone())).collect();
+            if !estilo.is_empty() {
+                h["barba_estilo"] = Value::Object(estilo);
+            }
+        }
+        _ => {}
+    }
+    if ctl["rosto"].is_object() {
+        h["detalhes"] = ctl["rosto"].clone();
+    }
+    if let Some(r) = ctl["roupa"].as_object() {
+        if let Some(e) = r.get("estilo").and_then(Value::as_str).filter(|e| ESTILOS_DE_ROUPA.contains(e)) {
+            h["roupa"]["estilo"] = json!(e);
+        }
+        if let Some(cores) = r.get("cores").and_then(Value::as_object) {
+            for (k, v) in cores {
+                h["roupa"]["cores"][k] = v.clone();
+            }
+        }
+        if let Some(c) = r.get("capa").and_then(Value::as_bool) {
+            h["roupa"]["capa"] = json!(c);
+        }
+    }
+    for (de, para) in [("cor_olhos", "cor_olhos"), ("sobrancelha", "sobrancelha")] {
+        if let Some(v) = ctl[de].as_str() {
+            h[para] = json!(v);
+        }
+    }
+}
+
 /// Ficha do personagem → humano realista (MakeHuman + roupa medieval + arma).
 fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
     let texto = format!(
@@ -114,7 +216,7 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
         "macro": {"genero": if feminino { 0.0 } else { 1.0 }, "idade": if velho { 0.88 } else { 0.55 }, "musculo": musculo, "peso": peso,
                   "altura": altura, "proporcoes": 0.75},
         "tom_de_pele": pele,
-        "cabelo": if pesado { "nenhum" } else if feminino { "long01" } else { "short02" },
+        "cabelo": if pesado { "nenhum" } else if feminino { "long01" } else { "short04" },
         "cor_cabelo": ficha["cor_cabelo"],
         // caimento simulado (sobreveste franzida no cinto, capa caindo pelas costas) junto com a pele em alta
         "roupa": {"estilo": estilo, "capa": ficha["capa"].as_bool().unwrap_or(matches!(estilo, "cavaleiro" | "templario")), "pano": textura_pele > 0,
@@ -137,6 +239,8 @@ fn humano_da_ficha(ficha: &Value, nivel: crate::niveis::Nivel) -> Value {
             h["roupa"]["cores"]["secundaria"] = json!("#4a443a");
         }
     }
+    // os controles da IA por último: o que ela pediu vale mais que o padrão do tipo
+    aplicar_controles(&mut h, &ficha["controles"], feminino);
     h
 }
 
@@ -329,6 +433,21 @@ pub struct ArgsPersonagem {
     /// Tipo de corpo: auto (medido na malha), humanoide, alado, quadrupede, aranha, inseto, serpente,
     /// criatura. Decide o esqueleto e as animações.
     pub corpo: Option<String>,
+    /// Controles finos do humano realista (para chegar perto de uma referência): penteado e estilo do
+    /// cabelo, barba, idade em anos, gênero, corpo, rosto (alvos do MakeHuman), olhos e sobrancelha.
+    pub cabelo: Option<Value>,
+    pub barba: Option<Value>,
+    pub idade: Option<f64>,
+    pub genero: Option<String>,
+    pub corpo_humano: Option<Value>,
+    pub rosto: Option<Value>,
+    pub cor_olhos: Option<String>,
+    pub sobrancelha: Option<String>,
+    /// Roupa: {estilo (campones, mercenario, soldado, cavaleiro, cavaleiro_placas, templario, nobre,
+    /// jaqueta), cores {principal, secundaria, detalhe}, capa}.
+    pub roupa: Option<Value>,
+    /// Imagem de referência: no fim, o resultado sai lado a lado com ela (compare_reference).
+    pub referencia: Option<String>,
 }
 
 fn eh_inimigo(papel: &str) -> bool {
@@ -452,6 +571,10 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
         "capuz": a.capuz.or(cerebro["capuz"].as_bool()).unwrap_or(false),
         "fala": a.fala.clone().or_else(|| c("fala")).unwrap_or_default(),
         "cerebro": if cerebro.is_null() { Value::Null } else { json!("ignis") },
+        "controles": {
+            "cabelo": a.cabelo, "barba": a.barba, "idade": a.idade, "genero": a.genero, "corpo_humano": a.corpo_humano,
+            "rosto": a.rosto, "cor_olhos": a.cor_olhos, "sobrancelha": a.sobrancelha, "roupa": a.roupa,
+        },
     })
 }
 
@@ -713,6 +836,26 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
         }
     }
 
+    // com referência: o resultado lado a lado com ela (cores e proporção medidas) para a IA ajustar
+    let mut comparacao = Value::Null;
+    if let Some(referencia) = a.referencia.as_deref() {
+        match comparar_referencia(
+            f,
+            ArgsComparar {
+                projeto: Some(p.raiz.to_string_lossy().into_owned()),
+                referencia: referencia.into(),
+                arquivo: glb.to_string_lossy().into_owned(),
+                vista: None,
+                enquadramento: None,
+            },
+        )
+        .await
+        {
+            Ok(c) => comparacao = c,
+            Err(e) => avisos.push(format!("A comparação com a referência falhou: {}", e.mensagem)),
+        }
+    }
+
     // voz (Chatterbox pelo Ignis) + boca
     let fala = ficha["fala"].as_str().unwrap_or("").to_string();
     if !fala.is_empty() {
@@ -727,6 +870,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
     f.avisar_ponte(arquivos.values().filter_map(|v| v.as_str()).map(|s| rel(&p.raiz, Path::new(s))).collect());
 
     let mut resposta = json!({
+        "comparacao": comparacao,
         "ficha": ficha, "pasta": pasta, "arquivos": arquivos, "estatisticas": r["estatisticas"], "segundos_blender": r["segundos"],
         "modelo_3d": modelo_3d, "avisos": avisos,
     });
@@ -1110,6 +1254,13 @@ pub struct Args3d {
     pub triangulos_max: Option<u64>,
     /// Imagem (do projeto) para virar 3D com o TRELLIS.2 (placa NVIDIA).
     pub imagem: Option<String>,
+    /// Montagem livre: a forma descrita peça por peça (caixa, cilindro, esfera, torno, extrusao, tubo).
+    pub pecas: Option<Vec<Value>>,
+    /// Materiais das peças: {"lamina": {"cor": "#c9ced4", "tipo": "metal", "rugosidade": 0.25}}.
+    pub materiais: Option<Value>,
+    /// Imagem de referência: no fim, a comparação lado a lado (compare_reference) vem junto.
+    pub referencia: Option<String>,
+    pub vista: Option<String>,
 }
 
 /// 3D a partir de uma imagem: só com o TRELLIS.2 (placa NVIDIA e worker instalado).
@@ -1164,6 +1315,25 @@ pub async fn gerar_3d(f: &Fornalha, a: Args3d, quem: &str) -> Resultado<Value> {
             pasta,
             nome,
         )
+    } else if let Some(pecas) = a.pecas.clone().filter(|p| !p.is_empty()) {
+        // montagem livre: a IA descreve a forma da referência peça por peça
+        let nome = projeto::nome_de_pasta(a.nome.as_deref().or(a.modelo.as_deref()).unwrap_or("modelo"));
+        let mut materiais = a.materiais.clone().unwrap_or_else(|| json!({}));
+        if materiais.as_object().is_none_or(|m| m.is_empty()) {
+            // sem materiais: as cores da paleta do guia visual, em ordem (coerência com o resto do jogo)
+            let pal = paleta(&p);
+            materiais = json!({"principal": {"cor": pal.first().cloned().unwrap_or_else(|| "#8a8580".into())}});
+        }
+        let spec = json!({"id": nome, "pecas": pecas, "materiais": materiais});
+        match a.tipo.as_str() {
+            "arma" => (json!({"tarefa": "arma", "arma": spec}), p.raiz.join("Weapons"), nome),
+            "objeto" => (json!({"tarefa": "objeto", "objeto": spec}), p.raiz.join("Items"), nome),
+            outro => {
+                return Err(Erro::argumento(format!(
+                    "Montagem por peças: tipo \"{outro}\" não existe. Use arma ou objeto (casa, móvel, prop)."
+                )))
+            }
+        }
     } else {
         match a.tipo.as_str() {
             "arma" => {
@@ -1208,7 +1378,26 @@ pub async fn gerar_3d(f: &Fornalha, a: Args3d, quem: &str) -> Resultado<Value> {
         }
     }
     f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
-    Ok(json!({"arquivos": arquivos, "estatisticas": r["estatisticas"], "segundos": r["segundos"]}))
+    let mut resposta = json!({"arquivos": arquivos, "estatisticas": r["estatisticas"], "segundos": r["segundos"]});
+    if r["avisos"].as_array().is_some_and(|v| !v.is_empty()) {
+        resposta["avisos"] = r["avisos"].clone();
+    }
+    if let Some(refe) = a.referencia.clone().filter(|s| !s.trim().is_empty()) {
+        // o ciclo da referência: o lado a lado já vem junto para a IA olhar e ajustar as peças
+        let c = comparar_referencia(
+            f,
+            ArgsComparar {
+                projeto: a.projeto.clone(),
+                referencia: refe,
+                arquivo: saida.to_string_lossy().into_owned(),
+                vista: a.vista.clone(),
+                enquadramento: Some("corpo".into()),
+            },
+        )
+        .await;
+        resposta["comparacao"] = c.unwrap_or_else(|e| json!({"erro": e.to_string()}));
+    }
+    Ok(resposta)
 }
 
 fn mesclar_cores(alvo: &mut Value, cores: &Option<Value>, paleta: &[String]) {
@@ -1515,6 +1704,44 @@ pub async fn gerar_voz(f: &Fornalha, a: ArgsVoz, quem: &str) -> Resultado<Value>
     Ok(r)
 }
 
+// ---------------------------------------------------------------- comparação com a referência
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct ArgsComparar {
+    pub projeto: Option<String>,
+    /// A imagem que a pessoa mandou (personagem, arma, casa, mapa).
+    pub referencia: String,
+    /// O resultado: um modelo (.glb, .obj, .fbx), renderizado na mesma vista, ou uma imagem/captura.
+    pub arquivo: String,
+    /// frente (padrão), lado, costas, tres_quartos, cima.
+    pub vista: Option<String>,
+    /// auto (padrão: pela forma da referência), corpo, busto, rosto.
+    pub enquadramento: Option<String>,
+}
+
+/// Referência × resultado lado a lado, com a paleta das duas, a diferença de cor e a proporção da
+/// silhueta: a IA olha, ajusta os controles (cores, porte, penteado, forma) e gera de novo.
+pub async fn comparar_referencia(f: &Fornalha, a: ArgsComparar) -> Resultado<Value> {
+    let p = f.projeto(a.projeto.as_deref())?;
+    let referencia = f.resolver_no_projeto(&p, &a.referencia);
+    let arquivo = f.resolver_no_projeto(&p, &a.arquivo);
+    for arq in [&referencia, &arquivo] {
+        if !arq.is_file() {
+            return Err(Erro::argumento(format!("{} não existe.", arq.display())));
+        }
+    }
+    let nome = arquivo.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "resultado".into());
+    let saida = p.raiz.join("ai/comparacoes").join(format!("{nome}_{}.png", chrono::Utc::now().format("%Y%m%d-%H%M%S")));
+    let r = forjar(
+        f,
+        &json!({"tarefa": "comparar", "referencia": referencia, "arquivo": arquivo, "saida": saida,
+                "vista": a.vista.unwrap_or_else(|| "frente".into()), "enquadramento": a.enquadramento.unwrap_or_else(|| "auto".into()), "amostras": 24}),
+    )
+    .await?;
+    Ok(r)
+}
+
 // ---------------------------------------------------------------- cena curta
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1691,7 +1918,7 @@ pub async fn gerar_mapa(f: &Fornalha, a: ArgsMapa, quem: &str) -> Resultado<Valu
     let areas: Vec<Value> = p.biblia.mundo.areas.iter().map(|x| json!({"id": x.id, "tipo": x.tipo, "nome": x.nome})).collect();
     let r = forjar(
         f,
-        &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "areas": areas, "paleta": paleta(&p),
+        &json!({"tarefa": "mapa", "saida": pasta, "plano": plano, "areas": areas, "paleta": paleta(&p), "projeto_raiz": p.raiz,
                 "fotos": a.fotos.unwrap_or(true), "amostras": 12}),
     )
     .await?;
@@ -1823,7 +2050,7 @@ pub async fn importar_na_engine(f: &Fornalha, a: ArgsEngine, quem: &str) -> Resu
         avisos.push("Ainda não há personagem nem inimigo: crie com create_character para o jogo ter quem jogar.".into());
     }
     // com a Erethea ligada ao vivo dizendo que monta as cenas, a Fornalha só avisa (sem o montar.gd)
-    let montado = if f.engine_monta_cenas() {
+    let montado = if f.engine_monta_cenas(&p.raiz) {
         f.avisar_ponte(vec![".fornalha/cena.json".into()]);
         json!({"cenas": f.cenas_da_engine().unwrap_or(json!({"montadas_pela": "erethea"})), "erros_da_engine": []})
     } else {
@@ -1868,6 +2095,89 @@ pub async fn rodar_teste(f: &Fornalha, a: ArgsTeste) -> Resultado<Value> {
     rel["avisos"] = json!(avisos);
     rel["pasta"] = json!(pasta);
     Ok(rel)
+}
+
+#[cfg(test)]
+mod testes_controles {
+    use serde_json::json;
+
+    fn ficha(controles: serde_json::Value) -> serde_json::Value {
+        json!({"id": "x", "nome": "Teste", "descricao": "andarilho", "papel": "heroi", "porte": "medio", "controles": controles})
+    }
+
+    #[test]
+    fn idade_em_anos_vira_a_do_makehuman() {
+        assert!((super::idade_mh(25.0) - 0.5).abs() < 1e-9);
+        assert!((super::idade_mh(11.0) - 0.1875).abs() < 1e-9);
+        assert!((super::idade_mh(90.0) - 1.0).abs() < 1e-9);
+        assert!((super::idade_mh(5.0) - 0.1875).abs() < 1e-9, "abaixo de 11 anos fica em 11");
+        assert!(super::idade_mh(50.0) > 0.5 && super::idade_mh(50.0) < 1.0);
+    }
+
+    #[test]
+    fn controles_de_cabelo_barba_e_corpo_chegam_ao_humano() {
+        let h = super::humano_da_ficha(
+            &ficha(json!({
+                "genero": "masculino", "idade": 50,
+                "cabelo": {"penteado": "short02", "cor": "#4f4842", "volume_cm": 1.6, "ondulacao": 0.4},
+                "barba": {"tipo": "cheia", "cor": "#6b6660", "comprimento_cm": 2.5, "grisalho": 0.4},
+                "corpo_humano": {"altura": 0.7, "musculo": 2.0},
+                "rosto": {"nariz_largura": 0.3}, "cor_olhos": "green", "sobrancelha": "eyebrow002"
+            })),
+            crate::niveis::Nivel::Qualidade,
+        );
+        assert_eq!(h["macro"]["genero"], 1.0);
+        assert!((h["macro"]["idade"].as_f64().unwrap() - super::idade_mh(50.0)).abs() < 1e-9);
+        assert_eq!(h["cabelo"], "short02");
+        assert_eq!(h["cor_cabelo"], "#4f4842");
+        assert_eq!(h["cabelo_estilo"]["volume_cm"], 1.6);
+        assert!(h["cabelo_estilo"].get("penteado").is_none() && h["cabelo_estilo"].get("cor").is_none());
+        assert_eq!(h["barba"], "cheia");
+        assert_eq!(h["cor_barba"], "#6b6660");
+        assert_eq!(h["barba_estilo"]["comprimento_cm"], 2.5);
+        assert_eq!(h["macro"]["altura"], 0.7);
+        assert_eq!(h["macro"]["musculo"], 1.0, "fora de 0..1 fica no limite");
+        assert_eq!(h["detalhes"]["nariz_largura"], 0.3);
+        assert_eq!(h["cor_olhos"], "green");
+        assert_eq!(h["sobrancelha"], "eyebrow002");
+        let j = super::humano_da_ficha(
+            &ficha(json!({"roupa": {"estilo": "jaqueta", "cores": {"principal": "#5b4632"}, "capa": false}})),
+            crate::niveis::Nivel::Qualidade,
+        );
+        assert_eq!(j["roupa"]["estilo"], "jaqueta");
+        assert_eq!(j["roupa"]["cores"]["principal"], "#5b4632");
+        assert_eq!(j["roupa"]["capa"], false);
+        let x = super::humano_da_ficha(&ficha(json!({"roupa": {"estilo": "astronauta"}})), crate::niveis::Nivel::Qualidade);
+        assert_ne!(x["roupa"]["estilo"], "astronauta", "estilo que o alfaiate não faz não entra");
+    }
+
+    #[test]
+    fn penteado_desconhecido_nao_entra_e_genero_troca_o_padrao() {
+        let h = super::humano_da_ficha(&ficha(json!({"cabelo": "moicano_inventado"})), crate::niveis::Nivel::Qualidade);
+        assert_eq!(h["cabelo"], "short04", "fica o penteado da ficha");
+        let f = super::humano_da_ficha(&ficha(json!({"genero": "feminino"})), crate::niveis::Nivel::Qualidade);
+        assert_eq!(f["macro"]["genero"], 0.0);
+        assert_eq!(f["cabelo"], "long01");
+    }
+
+    #[test]
+    fn controle_da_ia_vale_mais_que_o_padrao_do_zumbi() {
+        let mut fz = ficha(json!({"barba": "nenhuma", "cor_olhos": "brown"}));
+        fz["tipo"] = json!("zumbi");
+        let h = super::humano_da_ficha(&fz, crate::niveis::Nivel::Qualidade);
+        assert_eq!(h["zumbi"], true);
+        assert_eq!(h["barba"], "nenhuma");
+        assert_eq!(h["cor_olhos"], "brown");
+        let sem = super::humano_da_ficha(
+            &{
+                let mut f = ficha(json!(null));
+                f["tipo"] = json!("zumbi");
+                f
+            },
+            crate::niveis::Nivel::Qualidade,
+        );
+        assert_eq!(sem["barba"], "rala");
+    }
 }
 
 #[cfg(test)]

@@ -84,6 +84,16 @@ async fn crie_um_inimigo_novo_vira_inimigo_testado_na_engine() {
     assert!(raiz.join("Audio/musica/vila.wav").is_file());
     let espada = chamar(&s, &mut sessao, 7, "generate_3d", json!({"tipo": "arma", "modelo": "espada"})).await;
     assert!(raiz.join("Weapons/espada.glb").is_file(), "{espada}");
+    // arma pela referência: a forma montada por peças e o lado a lado junto
+    std::fs::create_dir_all(raiz.join("ai/referencias")).unwrap();
+    comum::referencia_png(&raiz.join("ai/referencias/cutelo.png"), [150, 150, 155], 200, 400);
+    let cutelo = chamar(&s, &mut sessao, 70, "generate_3d", json!({"tipo": "arma", "nome": "cutelo", "referencia": "ai/referencias/cutelo.png",
+        "materiais": {"lamina": {"cor": "#9a9aa0", "tipo": "metal"}, "cabo": {"tipo": "madeira"}},
+        "pecas": [{"tipo": "extrusao", "material": "lamina", "espessura": 0.008, "gume": 0.02, "contorno": [[-0.05, 0.1], [0.05, 0.1], [0.06, 0.6], [-0.05, 0.62]]},
+                  {"tipo": "cilindro", "material": "cabo", "de": [0, 0, -0.1], "para": [0, 0, 0.1], "raio": 0.018}]})).await;
+    assert!(raiz.join("Weapons/cutelo.glb").is_file(), "{cutelo}");
+    assert!(cutelo["comparacao"]["arquivos"]["comparacao"].as_str().is_some_and(|c| std::path::Path::new(c).is_file()), "{cutelo}");
+    assert!(cutelo["comparacao"]["diferenca_de_cor"].is_number(), "{cutelo}");
 
     // "crie um inimigo novo": ficha, 3D, esqueleto, animações, cena na engine e teste
     let inimigo = chamar(

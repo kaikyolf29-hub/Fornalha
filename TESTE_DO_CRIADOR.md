@@ -131,6 +131,23 @@ Provado no CI (no processador, horas) e com vídeos aqui; falta provar no seu PC
    manopla), a espada fica no punho nos golpes e a barra da sobreveste fica de pé na corrida (antes abria
    um "lençol" quando o joelho subia). Me diga se alguma placa do braço esquerdo, o da bainha, se solta.
 
+## 9d. Referência, cabelo, barba e montagem por peças (novo em 26/11)
+Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a imagem de referência e peça:
+1. *"Faça este personagem"* (ex.: a foto do Joel). **Esperado:** a IA chama `create_character` com
+   `referencia`, `cabelo` (penteado, cor, volume, ondulação), `barba` (tipo, cor, comprimento), `idade`;
+   a resposta traz a `comparacao` (imagem lado a lado em `ai/comparacoes/`). Ela ajusta e gera de novo.
+   **Olhe:** o cabelo não parece capacete nem cola (mechas, volume, fios na ponta), a testa sem mancha
+   clara, a barba saindo da pele (não colada). Dê a sua nota de 0 a 100 e o que falta.
+2. *"Faça esta espada"* (uma imagem de arma). **Esperado:** `generate_3d` com `pecas` (lâmina com gume,
+   guarda, cabo, pomo) e `referencia`; a comparação volta junto. A lâmina tem fio (afina na borda).
+3. *"Faça uma casa como esta e use na vila do mapa."* **Esperado:** `generate_3d` (objeto, `pecas`) e
+   `generate_map` com `regioes[].casas`; na foto da vila no `run_test` aparecem as casas montadas.
+4. No jogo (Forward+, na placa): o cabelo com TAA (sem granulado) e a barba. **Me diga:** granulado, fios
+   piscando, o cabelo atravessando a cabeça ao andar.
+5. **Jogo de prova** (opcional, ~30 min): `node testes/mcp-e2e/jogo_de_prova.mjs <fornalha-cli>` faz um jogo
+   pequeno inteiro só pelo MCP (herói com barba, três inimigos, espada e casa por peças, mapa com vila,
+   floresta e cripta, música, efeitos, cena curta) e testa na engine. **Esperado:** "Jogo de prova completo".
+
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.
 Meta de referência (a do Ignis): perto de 60 MB e processador perto de 0%. Me diga o número.

@@ -56,15 +56,25 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
 
 ## Ordem das receitas
 1. **Bíblia**: `get_project` / `update_project` (`game.project.json` é a fonte da verdade: gênero, estilo,
-   paleta, áreas do mundo).
+   paleta, áreas do mundo). Referência em estilo anime/cel: `guia_visual.render = "anime"` (no jogo, luz
+   em faixas e contorno); fotorrealista: `"realista"` (padrão).
 2. **Personagem**: `create_character` (com `imagem` para usar um conceito pronto; `corpo` para criaturas).
+   Controles finos do humano: `cabelo` (penteado, cor, volume, agrupamento, ondulação, frizz, direção),
+   `barba`, `idade`, `genero`, `corpo_humano`, `rosto` (alvos do MakeHuman), `cor_olhos`, `sobrancelha`.
+   **Com referência** (personagem, arma, casa, mapa): passe `referencia` ou use `compare_reference`, olhe o
+   lado a lado e as medidas (paleta, diferença de cor, silhueta), ajuste e gere de novo até chegar o mais perto
+   possível. Fique sempre com o melhor resultado; não entregue o que está visivelmente pior que a referência.
 3. **Movimento antes da roupa**: `check_motion` (com `corrigir`), `list_motions` → `apply_motion` (banco
    Quaternius, ACCAD, 100STYLE, Mixamo/CMU trazidos com `import_motion`); `show_skeleton` / `edit_skeleton`
    para qualquer corpo (ossos `mola_<grupo>_1..N` viram mola no jogo).
 4. **Roupa por cima**: `dress_character` (placas rígidas no osso, pano dobra).
-5. **Armas e objetos**: `generate_3d`. **Mundo**: escreva o plano do mapa e use `generate_map` (relevo,
-   rio, estradas, vila, masmorra, vegetação, luz da hora; olhe o `mapa.png`, as medidas e as fotos de cada
-   região no `run_test`); `generate_blockout` só para um teste rápido.
+5. **Armas, objetos e casas**: `generate_3d`. Para chegar perto de uma referência, monte a forma por
+   peças (`pecas`: caixa com chanfro, cilindro, esfera, torno pelo perfil, extrusão do contorno com gume,
+   tubo por pontos; `materiais` com cor e tipo) olhando a imagem, passe `referencia` e ajuste até ficar
+   perto. Placa NVIDIA: `imagem` faz o 3D direto da imagem (TRELLIS.2). **Mundo**: escreva o plano do mapa
+   e use `generate_map` (relevo, rio, estradas, vila, masmorra, vegetação, luz da hora; olhe o `mapa.png`,
+   as medidas e as fotos de cada região no `run_test`); a vila usa as casas que você montou
+   (`regioes[].casas`); `generate_blockout` só para um teste rápido.
 6. **Som**: `generate_sfx`, `generate_music`, `generate_voice` (dublagem com a boca mexendo).
    **Cena curta**: `create_cutscene` com o roteiro (quem fala, o texto, enquadramento close/medio/aberto/
    ombro/dois, animação, para quem olha); no jogo, `CenasCurtas.tocar("id")`.
@@ -79,6 +89,8 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
   vídeo e de a pessoa ver.
 - Não diga que algo funciona numa placa de vídeo sem ter rodado nela.
 - Os scripts em `Scripts/fornalha/` são da Fornalha (o que você mudar neles é mantido na próxima montagem).
+- Coerência: todo personagem, arma, objeto e mapa segue a bíblia (estilo, paleta, época); as cores que você
+  não der saem da paleta do projeto.
 - Fale com a pessoa em português do Brasil.
 {FIM}"#,
         nome = b.nome,

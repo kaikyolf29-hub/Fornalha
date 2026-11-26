@@ -617,7 +617,8 @@ def criar_humano(dados, assets, ficha):
 
     # cabelo curto: penteado fio a fio + cards (pipeline AAA); médio/comprido: ainda o do pacote,
     # até a queda com colisão nos ombros ficar pronta (plano, etapa 1.2)
-    cards = bool(res_pele) and tem_cabelo and fc_cabelo.estilo_de(ficha.get("cabelo")) == "curto"
+    # o caminho antigo de fios crescidos (curto) só se pedido: "cabelo_em_cards": "fios"
+    cards = bool(res_pele) and tem_cabelo and ficha.get("cabelo_em_cards") == "fios"
     # médio e comprido em cards: o cabelo do pacote guia a forma e vira a camada de baixo
     # (padrão no caminho de qualidade; "cabelo_em_cards": false deixa só o do pacote)
     guiado = bool(res_pele) and tem_cabelo and not cards and ficha.get("cabelo_em_cards") is not False
@@ -657,8 +658,9 @@ def criar_humano(dados, assets, ficha):
         mat = corpo.data.materials[0]
         olhos = next((o for o in pecas if o.name.endswith("_eyes")), None)
         dentes = next((o for o in pecas if o.name.endswith("_teeth")), None)
-        cor, rug, nor = fc_pele.gerar(corpo, fc_pele.base_da_pele(mat), ficha, olhos, dentes, res=res_pele,
-                                      cor_barba=ficha.get("cor_cabelo") or "#2a1e16")
+        guia_cab = next((o for o in pecas if o.name.endswith("_hair")), None) if guiado else None
+        cor, rug, nor = fc_pele.gerar(corpo, fc_pele.base_da_pele(mat), ficha, olhos, dentes, res=res_pele, guia_cabelo=guia_cab,
+                                      cor_barba=ficha.get("cor_barba") or ficha.get("cor_cabelo") or "#2a1e16")
         fc_pele.aplicar(mat, cor, rug, nor)
         # no render a malha é subdividida (silhueta lisa); no glb e na engine vai a malha do jogo
         sub = corpo.modifiers.new("subdivisao_render", "SUBSURF")
@@ -689,7 +691,34 @@ def criar_humano(dados, assets, ficha):
             idade = float(ficha.get("macro", {}).get("idade", 0.5))
             pecas.extend(fc_cabelo.cards_guiados(nome, guia, ficha.get("cor_cabelo") or "#3b2a1e", arm,
                                                  n_cards=900 if res_pele >= 4096 else (700 if res_pele >= 2048 else 500),
+                                                 estilo=ficha.get("cabelo_estilo"), penteado=ficha.get("cabelo") or "",
                                                  grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
+    if not guiado and not cards:
+        # só o cabelo do pacote (níveis leves): preso à cabeça e ao pescoço (o pacote prende na mandíbula e
+        # o cabelo abria com a fala), na cor pedida e denso (sem couro aparecendo), borda suave
+        for o in pecas:
+            if o.name.endswith("_hair"):
+                fc_cabelo.limpar_pesos_cabelo(o)
+                fc_cabelo._escurecer_camada_de_baixo(o, ficha.get("cor_cabelo") or "#3b2a1e", escuro=0.85, borda_suave=False)
+    # barba em cards (cheia ou curta); "rala" fica só pintada na pele
+    homem = float(ficha.get("macro", {}).get("genero", 0.5)) >= 0.5
+    if res_pele and homem and ficha.get("barba") in ("cheia", "curta"):
+        g = corpo.vertex_groups.get("head")
+        peso_cab = np.zeros(len(corpo.data.vertices))
+        if g is not None:
+            for v in corpo.data.vertices:
+                for ge in v.groups:
+                    if ge.group == g.index:
+                        peso_cab[v.index] = ge.weight
+        olhos_ = next((o for o in pecas if o.name.endswith("_eyes")), None)
+        dentes_ = next((o for o in pecas if o.name.endswith("_teeth")), None)
+        import fc_pele
+
+        pts = fc_pele.pontos_do_rosto(corpo, olhos_, dentes_)
+        idade_b = float(ficha.get("macro", {}).get("idade", 0.5))
+        pecas.extend(fc_cabelo.barba_em_cards(nome, corpo, pts, peso_cab, ficha.get("cor_barba") or ficha.get("cor_cabelo") or "#3b2a1e",
+                                              arm, tipo=ficha["barba"], grisalho=0.75 * float(np.clip((idade_b - 0.62) / 0.3, 0.0, 0.8)),
+                                              estilo=ficha.get("barba_estilo")))
     arma = ficha.get("arma")
     if arma and arma != "nenhuma":
         import fc_armas_pbr

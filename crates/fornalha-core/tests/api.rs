@@ -207,17 +207,24 @@ async fn ponte_ao_vivo_por_websocket() {
     };
     let primeira = ler(ws.next().await);
     assert_eq!(primeira["tipo"], "ponte");
-    let ola = json!({"tipo": "ola", "programa": "Erethea", "versao": "0.1", "projeto": "x", "monta_cenas": true});
+    let projeto = tmp.path().join("jogo");
+    let outro = tmp.path().join("outro-jogo");
+    std::fs::create_dir_all(&projeto).unwrap();
+    std::fs::create_dir_all(&outro).unwrap();
+    let ola =
+        json!({"tipo": "ola", "programa": "Erethea", "versao": "0.1", "projeto": format!("{}/", projeto.display()), "monta_cenas": true});
     ws.send(Message::Text(ola.to_string().into())).await.unwrap();
     assert_eq!(ler(ws.next().await)["tipo"], "ola");
     // espera a Fornalha registrar a engine
     for _ in 0..50 {
-        if f.engine_monta_cenas() {
+        if f.engine_monta_cenas(&projeto) {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    assert!(f.engine_monta_cenas());
+    assert!(f.engine_monta_cenas(&projeto));
+    // pedido 10 da Erethea: aberta em outro projeto, a Fornalha monta este ela mesma
+    assert!(!f.engine_monta_cenas(&outro), "a Erethea está com outro projeto aberto");
     ws.send(Message::Text(json!({"tipo": "cenas", "principal": "res://principal.tscn"}).to_string().into())).await.unwrap();
     f.avisar_ponte(vec!["Characters/heroi/heroi.glb".into()]);
     let aviso = ler(ws.next().await);

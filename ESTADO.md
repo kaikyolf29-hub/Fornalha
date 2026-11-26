@@ -11,6 +11,72 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Rodada da noite (25→26/11): cabelo realista, barba, controles finos, referência e liberdade
+Pedido do criador: cabelo e barba no nível da referência (Joel, TLOU2) sem preset; a IA com mais liberdade
+para chegar perto de qualquer referência (personagem, arma, casa, mundo); coerência entre tudo; não aprovar
+nada medíocre. **Feito aqui** (Linux, sem placa; testes `forja`, `geracao`, Teste Bruto):
+- **Cabelo** (`fc_cabelo.cards_guiados`): mapa de normais dos fios no atlas, tom por card (cor de vértice
+  "Col"), volume e mechas (agrupamento), camada interna densa (35%), ondas, frizz e fios soltos, direção do
+  penteado (`saindo` da coroa, `para_tras`, `para_frente`) e fluxo pela textura do pacote com confiança (a
+  coroa do comprido não quebra mais). Base mais escura **assada na imagem** (o nó de multiplicar não ia
+  para o glTF: aparecia mancha laranja na coroa). Couro pintado só debaixo do penteado, nunca na testa (a
+  faixa encardida de borda irregular sumiu em 26/11) nem na nuca/ombros. Godot: `cabelo.gdshader` com
+  `normais` e `COLOR`.
+- **Barba** (`fc_cabelo.barba_em_cards`): atlas próprio (fios mais grossos e ondulados), máscara suave
+  pela malha, densidade por cm², redemoinhos, 3 camadas, pesos da mandíbula. `barba`: cheia ou curta
+  (cards), rala (pintada na pele, com a cor da barba).
+- **Controles finos no `create_character`** (por parâmetro, não preset): `cabelo` (penteado da lista do
+  pacote, cor, volume_cm, agrupamento, ondulacao, frizz, densidade, direcao), `barba` (tipo, cor,
+  comprimento_cm, densidade, ondulacao, volume), `idade` em anos, `genero`, `corpo_humano` (altura, peso,
+  musculo, proporcoes), `rosto` (alvos do MakeHuman), `cor_olhos`, `sobrancelha`, `referencia`. O que a IA
+  pede vale mais que o padrão do tipo (zumbi com barba pedida fica com ela). Testes de unidade.
+- **`compare_reference`** (MCP, `fc_comparar.py`): referência × resultado lado a lado (modelo renderizado na
+  mesma vista ou captura da engine), paleta das duas, diferença de cor, proporção da silhueta,
+  enquadramento corpo/busto/rosto, dica. `create_character` e `generate_3d` com `referencia` já devolvem a
+  comparação. Teste com Blender: cor perto × cor longe.
+- **Montagem livre por peças no `generate_3d`** (`fc_pecas.py`): caixa com chanfro, cilindro, esfera, torno
+  (perfil girado), extrusão de contorno com **gume** (lâmina que afina até o fio), tubo por pontos (sem torcer:
+  transporte paralelo), rotação, espelhar, materiais com tipo PBR. Arma de pé com encaixe na origem; objeto
+  no chão. A IA monta a forma da referência e ajusta pela comparação. Provado: espada longa, machado
+  barbado, casa de pedra (imagens na sessão). **Mapa:** `regioes[].casas` faz a vila usar as casas montadas
+  (teste: a vila usa `casa_teste` e avisa a que falta).
+- **Visual anime pela bíblia** (`guia_visual.render = "anime"`): no jogo, personagens, armas e construções
+  ganham luz em faixas (sombra puxada para a cor escolhida), brilho de borda, especular recortado e
+  contorno (`anime.gdshader` + `contorno.gdshader`, trocados em `fisica.gd`/`principal.gd`); o relatório
+  do `run_test` traz `visual`. Provado aqui na Godot 4.6.1 (Xvfb, compatibilidade): 149 materiais trocados,
+  0 erro de shader, capturas com o contorno. Para referência anime: o personagem pela imagem (TRELLIS.2 na
+  NVIDIA ou API paga) ou o humano com os controles, e o render anime.
+- **Pedidos 10 a 12 da Erethea (26/11) atendidos:** (10) a Fornalha só deixa de rodar o `montar.gd` quando
+  a Erethea diz `monta_cenas` **e** está com o mesmo projeto aberto (o último "ola" vale); (11) a linha
+  `FORNALHA_MONTAR {"ok","cenas","erros"}` continua no fim, com os caminhos que o `montar.gd` salva;
+  (12) `directional_shadow_blend_splits = true` no sol do mapa.
+- **Cabelo (26/11, manhã):** com direção pedida (`para_tras`/`para_frente`) os fios seguem o rumo penteado
+  deitado na superfície (o UV/textura do pacote só dá variação): acabou o "rabisco" de fios cruzando em
+  zigue-zague. Fio grisalho mais fino. Camada de baixo com a borda sumindo aos poucos. **Barba:** cards
+  mais finos e densos (26/cm²), raiz estreita e ponta afinando (sem "lasca" de borda reta), deitados na
+  borda: deixou de parecer palha colada. Nível leve (sem pele em alta): o cabelo do pacote sai limpo
+  (preso à cabeça, não à mandíbula) e denso.
+- **Roupa moderna** (`roupa.estilo = "jaqueta"`): camisa de brim com colarinho e botões de pressão, jaqueta
+  de couro fosco (camurça) aberta, gola de tecido grosso, bolsos com aba no peito, jeans e botas. `roupa`
+  virou controle do `create_character` (estilo + cores). Teste no CI (`roupa_moderna_de_jaqueta`).
+- **Comparação melhor:** enquadramento `meio_corpo` (cabeça à cintura), braços baixados da pose T antes da
+  foto, fundo com faixa preta de cinema reconhecido (a paleta da referência deixou de pegar o fundo).
+- **Manequim do Joel (pedido do criador, 26/11):** feito só com os controles (idade, penteado, cor, barba,
+  cenho franzido e olhar apertado pelos alvos de expressão, jaqueta) e 4 voltas do ciclo de comparação
+  (diferença de cor 0,136 → 0,088). Painel em `scratchpad/manequim4/painel_joel.png` (a imagem do Joel é
+  só referência de teste, não entra no repositório). **Nota honesta:** cabelo ~60/100 (penteado e grisalho
+  certos, mas volumoso demais nas têmporas e sem mecha caindo na testa), barba ~60/100 (forma e grisalho
+  certos, menos densa e definida), rosto/expressão ~45/100 (o rosto base do MakeHuman não é o do Joel;
+  pele lisa demais), roupa ~35/100 (a ideia certa, mas casca sobre o corpo: sem costura, dobra e volume de
+  pano). É nível de NPC de jogo indie/AA, não de herói AAA. Para chegar perto do AAA faltam: roupa com
+  malha própria (TRELLIS.2/API na NVIDIA ou simulação de pano + escultura), cabelo fio a fio (Erethea #40)
+  com o groom da Fornalha, e pele escaneada.
+- **Teste Bruto** verde nos 4 casos (protagonista, inimigo, zumbi, dragão). Consertos: régua de "cabelo em
+  camadas" aceita o caminho guiado; cobertura do couro medida na pose de descanso (o zumbi curvado tirava
+  os pontos da malha dos raios e reprovava sem motivo).
+**Falta provar:** cabelo e barba no Forward+ com TAA numa placa e a **aprovação do criador** comparando com
+a referência; mola nas mechas.
+
 ### Etapa 1 — bancada de movimento (25/11, em andamento)
 **Feito e provado aqui** (Linux, Blender 5.2.4, sem placa; testes `cargo test --test forja`):
 - **Conferência do movimento** (`fc_conferir.py`, MCP `check_motion`): por animação mede torção de osso
@@ -562,6 +628,18 @@ Turbo), reserva da placa, `uso_comercial` nos modelos, aceleradores em `/motor/e
    RX 9060 XT 16 GB pelo que for mais rápido, com o mesmo endpoint.
 
 ## Pedidos para a Erethea Engine (o criador leva para o chat da Erethea)
+**Atualização 26/11 (HANDOFF do main em f81a616):** a Erethea 1.0.0 saiu em 25/11 e já tem, além do que
+está abaixo: cabelo fio a fio (#40), pele que segue a superfície (#39), terreno partes 1 a 3 (#38, #42,
+#50), sombras por ray tracing e de contato, materiais do glTF que a Godot ignora (coat, anisotropia, sheen
+do cabelo e da córnea da Fornalha, #44) e a ponte de 26/11 (#54: roda o `montar.gd` do projeto quando há
+`World/mapa/mapa.json`). Os pedidos 10 a 12 dela para a Fornalha foram atendidos (ver a rodada da noite).
+**Pedido novo (26/11):**
+6. **Visual anime nativo:** contorno por pós-processo (profundidade + normal, grossura em pixels) e luz em
+   faixas como opção de material/ambiente. A Fornalha já faz no script do jogo (`anime.gdshader` +
+   `contorno.gdshader` pela casca invertida, ligado por `guia_visual.render = "anime"` na bíblia); com a
+   Erethea fazendo o contorno na tela, a casca pode sair (mais barato e sem linha falhando em malha
+   aberta). Avise o nome da opção para a Fornalha ligar quando a bíblia pedir anime.
+
 Conferido no `HANDOFF.md` da Erethea em 25/11/2026 (main de 23/11, commit c4993bf).
 Já feitos na Erethea:
 - **Upscalers** AMD FSR 3.1/4, XeSS e DLSS (`modules/erethea_upscale/`), presets de qualidade e
@@ -593,10 +671,11 @@ A Fornalha trata a Erethea como a Godot: procura `erethea.console.exe`/`erethea.
 algum desses, avise aqui.
 
 ## Próximo passo
-0. [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): Etapa 1 feita; guia para qualquer IA, bancada de mapa,
-   masmorra por peças, cena curta e cabelo médio/comprido em cards guiados feitos. Falta: **aprovação do
-   criador no cabelo** (ver no Forward+ com TAA no PC), barba em cards, mola nas mechas, o **jogo de prova**
-   feito pela IA (Etapa 3, item 4) e o teste do criador no PC (mapa, cena curta e cabelo na placa).
+0. [PLANO_3_ETAPAS.md](docs/PLANO_3_ETAPAS.md): as três etapas estão feitas no código e provadas aqui
+   (Linux, sem placa). Falta: **aprovação do criador** no cabelo, barba e manequim do Joel (ver no Forward+
+   com TAA no PC), mola nas mechas, a linha do cabelo (ainda com fio avermelhado de sombra na pele), a roupa
+   com volume de pano de verdade, e o teste do criador no PC (mapa, cena curta, anime e cabelo na placa).
+   O jogo de prova está em `testes/mcp-e2e/jogo_de_prova.mjs` (ver a rodada da noite).
 1. Criador: rodar o TESTE_DO_CRIADOR.md no Windows (e, se quiser, no Linux).
 2. Com a placa NVIDIA nova: instalar os modelos de placa em Máquina e rodar a parte 9 do teste.
 3. Fase 5 só quando o criador pedir.

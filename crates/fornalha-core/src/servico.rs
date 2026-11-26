@@ -291,9 +291,11 @@ impl Fornalha {
         self.engine_ao_vivo.lock().unwrap().clone()
     }
 
-    /// A engine ligada disse que monta as cenas ela mesma (a Fornalha não roda o montar.gd).
-    pub fn engine_monta_cenas(&self) -> bool {
-        self.engine_ao_vivo().is_some_and(|v| v["monta_cenas"] == true)
+    /// A engine ligada disse que monta as cenas ela mesma (a Fornalha não roda o montar.gd) **e** está
+    /// com este projeto aberto (pedido 10 da Erethea: aberta em outro projeto, ninguém montava). Vale o
+    /// último "ola" (ela manda de novo quando o monta_cenas muda).
+    pub fn engine_monta_cenas(&self, raiz: &std::path::Path) -> bool {
+        self.engine_ao_vivo().is_some_and(|v| v["monta_cenas"] == true && v["projeto"].as_str().is_some_and(|p| mesmo_projeto(p, raiz)))
     }
 
     pub fn registrar_cenas(&self, relatorio: Value) {
@@ -322,4 +324,20 @@ impl Fornalha {
     pub async fn chamar(&self, nome: &str, args: Value, quem: &str) -> Resultado<Value> {
         crate::ferramentas::chamar(self, nome, args, quem).await
     }
+}
+
+/// A pasta que a engine diz ter aberta é a deste projeto? (barras, barra no fim e, no Windows,
+/// maiúsculas não contam; caminho que existe é comparado já resolvido)
+fn mesmo_projeto(da_engine: &str, raiz: &std::path::Path) -> bool {
+    let normal = |p: &std::path::Path| {
+        let p = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let t = p.to_string_lossy().replace('\\', "/");
+        let t = t.trim_start_matches("//?/").trim_end_matches('/').to_string();
+        if cfg!(windows) {
+            t.to_lowercase()
+        } else {
+            t
+        }
+    };
+    !da_engine.trim().is_empty() && normal(std::path::Path::new(da_engine.trim())) == normal(raiz)
 }

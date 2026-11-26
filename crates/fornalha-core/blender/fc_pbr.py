@@ -149,10 +149,11 @@ def material(nome, tipo, tom=None, escala=None, rugosidade_extra=0.0, mistura_to
         cor.image = final
     nt.links.new(cor.outputs["Color"], bsdf.inputs["Base Color"])
     rug = _mapa(pasta, ident, ("Roughness",))
-    if rug:
+    if rug and rugosidade_extra < 0.3:
         nt.links.new(textura(rug, cor=False).outputs["Color"], bsdf.inputs["Roughness"])
     else:
-        bsdf.inputs["Roughness"].default_value = 0.5 + rugosidade_extra
+        # bem mais fosco pedido (camurça): rugosidade lisa alta, que o glTF leva como fator
+        bsdf.inputs["Roughness"].default_value = min(0.5 + rugosidade_extra, 0.95)
     met = _mapa(pasta, ident, ("Metalness",))
     if met:
         nt.links.new(textura(met, cor=False).outputs["Color"], bsdf.inputs["Metallic"])

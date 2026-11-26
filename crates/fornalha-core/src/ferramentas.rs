@@ -101,7 +101,7 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "update_project",
             titulo: "Atualizar a bíblia do jogo",
-            descricao: "Muda a bíblia do jogo com um JSON Merge Patch: objetos se mesclam, null apaga o campo. Campos: nome, comercial, nivel (leve, equilibrado, qualidade, maximo), engine, conceito {genero, estilo, plataformas, camera, historia, ambientacao, mecanicas, publico, duracao, referencias_visuais}, guia_visual {texto_de_estilo, paleta (#RRGGBB), traco, referencias [{arquivo, aprovada, nota}], evitar}, personagens [{id, nome, papel, roupa, arma, descricao}], mundo {areas [{id, nome, tipo, descricao}]}. Listas são trocadas inteiras. id, formato, criado_em e atualizado_em não mudam.",
+            descricao: "Muda a bíblia do jogo com um JSON Merge Patch: objetos se mesclam, null apaga o campo. Campos: nome, comercial, nivel (leve, equilibrado, qualidade, maximo), engine, conceito {genero, estilo, plataformas, camera, historia, ambientacao, mecanicas, publico, duracao, referencias_visuais}, guia_visual {texto_de_estilo, paleta (#RRGGBB), traco, render (realista ou anime: no jogo, luz em faixas e contorno em personagens e construções), referencias [{arquivo, aprovada, nota}], evitar}, personagens [{id, nome, papel, roupa, arma, descricao}], mundo {areas [{id, nome, tipo, descricao}]}. Listas são trocadas inteiras. id, formato, criado_em e atualizado_em não mudam.",
             esquema: json!({
                 "type": "object",
                 "properties": {
@@ -215,6 +215,16 @@ pub fn lista() -> Vec<Ferramenta> {
                     "parar_no_conceito": {"type": "boolean", "description": "Por partes: para no conceito de corpo inteiro (o que vira 3D) e devolve a imagem para aceitar ou refazer; a chamada seguinte com o mesmo nome usa esse conceito."},
                     "refazer_conceito": {"type": "boolean", "description": "Apaga o conceito de corpo inteiro guardado e faz outro (mande outra seed)."},
                     "imagem": {"type": "string", "description": "Caminho de uma imagem PNG pronta (feita no Gemini, no ChatGPT, desenhada…): ela vira o 3D como está, sem ser refeita; esqueleto e animações vêm da malha."},
+                    "cabelo": {"description": "Penteado (texto) ou {penteado: short01|short02|short03|short04|bob01|bob02|long01|ponytail01|braid01|afro01|nenhum, cor, volume_cm (0–4, quanto descola do couro), agrupamento (0–1, fios juntos em mechas), ondulacao (0–1), frizz (0–1), densidade (0,5–2), direcao: auto|caindo|para_tras|para_frente}. As mechas são cards guiados pelo penteado; ajuste olhando o retrato e a comparação com a referência."},
+                    "barba": {"description": "nenhuma|rala|curta|cheia ou {tipo, cor, comprimento_cm (0,3–5), densidade (0,5–2), ondulacao (0–2), volume (0–2)} (homem, caminho realista)."},
+                    "idade": {"type": "number", "description": "Idade em anos (11–90): rugas, grisalho do cabelo e da barba."},
+                    "genero": {"type": "string", "enum": ["masculino", "feminino"]},
+                    "corpo_humano": {"type": "object", "description": "{altura, peso, musculo, proporcoes} de 0 a 1 (humano realista)."},
+                    "rosto": {"type": "object", "description": "Alvos do MakeHuman (CC0) com peso -1 a 1, ex.: {\"nose/nose-width-incr\": 0.4, \"chin/chin-prominent-incr\": 0.3, \"cheek/l-cheek-bones-incr\": 0.5}. Grupos: nose, chin, cheek, eyes, eyebrows, mouth, ears, forehead, head, neck."},
+                    "cor_olhos": {"type": "string", "description": "brown, brownlight, blue, bluegreen, green, grey, lightblue..."},
+                    "sobrancelha": {"type": "string", "description": "eyebrow001 a eyebrow012 (pacote MakeHuman)."},
+                    "roupa": {"type": "object", "description": "{estilo: campones|mercenario|soldado|cavaleiro|cavaleiro_placas|templario|nobre|jaqueta (moderno: camisa de brim, jaqueta de couro aberta com gola e bolsos, jeans, botas), cores: {principal, secundaria, detalhe}, capa}. Expressão do rosto: em `rosto`, os alvos expression/units/caucasian/* (eyebrows-left-down, eye-left-slit, mouth-compression...)."},
+                    "referencia": {"type": "string", "description": "Imagem de referência: no fim o resultado sai lado a lado com ela, com paleta, diferença de cor e proporção medidas (veja compare_reference)."},
                     "corpo": {"type": "string", "enum": ["auto", "humanoide", "alado", "quadrupede", "aranha", "inseto", "serpente", "criatura"],
                               "description": "Tipo de corpo: decide o esqueleto e as animações. auto mede na malha (padrão quando há imagem). humanoide: esqueleto do humano com dedos e captura de movimento; alado: asas, pescoço e cauda; os outros: patas achadas na malha (qualquer número), passada com IK, coluna e cauda em onda, bote."}
                 }
@@ -231,7 +241,7 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "generate_3d",
             titulo: "Gerar modelo 3D (arma, objeto, de uma imagem) ou limpar malha",
-            descricao: "Gera uma arma (espada, machado, lanca, martelo, adaga, cajado, escudo) ou um objeto (barril, caixa, bau, arvore, pedra, casa, tocha, cerca, pocao) low-poly no estilo do jogo, com colisão simples e prévia; com imagem, faz o 3D da imagem pelo TRELLIS.2 (placa NVIDIA; textura assada no Blender, sem o nvdiffrast); ou, com entrada, limpa uma malha de fora (escala real, pivô nos pés, decimar, UV e colisão). Personagens: use create_character.",
+            descricao: "Gera uma arma ou um objeto com colisão simples e prévia, de quatro jeitos. (1) Montagem livre por peças (o caminho para chegar perto de uma referência): olhe a imagem e descreva a forma em `pecas`, em metros; frente = olhando para +Y, x à direita, z para cima; arma de pé com o encaixe da mão na origem, objeto no chão. Peças: caixa {centro, tamanho, rotacao [graus x,y,z], chanfro}; cilindro {de, para, raio, raio_fim, lados}; esfera {centro, raio, escala}; torno {perfil [[raio, z], ...], posicao, eixo x|y|z, lados} (pomo, cabo, barril, vaso, coluna); extrusao {contorno [[u, v], ...], plano frente|lado|cima, espessura, gume (m: afina até o fio), borda (espessura que fica no fio), posicao} (lâmina, cabeça de machado, guarda, escudo, empena, folha); tubo {pontos [[x,y,z], ...], raio (um ou por ponto), suave} (cabo curvo, chifre, corda, galho); em qualquer peça: material, rotacao + pivo, espelhar x|y|z, liso. `materiais`: {nome: {cor, tipo metal|madeira|couro|pedra|tecido|telha|reboco|rocha, rugosidade, metal, emissao}} (com o pacote CC0 instalado, o tipo ganha textura PBR). Com `referencia`, a comparação lado a lado já volta junto: ajuste as peças e gere de novo até ficar o mais perto possível. (2) Pelo nome (forma pronta simples): arma espada, machado, lanca, martelo, adaga, cajado, escudo; objeto barril, caixa, bau, arvore, pedra, casa, tocha, cerca, pocao. (3) Com imagem, o 3D da imagem pelo TRELLIS.2 (placa NVIDIA; textura assada no Blender, sem o nvdiffrast). (4) Com entrada, limpa uma malha de fora (escala real, pivô nos pés, decimar, UV e colisão). Personagens: use create_character.",
             esquema: json!({"type": "object", "properties": {
                 "projeto": projeto_opcional(),
                 "tipo": {"type": "string", "enum": ["arma", "objeto"]},
@@ -239,7 +249,13 @@ pub fn lista() -> Vec<Ferramenta> {
                 "cores": {"type": "object", "description": "ex.: {\"metal\": \"#aabbcc\", \"madeira\": \"#553311\"}"},
                 "entrada": {"type": "string", "description": "Malha de fora (.glb, .gltf, .obj, .fbx, .ply) para limpar."},
                 "imagem": {"type": "string", "description": "Imagem do projeto para virar 3D com o TRELLIS.2 (precisa de placa NVIDIA e do modelo instalado)."},
-                "altura_m": {"type": "number"}, "triangulos_max": {"type": "integer"}, "seed": {"type": "integer", "minimum": 0}
+                "altura_m": {"type": "number"}, "triangulos_max": {"type": "integer"}, "seed": {"type": "integer", "minimum": 0},
+                "pecas": {"type": "array", "maxItems": 400, "items": {"type": "object", "properties": {
+                    "tipo": {"type": "string", "enum": ["caixa", "cilindro", "esfera", "torno", "extrusao", "tubo"]}, "material": {"type": "string"}},
+                    "required": ["tipo"]}, "description": "Montagem livre (veja a descrição): a forma da referência peça por peça."},
+                "materiais": {"type": "object", "description": "{\"lamina\": {\"cor\": \"#c9ced4\", \"tipo\": \"metal\", \"rugosidade\": 0.25}}"},
+                "referencia": {"type": "string", "description": "Imagem de referência (do projeto): a comparação lado a lado volta junto."},
+                "vista": {"type": "string", "enum": ["frente", "lado", "costas", "tres_quartos", "cima"]}
             }}),
             so_leitura: false,
         },
@@ -378,7 +394,7 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "generate_map",
             titulo: "Bancada de mapa: gerar o mundo pelo plano",
-            descricao: "Você escreve o plano do mapa; a Fornalha faz o relevo com erosão, rio que só desce, lagos de margem torta, estradas por onde dá para andar (com ponte no rio), chão pintado por inclinação e altura (grama, terra, rocha, areia ou neve), árvores, arbustos e pedras por regras (nada em barranco nem na água, mais mato perto da água, florestas densas), vila com ruas e casas, masmorra na encosta, e a luz e a névoa da hora e do clima. Devolve as medidas (área andável, regiões sem ligação, rampa das estradas, árvores em barranco ou na água, chão das construções, rio) com aprovado/reprovado, o mapa visto de cima e duas vistas. Coordenadas como na engine: x leste, z sul, em metros a partir do centro. Plano: {\"tamanho_m\": 512, \"relevo\": {\"estilo\": \"plano|colinas|montanhoso|vale\", \"altura_m\": 40, \"erosao\": 0.6}, \"clima\": \"temperado|seco|frio|neve|chuvoso\", \"hora\": \"amanhecer|manha|meio_dia|tarde|por_do_sol|noite\", \"nevoa\": 0.35, \"regioes\": [{\"id\", \"tipo\": \"vila|cidade|aldeia|floresta|bosque|pantano|campo|lago|montanha|colina|vulcao|masmorra|caverna|castelo|ruinas|arena|coliseu\", \"centro\": [x, z] ou \"posicao\": \"norte|sul|leste|oeste|nordeste|...|centro\", \"raio_m\"}], \"rio\": true ou {\"pontos\": [[x, z], ...], \"largura_m\": 8}, \"estradas\": [{\"de\", \"para\"}] (padrão: do início a cada região), \"spawn\": \"id da região inicial\", \"seed\"}. Sem plano: o último (World/mapa/plano.json) ou as áreas da bíblia. Grava World/mapa/ (relevo.r32 e .r16, pintura.png, terreno.glb, agua.glb, estruturas.glb, vegetacao.glb, espalhamento.json, mapa.json). Depois: import_to_engine e run_test (uma foto de cada região, com o FPS).",
+            descricao: "Você escreve o plano do mapa; a Fornalha faz o relevo com erosão, rio que só desce, lagos de margem torta, estradas por onde dá para andar (com ponte no rio), chão pintado por inclinação e altura (grama, terra, rocha, areia ou neve), árvores, arbustos e pedras por regras (nada em barranco nem na água, mais mato perto da água, florestas densas), vila com ruas e casas, masmorra na encosta, e a luz e a névoa da hora e do clima. Devolve as medidas (área andável, regiões sem ligação, rampa das estradas, árvores em barranco ou na água, chão das construções, rio) com aprovado/reprovado, o mapa visto de cima e duas vistas. Coordenadas como na engine: x leste, z sul, em metros a partir do centro. Plano: {\"tamanho_m\": 512, \"relevo\": {\"estilo\": \"plano|colinas|montanhoso|vale\", \"altura_m\": 40, \"erosao\": 0.6}, \"clima\": \"temperado|seco|frio|neve|chuvoso\", \"hora\": \"amanhecer|manha|meio_dia|tarde|por_do_sol|noite\", \"nevoa\": 0.35, \"regioes\": [{\"id\", \"tipo\": \"vila|cidade|aldeia|floresta|bosque|pantano|campo|lago|montanha|colina|vulcao|masmorra|caverna|castelo|ruinas|arena|coliseu\", \"centro\": [x, z] ou \"posicao\": \"norte|sul|leste|oeste|nordeste|...|centro\", \"raio_m\", \"casas\": [\"Items/casa_pedra.glb\"] (vila/cidade/aldeia: usa as casas que você montou no generate_3d, revezando)}], \"rio\": true ou {\"pontos\": [[x, z], ...], \"largura_m\": 8}, \"estradas\": [{\"de\", \"para\"}] (padrão: do início a cada região), \"spawn\": \"id da região inicial\", \"seed\"}. Sem plano: o último (World/mapa/plano.json) ou as áreas da bíblia. Grava World/mapa/ (relevo.r32 e .r16, pintura.png, terreno.glb, agua.glb, estruturas.glb, vegetacao.glb, espalhamento.json, mapa.json). Depois: import_to_engine e run_test (uma foto de cada região, com o FPS).",
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "plano": {"type": "object"}, "mudar": {"type": "object", "description": "Muda só estes campos do último plano (ex.: {\"clima\": \"neve\"})."}, "seed": {"type": "integer", "minimum": 0}, "fotos": {"type": "boolean"}}}),
             so_leitura: false,
         },
@@ -390,6 +406,15 @@ pub fn lista() -> Vec<Ferramenta> {
                 "roteiro": {"type": "array", "items": {"type": "object", "properties": {"quem": {"type": "string"}, "fala": {"type": "string"}, "animacao": {"type": "string"},
                     "camera": {"type": "string", "enum": ["close", "medio", "aberto", "ombro", "dois"]}, "olhar_para": {"type": "string"}, "duracao": {"type": "number"}, "idioma": {"type": "string"}}, "required": ["quem"]}},
                 "sem_voz": {"type": "boolean"}, "idioma": {"type": "string"}, "seed": {"type": "integer", "minimum": 0}}, "required": ["id", "roteiro"]}),
+            so_leitura: false,
+        },
+        Ferramenta {
+            nome: "compare_reference",
+            titulo: "Comparar com a referência",
+            descricao: "Põe a imagem de referência que a pessoa mandou e o resultado lado a lado (um modelo .glb/.obj/.fbx renderizado na mesma vista, ou uma imagem/captura da engine) e mede: a paleta das duas (cores e fração), a diferença de cor (0 = igual) e a proporção da silhueta. Serve para personagem, arma, objeto, casa e mapa. Use em ciclo: compare, ajuste os controles (cores, porte, penteado, rosto, forma, plano do mapa) e gere de novo até ficar o mais perto possível; olhe sempre a imagem, os números não veem tudo.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "referencia": {"type": "string"}, "arquivo": {"type": "string"},
+                "vista": {"type": "string", "enum": ["frente", "lado", "costas", "tres_quartos", "cima"]},
+                "enquadramento": {"type": "string", "enum": ["auto", "corpo", "meio_corpo", "busto", "rosto"]}}, "required": ["referencia", "arquivo"]}),
             so_leitura: false,
         },
         Ferramenta {
@@ -806,6 +831,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
         "generate_blockout" => geracao::gerar_blockout(f, args(a)?, quem).await,
         "generate_map" => geracao::gerar_mapa(f, args(a)?, quem).await,
         "create_cutscene" => geracao::criar_cena(f, args(a)?, quem).await,
+        "compare_reference" => geracao::comparar_referencia(f, args(a)?).await,
         "generate_code" => geracao::gerar_codigo(f, args(a)?).await,
         "import_to_engine" => geracao::importar_na_engine(f, args(a)?, quem).await,
         "run_test" => geracao::rodar_teste(f, args(a)?).await,

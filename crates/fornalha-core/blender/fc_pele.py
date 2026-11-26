@@ -158,7 +158,27 @@ def pontos_do_rosto(corpo, olhos=None, dentes=None):
 
 # ------------------------------------------------------------------ a pele
 
-def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="#2a1e16", semente=7):
+def _sob_o_penteado(corpo, guia, pos, regiao, irregular):
+    """1 onde a pele está debaixo da malha do penteado (até ~1,5 cm), com degradê até ~2,5 cm e borda
+    irregular: a raiz do cabelo pintada no couro (sem pele clara ou vermelha entre os fios)."""
+    from mathutils import Vector
+    from mathutils.kdtree import KDTree
+
+    inv = corpo.matrix_world.inverted() @ guia.matrix_world
+    gv = [inv @ v.co for v in guia.data.vertices]
+    kd = KDTree(len(gv))
+    for i, q in enumerate(gv):
+        kd.insert(q, i)
+    kd.balance()
+    cc = np.zeros(regiao.shape, dtype=np.float32)
+    idx = np.argwhere(regiao)
+    dist = np.array([kd.find(Vector(pos[i, j]))[2] for i, j in idx], dtype=np.float32)
+    d = dist + irregular[idx[:, 0], idx[:, 1]] * 0.004
+    cc[idx[:, 0], idx[:, 1]] = np.clip((0.025 - d) / 0.01, 0, 1)
+    return cc
+
+
+def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="#2a1e16", semente=7, guia_cabelo=None):
     """Devolve (imagem_cor, imagem_rugosidade, imagem_normal) prontas para o material."""
     rng = np.random.default_rng(semente)
     m = ficha.get("macro", {})
@@ -274,12 +294,20 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
         import fc_cabelo
 
         irregular = 0.5 * _normalizar(borrar(rng.standard_normal((res, res)).astype(np.float32), round(2 * px)))
-        cc = fc_cabelo.mascara_couro(x, y, z, P, irregular, suave=3.0) * mask
+        if guia_cabelo is not None:
+            # o couro pintado segue o penteado de verdade: pele que fica debaixo da malha do cabelo
+            # só o couro: acima da linha dos olhos, ou atrás das orelhas (o comprido passa perto do rosto e do
+            # pescoço, e ali é pele)
+            couro_reg = (cabeca > 0.3) & ((z > oz + 0.01 * s) | ((y > oy + 0.075 * s) & (z > qz + 0.035 * s)))
+            cc = _sob_o_penteado(corpo, guia_cabelo, pos, couro_reg, irregular)
+        else:
+            cc = fc_cabelo.mascara_couro(x, y, z, P, irregular, suave=3.0) * mask
         cc = borrar(cc.astype(np.float32), round(4 * px))
         # degradê: mais denso no alto, mais ralo perto da linha (como cabelo cortado)
         cc = np.clip(cc * 1.4, 0, 1) * (0.7 + 0.3 * sstep(0.2, 0.9, cc))
-        # na testa os fios já cobrem a linha: pintura bem mais leve ali (sem faixa escura)
-        cc = cc * (0.35 + 0.65 * sstep(oy + 0.045 * s, oy + 0.08 * s, y))
+        # na testa, nada: a malha guia desce mais que os fios penteados (para trás) e a pintura virava
+        # uma faixa encardida de borda irregular em volta da pele clara; a linha do cabelo é dos fios
+        cc = cc * sstep(oy + 0.05 * s, oy + 0.085 * s, y)
         ccab = np.array([int((ficha.get("cor_cabelo") or "#3b2a1e").lstrip("#")[i:i + 2], 16) / 255.0 for i in (0, 2, 4)], dtype=np.float32)
         pontinhos = np.clip(ruido(1) + 0.3, 0, 1)[..., None]
         fio_curto = ccab * (0.3 + 0.3 * pontinhos)
@@ -300,7 +328,8 @@ def gerar(corpo, base_img, ficha, olhos=None, dentes=None, res=4096, cor_barba="
     lin *= (1 - 0.1 * poros * dens)[..., None]
     if barba != "nenhuma" and homem:
         zona = rosto * sstep(nz - 0.004 * s, nz - 0.012 * s, z) * (1 - labios)
-        zona = np.maximum(zona, cabeca * sstep(qz + 0.002 * s, qz - 0.03 * s, z) * sstep(qz - 0.06 * s, qz - 0.035 * s, z))
+        # embaixo do queixo só na frente do pescoço (antes dava a volta e sujava a nuca e os ombros)
+        zona = np.maximum(zona, cabeca * frente * sstep(qz + 0.002 * s, qz - 0.03 * s, z) * sstep(qz - 0.06 * s, qz - 0.035 * s, z))
         # sobe pela lateral até a costeleta
         lateral = cabeca * sstep(0.045 * s, 0.06 * s, ax) * sstep(oz + 0.005 * s, oz - 0.01 * s, z) * sstep(qz - 0.01 * s, qz + 0.01 * s, z)
         zona = np.clip(np.maximum(zona, lateral) * (1 - 0.8 * bochecha * sstep(nz - 0.01 * s, nz + 0.01 * s, z)), 0, 1)

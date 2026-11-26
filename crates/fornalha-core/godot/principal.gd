@@ -7,9 +7,27 @@ extends Node3D
 func _ready() -> void:
 	_cor_do_chao()
 	_grama()
+	_visual_anime()
 	var sons := get_node_or_null("/root/Sons")
 	if musica != "" and sons:
 		sons.tocar_musica(musica)
+
+
+## Visual anime (bíblia): as construções e os objetos do mundo também ganham faixas e contorno; o chão,
+## a água e a vegetação têm shader próprio e ficam como estão.
+func _visual_anime() -> void:
+	var fisica = load("res://Scripts/fornalha/fisica.gd")
+	if fisica.render() != "anime":
+		return
+	var mundo := get_node_or_null("Mundo")
+	if mundo == null:
+		return
+	var n := 0
+	for mi in mundo.find_children("*", "MeshInstance3D", true, false):
+		if String(mi.name).begins_with("chao") or String(mi.name).begins_with("terreno") or String(mi.name).begins_with("agua"):
+			continue
+		n += fisica.materiais_anime(mi)
+	set_meta("materiais_anime", n)
 
 
 ## O chão do mundo traz a variação de cor por vértice (terra batida nas áreas e nos caminhos, grama seca,

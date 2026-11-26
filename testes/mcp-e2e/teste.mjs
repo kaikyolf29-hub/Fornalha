@@ -37,7 +37,7 @@ const FERRAMENTAS = [
   "detect_gpu", "list_quality_levels", "choose_model", "list_models", "record_receipt",
   "list_receipts", "check_licenses", "export_credits",
   "create_character", "generate_concept", "generate_3d", "create_material", "create_skeleton", "generate_animation",
-  "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_map", "create_cutscene", "generate_code",
+  "retarget_animation", "generate_sfx", "generate_music", "generate_voice", "generate_blockout", "generate_map", "create_cutscene", "compare_reference", "generate_code",
   "import_to_engine", "run_test", "plan_request", "queue_job", "list_queue", "cancel_job", "check_style",
   "list_motions", "apply_motion", "check_motion", "import_motion", "show_skeleton", "edit_skeleton", "dress_character",
 ];

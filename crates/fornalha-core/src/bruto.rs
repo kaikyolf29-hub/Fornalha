@@ -234,10 +234,13 @@ fn conferir_personagem(c: &Caso, r: &Value, raiz: &Path) -> Vec<Value> {
     if c.cabelo {
         let pecas: Vec<String> =
             forja["estatisticas"]["pecas"].as_array().into_iter().flatten().filter_map(|p| p.as_str().map(String::from)).collect();
-        let cards = pecas.iter().any(|p| p.ends_with("_hair")) && pecas.iter().any(|p| p.contains("couro_cabeludo"));
+        // fios crescidos: cards + couro cabeludo; guiado (padrão): malha do penteado por baixo + cards por cima
+        let fios = pecas.iter().any(|p| p.ends_with("_hair")) && pecas.iter().any(|p| p.contains("couro_cabeludo"));
+        let guiado = pecas.iter().any(|p| p.ends_with("_hair")) && pecas.iter().any(|p| p.ends_with("_hair_cards"));
+        let cards = fios || guiado;
         let tem_cabelo = pecas.iter().any(|p| p.contains("hair") || p.contains("cabelo"));
         v.push(conf(
-            "cabelo em camadas (cards + couro cabeludo)",
+            "cabelo em camadas (cards + camada de baixo)",
             cards || (tem_cabelo && r["modelo_3d"] != "humano-fornalha"),
             format!("{pecas:?}"),
         ));

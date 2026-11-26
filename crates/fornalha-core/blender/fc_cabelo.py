@@ -458,7 +458,7 @@ def malha_de_fios(nome, P, cor, n_jogo, largura=0.0005, arm=None, semente=5):
 VARIANTES = 8
 
 
-def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0):
+def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0, fios=(230, 45), espessura=1.0, onda=1.0):
     """Atlas com 8 mechas lado a lado, da mais densa (0) à mais rala (7). Raiz em cima (V=1).
     Devolve (imagem_cor RGBA, imagem_dados RGB: R=oclusão, G=profundidade, B=raiz→ponta)."""
     rng = np.random.default_rng(semente)
@@ -469,24 +469,30 @@ def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0):
     alfa = np.zeros((H, res), dtype=np.float32)
     prof = np.zeros((H, res), dtype=np.float32)
     dens = np.zeros((H, res), dtype=np.float32)
+    nx = np.zeros((H, res), dtype=np.float32)  # normal de cada fio (cilindro): o brilho quebra fio a fio
     v = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None]  # 0 = raiz (linha de cima), 1 = ponta
     cols = np.arange(W, dtype=np.float32)[None, :]
     for k in range(VARIANTES):
-        n_fios = int(np.interp(k, [0, VARIANTES - 1], [230, 45]))
+        n_fios = int(np.interp(k, [0, VARIANTES - 1], list(fios)))
         x0 = k * W
         for _ in range(n_fios):
             cx = rng.uniform(0.04, 0.96) * W
             fim = rng.uniform(0.6, 1.0) if k < 5 else rng.uniform(0.45, 1.0)
-            amp = rng.uniform(0.3, 2.2)
-            fase, freq = rng.uniform(0, 2 * np.pi), rng.uniform(0.6, 2.4)
-            esp = rng.uniform(0.5, 1.0) * (W / 256.0)
+            amp = rng.uniform(0.3, 2.2) * onda
+            fase, freq = rng.uniform(0, 2 * np.pi), rng.uniform(0.6, 2.4) * (1.0 + 0.5 * (onda - 1.0))
+            esp = rng.uniform(0.5, 1.0) * (W / 256.0) * espessura
+            # fio branco é mais fino e um pouco transparente: grisalho de perto é sal e pimenta fino,
+            # não risco claro grosso (que lia como rabisco)
+            branco = rng.random() < grisalho
+            if branco:
+                esp *= 0.6
             curva = rng.uniform(-0.06, 0.06) * W
             x = cx + amp * np.sin(v * freq * 2 * np.pi + fase) + curva * v ** 2
             d = np.abs(cols - x)
             a = np.exp(-((d / esp) ** 2))
             a = a * (v <= fim) * np.clip((fim - v) / 0.1, 0, 1) * np.clip(v / 0.04 + 0.35, 0, 1)
             # menos fios na borda da mecha (a fita não aparece)
-            a = a * np.clip(min(cx, W - cx) / (0.15 * W), 0.3, 1.0)
+            a = a * np.clip(min(cx, W - cx) / (0.15 * W), 0.3, 1.0) * (0.8 if branco else 1.0)
             idf = rng.uniform(0.0, 1.0)
             pf = rng.uniform(0.0, 1.0)
             sub = alfa[:, x0:x0 + W]
@@ -496,12 +502,14 @@ def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0):
             tom = base * (0.84 + 0.3 * idf)
             if rng.random() < 0.06:
                 tom = np.clip(base * 1.3 + 0.02, 0, 1)
-            if rng.random() < grisalho:
-                tom = np.array([0.55, 0.53, 0.5], dtype=np.float32) * rng.uniform(0.8, 1.1)
+            if branco:
+                tom = np.array([0.36, 0.35, 0.33], dtype=np.float32) * rng.uniform(0.75, 1.15)
             cs = cor_img[:, x0:x0 + W]
             cs[muda] = np.broadcast_to(tom, cs.shape)[muda]
             ps = prof[:, x0:x0 + W]
             ps[muda] = pf
+            ns = nx[:, x0:x0 + W]
+            ns[muda] = np.broadcast_to(np.clip((cols - x) / (esp * 1.6), -1, 1), ns.shape)[muda]
             alfa[:, x0:x0 + W] = np.maximum(sub, a)
             dens[:, x0:x0 + W] += a
     raiz = np.broadcast_to(np.clip(v * 1.6, 0, 1), (H, res))
@@ -517,7 +525,9 @@ def atlas_de_mechas(cor, res=2048, semente=3, grisalho=0.0):
     srgb = np.clip(cor_img, 0, 1) ** (1 / 2.2)
     img_cor = fc_pele._imagem("cabelo_atlas_cor", np.concatenate([srgb, alfa[..., None]], -1), False, alfa=True)
     img_dados = fc_pele._imagem("cabelo_atlas_dados", np.stack([ao, prof, raiz], -1), True)
-    return img_cor, img_dados
+    nz = np.sqrt(np.clip(1 - nx * nx, 0, 1))
+    img_normal = fc_pele._imagem("cabelo_atlas_normal", np.stack([nx * 0.5 + 0.5, np.full_like(nx, 0.5), nz * 0.5 + 0.5], -1), True)
+    return img_cor, img_dados, img_normal
 
 
 def _caminho_medio(P, membros):
@@ -630,7 +640,7 @@ def cards_do_penteado(P, campo, pontos, semente=7, escala_n=1.0, faixas=None, lo
     return np.array(V), F, UV
 
 
-def material_cards(nome, img_cor, img_dados):
+def material_cards(nome, img_cor, img_dados, img_normal=None):
     """Material dos cards (render e glTF): cor + alfa com hash, oclusão no canal de oclusão do
     glTF (a engine lê os dados de lá) e brilho anisotrópico pela direção do fio (V do UV)."""
     mat = bpy.data.materials.new(nome)
@@ -639,10 +649,27 @@ def material_cards(nome, img_cor, img_dados):
     bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
     tc = nt.nodes.new("ShaderNodeTexImage")
     tc.image = img_cor
-    nt.links.new(tc.outputs["Color"], bsdf.inputs["Base Color"])
+    # tom de cada mecha (cor de vértice "Col"; sem ela, branco)
+    tom = nt.nodes.new("ShaderNodeVertexColor")
+    tom.layer_name = "Col"
+    mult = nt.nodes.new("ShaderNodeMix")
+    mult.data_type = "RGBA"
+    mult.blend_type = "MULTIPLY"
+    mult.inputs["Factor"].default_value = 1.0
+    nt.links.new(tc.outputs["Color"], mult.inputs["A"])
+    nt.links.new(tom.outputs["Color"], mult.inputs["B"])
+    nt.links.new(mult.outputs["Result"], bsdf.inputs["Base Color"])
     nt.links.new(tc.outputs["Alpha"], bsdf.inputs["Alpha"])
-    bsdf.inputs["Roughness"].default_value = 0.48
-    for k, v in (("Specular IOR Level", 0.38), ("Anisotropic", 0.75), ("Sheen Weight", 0.08), ("Sheen Roughness", 0.5)):
+    bsdf.inputs["Roughness"].default_value = 0.58
+    if img_normal is not None:
+        tn = nt.nodes.new("ShaderNodeTexImage")
+        tn.image = img_normal
+        nm = nt.nodes.new("ShaderNodeNormalMap")
+        nm.uv_map = "UVMap"
+        nm.inputs["Strength"].default_value = 0.9
+        nt.links.new(tn.outputs["Color"], nm.inputs["Color"])
+        nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    for k, v in (("Specular IOR Level", 0.28), ("Anisotropic", 0.8), ("Sheen Weight", 0.0), ("Coat Weight", 0.0)):
         if k in bsdf.inputs:
             bsdf.inputs[k].default_value = v
     tg = nt.nodes.new("ShaderNodeTangent")
@@ -787,7 +814,7 @@ def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n
     P, raios, campo = crescer_fios(corpo, pontos, cabeca_peso, estilo, devolver_campo=True)
     if P is None:
         return []
-    img_cor, img_dados = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
+    img_cor, img_dados, img_normal = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
     V, F, UV = cards_do_penteado(P, campo, pontos, escala_n=escala_n, longo=estilo != "curto")
     malha = bpy.data.meshes.new(f"{nome}_hair")
     malha.from_pydata(V.tolist(), [], F)
@@ -800,7 +827,9 @@ def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n
     cards = bpy.data.objects.new(malha.name, malha)
     bpy.context.scene.collection.objects.link(cards)
     cards.matrix_world = corpo.matrix_world
-    malha.materials.append(material_cards(f"{nome}_cabelo_cards", img_cor, img_dados))
+    malha.materials.append(material_cards(f"{nome}_cabelo_cards", img_cor, img_dados, img_normal))
+    branco = malha.color_attributes.new("Col", "BYTE_COLOR", "POINT")  # tom neutro (o material multiplica)
+    branco.data.foreach_set("color", np.ones(len(malha.vertices) * 4, dtype=np.float32))
     # casca lisa do penteado (envolve os cards) só para transferir as normais
     cap = couro_cabeludo_cap(corpo, pontos, cor)
     if cap is not None:
@@ -877,13 +906,166 @@ def limpar_pesos_cabelo(obj):
         obj.vertex_groups.remove(g)
 
 
-def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048):
+def _escurecer_camada_de_baixo(guia, cor, escuro=0.6, borda_suave=True):
+    img = _imagem_de_cor(guia)
+    for m in guia.data.materials:
+        if m and m.use_nodes:
+            bsdf = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf is not None:
+                bsdf.inputs["Roughness"].default_value = 0.75
+    if img is None:
+        return
+    w, h = img.size
+    px = np.empty(w * h * 4, np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    lum = px[..., :3] @ np.array([0.3, 0.59, 0.11], np.float32)
+    media = float(lum[px[..., 3] > 0.3].mean()) if (px[..., 3] > 0.3).any() else 0.5
+    alvo = np.array([int(cor.lstrip("#")[k:k + 2], 16) / 255.0 for k in (0, 2, 4)], np.float32) * escuro  # sRGB, mais escuro
+    var = np.clip(0.55 + 0.45 * lum / max(media, 1e-3), 0.3, 1.4)[..., None]  # mantém o desenho dos fios
+    novo = np.empty_like(px)
+    novo[..., :3] = np.clip(alvo * var, 0, 1)
+    novo[..., 3] = np.clip(px[..., 3] * 2.2, 0, 1)  # camada funda densa: o couro não aparece por ela
+    if borda_suave:  # com os cards por cima, a borda dela vai sumindo (linha do cabelo sem degrau)
+        novo[..., 3] *= _borda_suave(guia, w, h)
+    nova = bpy.data.images.new(f"{img.name}_fundo", width=w, height=h, alpha=True)
+    nova.pixels.foreach_set(novo.ravel())
+    nova.pack()
+    for m in guia.data.materials:
+        if m and m.use_nodes:
+            for n in m.node_tree.nodes:
+                if n.type == "TEX_IMAGE" and n.image == img:
+                    n.image = nova
+
+
+def _borda_suave(guia, w, h, largura_m=0.007):
+    """Fator de alfa (h×w) que cai a zero na borda da malha-guia (linha do cabelo, costeleta, nuca):
+    a linha do cabelo nasce aos poucos, em vez da borda dura de peruca (com a pele vermelha embaixo)."""
+    import fc_pele
+    from collections import Counter
+
+    me = guia.data
+    uvl = me.uv_layers.active
+    if uvl is None:
+        return np.ones((h, w), np.float32)
+    conta = Counter(k for p_ in me.polygons for k in p_.edge_keys)
+    borda = np.zeros((h, w), np.float32)
+    px_por_m = []
+    for p_ in me.polygons:
+        ls = list(p_.loop_indices)
+        for i, li in enumerate(ls):
+            lj = ls[(i + 1) % len(ls)]
+            va, vb = me.loops[li].vertex_index, me.loops[lj].vertex_index
+            ua, ub = np.array(uvl.data[li].uv) * (w, h), np.array(uvl.data[lj].uv) * (w, h)
+            mundo = (me.vertices[va].co - me.vertices[vb].co).length
+            if mundo > 1e-6:
+                px_por_m.append(np.linalg.norm(ua - ub) / mundo)
+            if conta[(min(va, vb), max(va, vb))] != 1:
+                continue
+            n = int(np.linalg.norm(ub - ua) * 2) + 2
+            for t in np.linspace(0.0, 1.0, n):
+                x, y = (ua + (ub - ua) * t).astype(int)
+                if 0 <= x < w and 0 <= y < h:
+                    borda[y, x] = 1.0
+    if not borda.any() or not px_por_m:
+        return np.ones((h, w), np.float32)
+    r = max(2, int(float(np.median(px_por_m)) * largura_m / 2))
+    perto = fc_pele.borrar(borda, r)
+    perto = perto / max(float(np.percentile(perto[borda > 0], 50)), 1e-6)  # 1 em cima da borda
+    return np.clip(1.0 - perto, 0.0, 1.0) ** 0.7
+
+
+def _imagem_de_cor(obj):
+    for m in obj.data.materials:
+        if m is None or not m.use_nodes:
+            continue
+        bsdf = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        for l_ in m.node_tree.links:
+            if l_.to_node == bsdf and l_.to_socket.name == "Base Color" and l_.from_node.type == "TEX_IMAGE":
+                return l_.from_node.image
+    return None
+
+
+def _fluxo_da_textura(guia, V, T, UV, saindo):
+    """Direção dos fios em cada triângulo pela textura do penteado (tensor de estrutura: os fios correm
+    perpendiculares ao gradiente de brilho), levada para 3D pelo mapeamento do UV; sentido raiz → ponta."""
+    img = _imagem_de_cor(guia)
+    if img is None or img.size[0] < 16:
+        return None
+    import fc_pele
+
+    w, h = img.size
+    px = np.empty(w * h * 4, np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    lum = (px[..., :3] @ np.array([0.3, 0.59, 0.11], np.float32)) * px[..., 3]
+    gy, gx = np.gradient(lum)
+    r = max(2, w // 256)
+    jxx, jyy, jxy = (fc_pele.borrar(a, r) for a in (gx * gx, gy * gy, gx * gy))
+    tri_uv = UV.mean(axis=1)
+    cx = np.clip((tri_uv[:, 0] % 1.0) * (w - 1), 0, w - 1).astype(np.int64)
+    cy = np.clip((tri_uv[:, 1] % 1.0) * (h - 1), 0, h - 1).astype(np.int64)
+    a_, b_, c_ = jxx[cy, cx], jyy[cy, cx], jxy[cy, cx]
+    ang = 0.5 * np.arctan2(2 * c_, a_ - b_) + np.pi / 2  # perpendicular ao gradiente = ao longo do fio
+    coer = np.sqrt((a_ - b_) ** 2 + 4 * c_ ** 2) / np.maximum(a_ + b_, 1e-9)
+    opaco = px[cy, cx, 3] > 0.3
+    du = np.cos(ang)
+    dv = np.sin(ang)
+    p0, p1, p2 = V[T[:, 0]], V[T[:, 1]], V[T[:, 2]]
+    e1, e2 = p1 - p0, p2 - p0
+    d1, d2 = UV[:, 1] - UV[:, 0], UV[:, 2] - UV[:, 0]
+    det = d1[:, 0] * d2[:, 1] - d2[:, 0] * d1[:, 1]
+    det = np.where(np.abs(det) < 1e-12, 1e-12, det)
+    dpdu = (e1 * d2[:, 1:2] - e2 * d1[:, 1:2]) / det[:, None]
+    dpdv = (e2 * d1[:, 0:1] - e1 * d2[:, 0:1]) / det[:, None]
+    d3 = dpdu * du[:, None] + dpdv * dv[:, None]
+    n = np.cross(e1, e2)
+    n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    d3 -= n * np.sum(d3 * n, axis=1, keepdims=True)
+    d3 /= np.maximum(np.linalg.norm(d3, axis=1, keepdims=True), 1e-12)
+    d3 *= np.where(np.sum(d3 * saindo, axis=1) < 0, -1.0, 1.0)[:, None]  # da raiz (topo) para a ponta
+    return d3, coer, opaco
+
+
+def _suavizar_fluxo(B, T, saindo, passes=4):
+    """Média com os vizinhos (o fluxo da textura tem ruído); o sentido continua do topo para fora."""
+    from collections import defaultdict
+
+    viz = defaultdict(list)
+    por_v = defaultdict(list)
+    for i, t in enumerate(T):
+        for v in t:
+            por_v[v].append(i)
+    for lst in por_v.values():
+        for i in lst:
+            viz[i].extend(lst)
+    idx = [np.unique(viz[i]) for i in range(len(T))]
+    for _ in range(passes):
+        novo = np.array([B[j].sum(axis=0) for j in idx])
+        novo /= np.maximum(np.linalg.norm(novo, axis=1, keepdims=True), 1e-12)
+        novo *= np.where(np.sum(novo * saindo, axis=1) < 0, -1.0, 1.0)[:, None]
+        B = novo
+    return B
+
+
+ESTILO_CABELO = {"volume_cm": 1.0, "agrupamento": 0.55, "ondulacao": 0.15, "frizz": 0.15, "densidade": 1.0}
+# para onde vão os fios (raiz → ponta). "caindo": do topo da cabeça para fora e para baixo (comprido, bob);
+# "para_tras": da testa para a nuca (penteado para trás); "para_frente": da coroa para a testa (franja)
+DIRECAO_PADRAO = {"short04": "para_tras", "short02": "para_frente", "short03": "para_frente"}
+DIRECOES = ("auto", "caindo", "para_tras", "para_frente")
+
+
+def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048, estilo=None, penteado=""):
     """Cards traçados SOBRE a malha do penteado (o cabelo do pacote), da raiz à ponta, seguindo a
     direção dos fios dada pelo UV dela. A malha vira a camada de baixo (mais escura, cobre o couro) e
     os cards por cima dão os fios e a silhueta, sem espetar para fora da forma do penteado."""
     from mathutils.bvhtree import BVHTree
 
     rng = np.random.default_rng(semente)
+    est = dict(ESTILO_CABELO)
+    est.update({k: float(v) for k, v in (estilo or {}).items() if k in est})
+    n_cards = max(50, int(n_cards * est["densidade"]))
+    vol, agr, ond, friz = est["volume_cm"] / 100.0, est["agrupamento"], est["ondulacao"], est["frizz"]
     me = guia.data
     me.calc_loop_triangles()
     M = np.array(guia.matrix_world)
@@ -895,13 +1077,59 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
         return []
     UVloop = np.array([d.uv[:] for d in uvl.data], dtype=np.float64)
     UV = UVloop[np.array([t.loops[:] for t in me.loop_triangles], dtype=np.int64)]
-    # sinal: a raiz (V alto) fica em cima; o fluxo vai para onde o V cai
-    B, N = _fluxo_por_triangulo(V, T, UV, -1.0)
+    # a direção dos fios na textura muda de penteado para penteado (V ou U, num sentido ou no outro):
+    # fica a que mais aponta do topo da cabeça para fora e para baixo (raiz → ponta)
+    centro_tri = (V[T[:, 0]] + V[T[:, 1]] + V[T[:, 2]]) / 3
+    topo = np.array([V[:, 0].mean(), V[:, 1].mean(), V[:, 2].max()])
+    saindo = centro_tri - topo
+    saindo /= np.maximum(np.linalg.norm(saindo, axis=1, keepdims=True), 1e-9)
+    direcao = (estilo or {}).get("direcao") or DIRECAO_PADRAO.get(penteado, "auto")
+    if direcao in ("para_tras", "para_frente"):
+        # no Blender a frente é -Y: para trás = +Y (e um pouco para baixo); a ponta vai nesse rumo
+        rumo = np.array([0.0, 1.0 if direcao == "para_tras" else -1.0, -0.45])
+        rumo /= np.linalg.norm(rumo)
+        # atrás da cabeça o cabelo cai: mistura o rumo com o "para fora e para baixo"
+        atras = np.clip((centro_tri[:, 1] - V[:, 1].mean()) / max(np.ptp(V[:, 1]) * 0.5, 1e-6), 0, 1)[:, None]
+        if direcao == "para_frente":
+            atras = 1.0 - np.clip((V[:, 1].mean() - centro_tri[:, 1]) / max(np.ptp(V[:, 1]) * 0.5, 1e-6), 0, 1)[:, None]
+        saindo = rumo[None, :] * (1 - atras) + saindo * atras
+        saindo /= np.maximum(np.linalg.norm(saindo, axis=1, keepdims=True), 1e-9)
+    area_t = np.linalg.norm(np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]]), axis=1)
+    melhor = None
+    for eixo in (1, 0):
+        UVe = UV if eixo == 1 else UV[:, :, ::-1]  # U no lugar do V
+        for sinal in (-1.0, 1.0):
+            Bc, Nc = _fluxo_por_triangulo(V, T, UVe, sinal)
+            nota = float((np.sum(Bc * saindo, axis=1) * area_t).sum() / area_t.sum())
+            if melhor is None or nota > melhor[0]:
+                melhor = (nota, Bc, Nc, eixo, sinal)
+    _, B, N, eixo_fio, _ = melhor
+    # melhor ainda: a direção dos fios lida na própria textura (cada penteado desenha os fios de um jeito,
+    # às vezes irradiando do topo); onde a textura não diz nada, fica a do eixo do UV
+    fluxo_tex = _fluxo_da_textura(guia, V, T, UV, saindo)
+    if fluxo_tex is not None:
+        Bt, coer, opaco = fluxo_tex
+        # a textura só manda onde é nítida (fios bem desenhados) ou onde concorda com o eixo do UV;
+        # em mancha, brilho ou borda (coroa do long01) fica o eixo
+        concorda = np.abs(np.sum(Bt * B, axis=1)) > 0.65
+        usa = opaco & ((coer > 0.55) | (concorda & (coer > 0.25)))
+        B = np.where(usa[:, None], Bt, B)
+        B = _suavizar_fluxo(B, T, saindo)
+    if direcao in ("para_tras", "para_frente"):
+        # penteado pedido: o fio segue o rumo penteado deitado na superfície; o UV/textura do pacote só
+        # dá a variação (sozinhos, viravam fios cruzando em zigue-zague, "rabiscados")
+        Nf = np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]])
+        Nf /= np.maximum(np.linalg.norm(Nf, axis=1, keepdims=True), 1e-12)
+        proj = saindo - Nf * np.sum(saindo * Nf, axis=1, keepdims=True)
+        proj /= np.maximum(np.linalg.norm(proj, axis=1, keepdims=True), 1e-9)
+        B = proj * 0.75 + B * 0.25
+        B /= np.maximum(np.linalg.norm(B, axis=1, keepdims=True), 1e-9)
+        B = _suavizar_fluxo(B, T, saindo, passes=6)
     bvh = BVHTree.FromPolygons(V.tolist(), T.tolist())
     area = np.linalg.norm(np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]]), axis=1) / 2
     passo = 0.012
-    img_cor, img_dados = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
-    verts, faces, uvs = [], [], []
+    img_cor, img_dados, img_normal = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
+    verts, faces, uvs, tons = [], [], [], []
     comprimentos = []
 
     def seguir(p, sentido, maximo):
@@ -937,41 +1165,108 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
     peso = area * ~costura
     escolhidos = rng.choice(len(T), size=n_cards, p=peso / peso.sum())
 
-    for k, f in enumerate(escolhidos):
+    def ponto_no(f):
         a, b = rng.random(2)
         if a + b > 1:
             a, b = 1 - a, 1 - b
-        p = V[T[f, 0]] + (V[T[f, 1]] - V[T[f, 0]]) * a + (V[T[f, 2]] - V[T[f, 0]]) * b
-        raiz = seguir(p, -1.0, 80)[::-1]
-        ponta = seguir(p, 1.0, 120)
-        linha = np.array(raiz + ponta[1:])
+        return V[T[f, 0]] + (V[T[f, 1]] - V[T[f, 0]]) * a + (V[T[f, 2]] - V[T[f, 0]]) * b
+
+    def linha_por(f):
+        p = ponto_no(f)
+        return np.array(seguir(p, -1.0, 80)[::-1] + seguir(p, 1.0, 120)[1:])
+
+    # mechas: linhas-guia de grupos de fios; os cards de cada grupo se juntam a ela rumo à ponta (vão
+    # escuro entre as mechas, em vez de uma folha lisa de fios grudados)
+    from mathutils.kdtree import KDTree
+
+    mechas = [m for m in (linha_por(f) for f in rng.choice(len(T), size=max(12, n_cards // 6), p=peso / peso.sum())) if len(m) >= 4]
+    kd_m = KDTree(sum(len(m) for m in mechas) or 1)
+    quem = []
+    for mi, m in enumerate(mechas):
+        for j, q in enumerate(m):
+            kd_m.insert(Vector(q), len(quem))
+            quem.append((mi, j))
+    kd_m.balance()
+    fases = rng.uniform(0, 2 * np.pi, max(len(mechas), 1))
+    usadas = {}
+    deslocamentos = []
+    for k, f in enumerate(escolhidos):
+        linha = linha_por(f)
         if len(linha) < 4:
             continue
-        # camada: a maioria rente à malha, algumas por fora (volume e quebra da silhueta)
-        camada = rng.choice([0.0015, 0.004, 0.008], p=[0.5, 0.35, 0.15])
-        larg = rng.uniform(0.010, 0.022) * (1.0 if camada < 0.007 else 0.7)
-        var = int(rng.integers(0, VARIANTES)) if camada > 0.003 else int(rng.integers(0, 4))
+        # camada: a maioria rente à malha, algumas por fora (volume e quebra da silhueta); ~7% são fios
+        # soltos: finos, ralos, saindo um pouco da forma no meio do caminho (o contorno não fica liso)
+        solto = rng.random() < 0.04 + 0.12 * friz
+        camada = 0.0015
+        # profundidade da mecha no volume (0 = funda, 1 = por fora): um terço forma a camada de dentro,
+        # densa, larga e pouco agrupada (cobre a malha-guia: sem vão liso entre as mechas de fora)
+        interna = rng.random() < 0.35
+        k_cam = rng.uniform(0.03, 0.18) if interna else rng.uniform(0.3, 1.0)
+        larg = rng.uniform(0.010, 0.022) * (1.0 - 0.3 * k_cam) * (1.5 if interna else 1.0)
+        var = int(rng.integers(0, VARIANTES)) if k_cam > 0.4 else int(rng.integers(0, 4))
+        if solto:
+            larg = rng.uniform(0.003, 0.006)
+            var = VARIANTES - 1
+            corte = int(len(linha) * rng.uniform(0.2, 0.5))
+            linha = linha[corte:]
+            if len(linha) < 4:
+                continue
+        # as de dentro mais escuras (sombra das de fora), cada mecha com o seu tom
+        tom = float(np.clip(rng.normal(1.0, 0.07), 0.82, 1.15)) * (0.7 + 0.3 * k_cam)
         giro = rng.uniform(-0.25, 0.25)
         comp = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(linha, axis=0), axis=1))])
         total = max(comp[-1], 1e-6)
         comprimentos.append(total)
-        base = len(verts)
-        for i, q in enumerate(linha):
+        sfr = comp / total
+        alcance_v = float(np.clip(total / 0.45, 0.35, 1.0))  # quanto do fio do atlas a mecha usa
+        nrms, lados_ = [], []
+        for q in linha:
             _l, nrm, f_, _d = bvh.find_nearest(Vector(q))
             n_ = np.array(nrm) if nrm is not None else np.array([0, 0, 1.0])
             t_ = B[f_] if f_ is not None else np.array([0, 0, -1.0])
             lado = np.cross(n_, t_)
-            lado /= max(np.linalg.norm(lado), 1e-9)
-            lado = lado * np.cos(giro) + n_ * np.sin(giro)  # leve torção: a mecha não é uma fita chapada
-            s = comp[i] / total
+            nrms.append(n_)
+            lados_.append(lado / max(np.linalg.norm(lado), 1e-9))
+        nrms, lados_ = np.array(nrms), np.array(lados_)
+        pos = linha.copy()
+        fase = rng.uniform(0, 2 * np.pi)
+        if mechas and agr > 0:
+            _co, ii, dist = kd_m.find(Vector(linha[0]))
+            if dist < 0.03:
+                mi, j0 = quem[ii]
+                alvo = mechas[mi][np.clip(j0 + np.arange(len(linha)), 0, len(mechas[mi]) - 1)]
+                puxa = (agr * (0.3 if interna else 1.0) * sfr ** 1.3)[:, None]
+                pos = pos * (1 - puxa) + alvo * puxa
+                fase = fases[mi]
+                usadas[mi] = usadas.get(mi, 0) + 1
+        # onda comum à mecha (o grupo ondula junto)
+        lam = float(np.clip(total * 0.35, 0.03, 0.09))
+        pos += lados_ * (ond * 0.01 * np.sin(2 * np.pi * comp / lam + fase))[:, None]
+        # volume: a raiz sobe do couro e o fio vai deitando para a ponta
+        lift = vol * k_cam * (1 - np.exp(-comp / 0.025)) * (1 - 0.55 * sfr)
+        if solto:
+            lift = lift + 0.012 * sfr ** 1.5
+        pos += nrms * (camada + lift)[:, None]
+        deslocamentos.extend((camada + lift).tolist())
+        # frizz: as pontas se desarrumam (passeio aleatório suave, mais forte na ponta)
+        if friz > 0:
+            rw = np.cumsum(rng.normal(0, 1, (len(linha), 2)), axis=0) / np.sqrt(np.arange(1, len(linha) + 1))[:, None]
+            a_ = friz * 0.004 * sfr ** 1.5 * min(1.0, total / 0.3)
+            pos += lados_ * (rw[:, 0] * a_)[:, None] + nrms * (np.abs(rw[:, 1]) * a_)[:, None]
+        base = len(verts)
+        for i in range(len(linha)):
+            n_ = nrms[i]
+            lado = lados_[i] * np.cos(giro) + n_ * np.sin(giro)  # leve torção: a mecha não é uma fita chapada
+            s = sfr[i]
             # a raiz nasce fina (na risca as mechas dos dois lados não se cruzam) e a ponta afina
             w = larg * min(1.0, 0.25 + s * 12.0) * (1.0 - 0.65 * s ** 1.5) / 2
-            centro = q + n_ * camada
+            centro = pos[i]
             verts.append(centro - lado * w)
             verts.append(centro + lado * w)
             u0, u1 = var / VARIANTES + 0.01, (var + 1) / VARIANTES - 0.01
-            uvs.append((u0, 1.0 - s))
-            uvs.append((u1, 1.0 - s))
+            uvs.append((u0, 1.0 - s * alcance_v))
+            uvs.append((u1, 1.0 - s * alcance_v))
+            tons.extend((tom, tom))
             if i:
                 j = base + 2 * i
                 faces.append((j - 2, j - 1, j + 1, j))
@@ -987,35 +1282,13 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
         p_.use_smooth = True
     cards = bpy.data.objects.new(malha.name, malha)
     bpy.context.scene.collection.objects.link(cards)
-    malha.materials.append(material_cards(f"{nome}_cabelo_cards", img_cor, img_dados))
-    # a malha do pacote vira a camada de baixo: mais escura e fosca (profundidade entre as mechas)
-    for m in guia.data.materials:
-        if m and m.use_nodes:
-            bsdf = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
-            if bsdf is not None:
-                bsdf.inputs["Roughness"].default_value = 0.75
-                # a textura de cor é a que chega na cor base (a do mapa de normal não serve)
-                tex = next((l_.from_node for l_ in m.node_tree.links
-                            if l_.to_node == bsdf and l_.to_socket.name == "Base Color" and l_.from_node.type == "TEX_IMAGE"), None)
-                cor_base = np.array(c.cor_hex(cor)) * 0.55
-                if tex is not None and tex.outputs["Alpha"].is_linked:
-                    # camada funda mais densa: os buracos de alfa do pacote deixavam o couro aparecer
-                    reforco = m.node_tree.nodes.new("ShaderNodeMath")
-                    reforco.operation = "MULTIPLY"
-                    reforco.use_clamp = True
-                    reforco.inputs[1].default_value = 2.2
-                    m.node_tree.links.new(tex.outputs["Alpha"], reforco.inputs[0])
-                    m.node_tree.links.new(reforco.outputs["Value"], bsdf.inputs["Alpha"])
-                if tex is not None:
-                    mix = m.node_tree.nodes.new("ShaderNodeMix")
-                    mix.data_type = "RGBA"
-                    mix.blend_type = "MULTIPLY"
-                    mix.inputs["Factor"].default_value = 1.0
-                    m.node_tree.links.new(tex.outputs["Color"], mix.inputs["A"])
-                    mix.inputs["B"].default_value = (*(cor_base / max(cor_base.max(), 1e-3) * 0.5), 1.0)
-                    m.node_tree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
-                else:
-                    bsdf.inputs["Base Color"].default_value = (*cor_base, 1.0)
+    malha.materials.append(material_cards(f"{nome}_cabelo_cards", img_cor, img_dados, img_normal))
+    # tom de cada mecha (cor de vértice): mechas iguais lado a lado é o que mais parece plástico
+    ca = malha.color_attributes.new("Col", "BYTE_COLOR", "POINT")
+    ca.data.foreach_set("color", np.array([(t, t * 0.99, t * 0.97, 1.0) for t in tons], dtype=np.float32).ravel())
+    # a malha do pacote vira a camada de baixo: mais escura, na cor do cabelo e mais densa. Gravado na
+    # própria imagem (o glTF não leva nós de multiplicar: na engine ela chegava laranja e rala)
+    _escurecer_camada_de_baixo(guia, cor)
     # pesos da malha-guia (o comprido segue pescoço e costas como o cabelo do pacote)
     if guia.vertex_groups:
         limpar_pesos_cabelo(guia)
@@ -1052,6 +1325,162 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
         cards.parent = arm
         cards.matrix_parent_inverse = arm.matrix_world.inverted()
     # medidas: quanto do cabelo entra no corpo (ninguém quer fio atravessando o pescoço)
+    est["direcao"] = direcao
     cards["medidas_cabelo"] = {"cards": len(comprimentos), "triangulos": 2 * len(faces),
+                               "mechas": int(sum(1 for v in usadas.values() if v >= 3)),
+                               "descola_do_penteado_cm": round(float(np.mean(deslocamentos)) * 100, 2) if deslocamentos else 0.0,
+                               "estilo": est,
                                "comprimento_medio_cm": round(float(np.mean(comprimentos)) * 100, 1) if comprimentos else 0.0}
     return [cards]
+
+
+# ---------------- barba em cards ----------------
+
+ESTILO_BARBA = {"comprimento_cm": 1.8, "densidade": 1.0, "ondulacao": 1.0, "volume": 1.0}
+
+
+def _suavizar_nos_vizinhos(valor, T, passes=4):
+    viz = [[] for _ in range(len(valor))]
+    for a, b, c_ in T:
+        viz[a] += (b, c_)
+        viz[b] += (a, c_)
+        viz[c_] += (a, b)
+    idx = [np.unique(v) if v else np.array([i]) for i, v in enumerate(viz)]
+    for _ in range(passes):
+        valor = np.array([0.5 * valor[i] + 0.5 * valor[j].mean() for i, j in enumerate(idx)])
+    return valor
+
+
+def barba_em_cards(nome, corpo, pontos, cabeca_peso, cor, arm, tipo="cheia", semente=17, grisalho=0.0, res_atlas=2048, estilo=None):
+    """Barba de verdade: fio curto, grosso e ondulado (atlas próprio), cards pequenos e densos em camadas,
+    plantados na pele do queixo, mandíbula, bochecha baixa (linha diagonal da barba), bigode e costeleta,
+    rareando na borda (máscara suavizada na pele) e crescendo em redemoinhos (não tudo reto para baixo).
+    Abaixo da boca segue o osso do queixo (acompanha a fala). Controles em ESTILO_BARBA."""
+    est = dict(ESTILO_BARBA)
+    if tipo == "curta":
+        est["comprimento_cm"] = 0.7
+    est.update({k: float(v) for k, v in (estilo or {}).items() if k in est})
+    rng = np.random.default_rng(semente)
+    me = corpo.data
+    me.calc_loop_triangles()
+    co = np.array([v.co[:] for v in me.vertices])
+    T = np.array([t.vertices[:] for t in me.loop_triangles], dtype=np.int64)
+    s = pontos["s"]
+    oz, nz, bz = pontos["olho_z"], pontos["nariz"][2], pontos["boca"][2]
+    qz, ny, mb = pontos["queixo"][2], pontos["nariz"][1], pontos["meia_boca"]
+    x, y, z = co[:, 0], co[:, 1], co[:, 2]
+    ax = np.abs(x)
+    frente = y < ny + 0.085 * s
+    linha = np.where(ax < mb * 1.15, nz - 0.006 * s, bz + 0.012 * s + (ax - mb) * 0.55)
+    rosto = frente & (z < linha) & (z > qz - 0.05 * s)
+    bigode = (ax < mb * 1.3) & (z > bz + 0.006 * s) & (z < nz - 0.006 * s) & frente
+    labios = (ax < mb * 1.1) & (np.abs(z - bz) < 0.0085 * s) & (y < ny + 0.03 * s)
+    costeleta = (ax > 0.055 * s) & (z < oz - 0.004 * s) & (z > bz - 0.01 * s) & (y > ny + 0.05 * s) & (y < ny + 0.1 * s)
+    pescoco = (z < qz) & (z > qz - 0.06 * s) & (y < pontos["queixo"][1] + 0.05 * s)
+    zona = (((rosto | bigode | costeleta) & ~labios & (cabeca_peso > 0.3)) | (pescoco & (cabeca_peso > 0.05))).astype(float)
+    if tipo == "curta":
+        zona *= ~(pescoco & (z < qz - 0.03 * s))
+    # borda suave: a barba rareia na bochecha e no pescoço em vez de acabar numa linha
+    mascara = np.clip(_suavizar_nos_vizinhos(zona, T, 5) * 1.6 - 0.25, 0, 1) * (~labios)
+    tri = T[(mascara[T] > 0.05).all(axis=1)]
+    if not len(tri):
+        return []
+    p0, p1, p2 = co[tri[:, 0]], co[tri[:, 1]], co[tri[:, 2]]
+    cr = np.cross(p1 - p0, p2 - p0)
+    area = np.linalg.norm(cr, axis=1) / 2
+    nrm_t = cr / np.maximum(np.linalg.norm(cr, axis=1, keepdims=True), 1e-12)
+    m_tri = mascara[tri].mean(axis=1)
+    peso = area * m_tri ** 1.5
+    n_cards = int(peso.sum() * 1e4 * 26.0 * est["densidade"])
+    escolhidos = rng.choice(len(tri), size=max(n_cards, 1), p=peso / peso.sum())
+    # fio de barba: menos fios por card, mais grossos e bem mais ondulados que os do cabelo
+    img_cor, img_dados, img_normal = atlas_de_mechas(cor, res_atlas, semente=semente, grisalho=grisalho, fios=(110, 30),
+                                                     espessura=1.3, onda=1.0 + 2.0 * est["ondulacao"])
+    verts, faces, uvs, tons, jaw = [], [], [], [], []
+    fase_r = rng.uniform(0, 2 * np.pi, 3)
+    for f in escolhidos:
+        a, b = rng.random(2)
+        if a + b > 1:
+            a, b = 1 - a, 1 - b
+        p = p0[f] + (p1[f] - p0[f]) * a + (p2[f] - p0[f]) * b
+        n_ = nrm_t[f]
+        g = np.array([0.0, 0.0, -1.0])
+        d = g - n_ * (n_ @ g)
+        if np.linalg.norm(d) < 0.25:  # embaixo do queixo: para a frente e para baixo
+            d = np.array([0.0, -1.0, -0.3]) - n_ * (n_ @ np.array([0.0, -1.0, -0.3]))
+        no_bigode = abs(p[0]) < mb * 1.3 and bz + 0.004 * s < p[2] < nz
+        if no_bigode:
+            d = d + np.array([np.sign(p[0]) * 0.9, 0.0, 0.0])
+        d /= max(np.linalg.norm(d), 1e-9)
+        # redemoinho: gira a direção em volta da normal por um campo suave (+ um pouco de acaso)
+        ang = 0.45 * np.sin(p[0] * 90 + fase_r[0]) * np.cos(p[2] * 70 + fase_r[1]) + rng.normal(0, 0.15)
+        lado0 = np.cross(n_, d)
+        d = d * np.cos(ang) + lado0 * np.sin(ang)
+        borda = float(np.clip(m_tri[f], 0, 1))
+        camada = rng.choice([0.4, 0.7, 1.0], p=[0.45, 0.35, 0.2])  # baixo curto e denso, meio, por cima
+        # na borda (bochecha, pescoço) o fio é bem mais curto: a barba rareia em vez de espetar para fora
+        comp = est["comprimento_cm"] / 100 * rng.uniform(0.7, 1.25) * camada * (0.3 + 0.7 * borda ** 1.5) * s
+        if not no_bigode and p[2] < bz - 0.01 * s:
+            comp *= 1.0 + 0.5 * np.exp(-(p[0] / (0.022 * s)) ** 2)  # mais comprida no queixo
+        if no_bigode:
+            comp = min(comp, 0.012 * s)
+        larg = rng.uniform(0.0016, 0.003) * s * (0.8 + 0.4 * camada)
+        var = int(rng.integers(0, VARIANTES))
+        tom = float(np.clip(rng.normal(1.0, 0.1), 0.75, 1.2)) * (0.75 + 0.25 * camada)
+        pts = [p + n_ * 0.0003]
+        sai = 0.08 + 0.18 * camada * est["volume"] * borda  # quanto o fio sai da pele (volume; deitado na borda)
+        dirr = d * (1 - sai) + n_ * sai
+        curva = np.cross(n_, d) * rng.uniform(-0.3, 0.3) * est["ondulacao"]
+        for k in range(4):
+            dirr = dirr + d * 0.2 - n_ * 0.05 + curva
+            dirr /= np.linalg.norm(dirr)
+            pts.append(pts[-1] + dirr * comp / 4)
+        lado = np.cross(n_, d)
+        lado /= max(np.linalg.norm(lado), 1e-9)
+        lado = lado * np.cos(rng.uniform(-0.5, 0.5)) + n_ * np.sin(rng.uniform(-0.35, 0.35))
+        peso_jaw = float(np.clip((bz - 0.004 * s - p[2]) / (0.012 * s), 0.0, 1.0))
+        base = len(verts)
+        for i, q in enumerate(pts):
+            t = i / 4
+            # raiz estreita (sai de um ponto da pele) e ponta afinando: sem a "lasca" de borda reta que fazia
+            # a barba parecer palha colada
+            w = larg * min(1.0, 0.3 + 2.8 * t) * (1.0 - 0.8 * t) / 2
+            verts += [q - lado * w, q + lado * w]
+            u0, u1 = var / VARIANTES + 0.01, (var + 1) / VARIANTES - 0.01
+            uvs += [(u0, 1.0 - 0.92 * t), (u1, 1.0 - 0.92 * t)]  # quase o fio todo: as pontas terminam soltas
+            tons += [tom, tom]
+            jaw += [peso_jaw, peso_jaw]
+            if i:
+                j = base + 2 * i
+                faces.append((j - 2, j - 1, j + 1, j))
+    malha = bpy.data.meshes.new(f"{nome}_barba")
+    malha.from_pydata([tuple(v) for v in verts], [], faces)
+    uv = malha.uv_layers.new(name="UVMap")
+    lv = np.empty(len(malha.loops), dtype=np.int64)
+    malha.loops.foreach_get("vertex_index", lv)
+    uv.data.foreach_set("uv", np.array(uvs, dtype=np.float32)[lv].ravel())
+    for p_ in malha.polygons:
+        p_.use_smooth = True
+    ca = malha.color_attributes.new("Col", "BYTE_COLOR", "POINT")
+    ca.data.foreach_set("color", np.array([(t, t * 0.99, t * 0.97, 1.0) for t in tons], dtype=np.float32).ravel())
+    malha.materials.append(material_cards(f"{nome}_barba_cabelo_cards", img_cor, img_dados, img_normal))
+    o = bpy.data.objects.new(malha.name, malha)
+    bpy.context.scene.collection.objects.link(o)
+    o.matrix_world = corpo.matrix_world
+    if arm is not None:
+        tem_jaw = "jaw" in arm.data.bones
+        gh = o.vertex_groups.new(name="head")
+        gj = o.vertex_groups.new(name="jaw") if tem_jaw else None
+        for i, wj in enumerate(jaw):
+            wj = wj if tem_jaw else 0.0
+            if wj < 1.0:
+                gh.add([i], 1.0 - wj, "REPLACE")
+            if wj > 0.0 and gj is not None:
+                gj.add([i], wj, "REPLACE")
+        mod = o.modifiers.new("esqueleto", "ARMATURE")
+        mod.object = arm
+        o.parent = arm
+        o.matrix_parent_inverse = arm.matrix_world.inverted()
+    o["medidas_barba"] = {"cards": len(faces) // 4, "triangulos": 2 * len(faces), "tipo": tipo, "estilo": est,
+                          "area_cm2": round(float(area[m_tri > 0.5].sum()) * 1e4, 1)}
+    return [o]

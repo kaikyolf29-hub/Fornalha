@@ -1360,29 +1360,75 @@ pub struct Args3d {
     /// Imagem de referência: no fim, a comparação lado a lado (compare_reference) vem junto.
     pub referencia: Option<String>,
     pub vista: Option<String>,
+    /// Qualquer item do jogo descrito em texto ("baú de madeira com ferragens de ferro", "casa de pedra de
+    /// dois andares"): vira a imagem de conceito (motor de imagem) e dela o 3D pela IA, como `imagem`.
+    pub pedido: Option<String>,
+    /// Quatro vistas na textura (padrão: sim nos níveis Qualidade e Máximo, no 3D local).
+    pub vistas: Option<bool>,
 }
 
-/// 3D a partir de uma imagem: só com o TRELLIS.2 (placa NVIDIA e worker instalado).
-async fn gerar_3d_da_imagem(f: &Fornalha, p: &Projeto, a: &Args3d, imagem: &str, quem: &str) -> Resultado<Value> {
-    let img = f.resolver_no_projeto(p, imagem);
-    if !img.is_file() {
-        return Err(Erro::argumento(format!("A imagem {} não existe.", img.display())));
-    }
-    let mut avisos = Vec::new();
-    let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, p, "3d", &mut avisos).await else {
-        let motivo = avisos.pop().unwrap_or_else(|| {
-            "o roteador não liberou o TRELLIS.2 aqui (precisa de placa NVIDIA; em projeto comercial, a verificação sem o nvdiffrast)".into()
-        });
-        return Err(Erro::novo(
-            "sem_modelo_de_imagem_para_3d",
-            format!("3D a partir de imagem precisa do TRELLIS.2: {motivo}. Sem placa, use tipo arma ou objeto (a Forja monta pelo nome)."),
-        ));
+/// O pedido da imagem de conceito de um item do jogo: um só objeto, inteiro, de frente (a frente do conceito
+/// vira a textura da frente nas quatro vistas), no fundo de estúdio que o 3D pela IA separa bem.
+pub fn descrever_item(p: &Projeto, tipo: &str, pedido: &str) -> String {
+    let estilo = estilo_das_imagens(p, "realista, muito detalhado, asset de jogo AAA");
+    let o_que = match tipo {
+        "arma" => "Uma arma só, inteira, de pé e reta, vista de frente",
+        _ => "Um objeto só, inteiro, apoiado no chão, vista de frente e reto",
     };
-    let nome = projeto::nome_de_pasta(a.nome.as_deref().unwrap_or("modelo"));
+    format!(
+        "{estilo}. {o_que}, centralizado, sem pessoas, sem texto, sem moldura, fundo cinza claro liso, luz suave e uniforme, \
+         sombra leve embaixo. {}",
+        pedido.trim()
+    )
+}
+
+/// Tamanho padrão do item quando a IA não diz (m): arma de mão ~1 m, construção ~6 m, objeto ~1 m.
+fn altura_padrao_do_item(tipo: &str, texto: &str) -> f64 {
+    let t = texto.to_lowercase();
+    if tipo == "arma" {
+        return 1.0;
+    }
+    if ["casa", "construção", "construcao", "torre", "templo", "igreja", "castelo", "moinho", "ponte", "muralha", "cabana"]
+        .iter()
+        .any(|k| t.contains(k))
+    {
+        return 6.0;
+    }
+    if ["árvore", "arvore"].iter().any(|k| t.contains(k)) {
+        return 5.0;
+    }
+    1.0
+}
+
+/// Qualquer item do jogo pela IA de 3D (arma, escudo, baú, barril, móvel, casa, pedra, árvore, construção):
+/// da imagem dada ou do conceito feito pelo `pedido`. O 3D sai pela placa NVIDIA (TRELLIS.2 no worker),
+/// senão pela API paga ligada, senão pelo TRELLIS.2 no processador (o caminho grátis: no Máximo, o fluxo
+/// inteiro); depois as quatro vistas (Qualidade e Máximo) e a limpeza (tamanho real, pivô no chão, menos
+/// triângulos, UV e colisão).
+async fn gerar_3d_da_imagem(f: &Fornalha, p: &Projeto, a: &Args3d, imagem: &str, quem: &str) -> Resultado<Value> {
+    let nome = projeto::nome_de_pasta(a.nome.as_deref().or(a.modelo.as_deref()).unwrap_or("modelo"));
     let pasta = p.raiz.join(if a.tipo == "arma" { "Weapons" } else { "Items" });
     std::fs::create_dir_all(&pasta).map_err(|e| Erro::io(&pasta, e))?;
     let seed = a.seed.unwrap_or(1);
-    let (malha, info) = trellis_e_assar(f, &inst, &modelo, &img, &pasta, &nome, a.altura_m.unwrap_or(1.0), seed, true).await?;
+    let mut avisos = Vec::new();
+    let img = if imagem.trim().is_empty() {
+        // sem imagem: o conceito pelo pedido
+        let pedido = a.pedido.clone().unwrap_or_default();
+        let destino = pasta.join(format!("{nome}_conceito.png"));
+        gerar_imagem_conceito(f, p, &descrever_item(p, &a.tipo, &pedido), &destino, seed, quem).await?;
+        destino
+    } else {
+        f.resolver_no_projeto(p, imagem)
+    };
+    if !img.is_file() {
+        return Err(Erro::argumento(format!("A imagem {} não existe.", img.display())));
+    }
+    let texto = format!("{} {}", a.pedido.as_deref().unwrap_or(""), nome);
+    let altura = a.altura_m.unwrap_or_else(|| altura_padrao_do_item(&a.tipo, &texto));
+    let Some((Worker::Trellis2, modelo, inst)) = modelo_de_placa(f, p, "3d", &mut avisos).await else {
+        return item_sem_placa(f, p, a, &img, &pasta, &nome, altura, seed, avisos, quem).await;
+    };
+    let (malha, info) = trellis_e_assar(f, &inst, &modelo, &img, &pasta, &nome, altura, seed, true).await?;
     let saida = pasta.join(format!("{nome}.glb"));
     std::fs::rename(&malha, &saida).map_err(|e| Erro::io(&saida, e))?;
     let mut arquivos = serde_json::Map::new();
@@ -1400,10 +1446,114 @@ async fn gerar_3d_da_imagem(f: &Fornalha, p: &Projeto, a: &Args3d, imagem: &str,
     Ok(json!({"arquivos": arquivos, "estatisticas": info, "modelo": modelo, "avisos": avisos}))
 }
 
+/// O item pela IA sem placa NVIDIA: a API paga (se ligada) ou o TRELLIS.2 no processador, as quatro
+/// vistas e a limpeza.
+#[allow(clippy::too_many_arguments)]
+async fn item_sem_placa(
+    f: &Fornalha,
+    p: &Projeto,
+    a: &Args3d,
+    img: &Path,
+    pasta: &Path,
+    nome: &str,
+    altura: f64,
+    seed: u64,
+    mut avisos: Vec<String>,
+    quem: &str,
+) -> Resultado<Value> {
+    let nivel = f.nivel_em_uso(Some(p)).await;
+    let maximo = nivel == crate::niveis::Nivel::Maximo;
+    let alta = pasta.join(format!("{nome}_ia_alta.glb"));
+    let Some(info) = malha_pela_ia(f, img, &alta, nome, seed, maximo, &mut avisos).await else {
+        return Err(Erro::novo(
+            "sem_modelo_de_imagem_para_3d",
+            format!(
+                "Não há 3D pela IA disponível aqui para o item: sem placa NVIDIA, sem API de 3D ligada e sem o 3D pela IA no \
+                 processador (Máquina → Motor de imagem → Instalar o 3D pela IA, com o aceite do DINOv3 em Licenças). Sem \
+                 isso, a IA monta o item por peças (pecas) olhando a imagem. {}",
+                avisos.join(" ")
+            ),
+        ));
+    };
+    let modelo = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
+    // quatro vistas: a textura borrada do processador fica nítida e fiel ao conceito
+    let mut entrada = alta.clone();
+    let mut vistas = Value::Null;
+    let quer_vistas = a.vistas.unwrap_or(matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo));
+    if quer_vistas && modelo == "trellis2-comfyui" {
+        let com_vistas = pasta.join(format!("{nome}_ia_vistas.glb"));
+        let descricao = a.pedido.clone().unwrap_or_else(|| nome.replace(['_', '-'], " "));
+        match blender(f).await {
+            Ok(b) => match crate::vistas::refinar_textura_de(
+                &b,
+                &f.paths.data_dir,
+                porta_com_motor_de_imagem(f).await,
+                &alta,
+                Some(img),
+                &descricao,
+                &pasta.join(format!("{nome}_vistas")),
+                seed,
+                &com_vistas,
+                crate::vistas::lado_da_textura(maximo),
+                None,
+                crate::vistas::Assunto::Objeto,
+            )
+            .await
+            {
+                Ok(v) => {
+                    avisos.extend(v["avisos"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)));
+                    vistas = v;
+                    entrada = com_vistas;
+                }
+                Err(e) => avisos.push(format!("As quatro vistas não saíram ({}): ficou a textura da IA.", e.mensagem)),
+            },
+            Err(e) => avisos.push(format!("Sem o Blender para as quatro vistas ({}).", e.mensagem)),
+        }
+    }
+    let saida = pasta.join(format!("{nome}.glb"));
+    let triangulos = a.triangulos_max.unwrap_or(if maximo { 40_000 } else { 20_000 });
+    let r = forjar(
+        f,
+        &json!({"tarefa": "limpar", "entrada": entrada, "saida": saida, "nome": nome, "altura_m": altura,
+                "triangulos_max": triangulos, "colisao": true, "previa": true, "amostras": 16}),
+    )
+    .await?;
+    let mut arquivos = r["arquivos"].as_object().cloned().unwrap_or_default();
+    arquivos.insert("conceito".into(), json!(img));
+    for arq in arquivos.values().filter_map(|v| v.as_str()) {
+        let arq = Path::new(arq);
+        if arq.starts_with(&p.raiz) && arq.extension().is_some_and(|e| e == "glb" || e == "png") {
+            recibo(f, p, arq, &modelo, None, Some(seed), json!({"imagem": img, "vistas": !vistas.is_null()}), quem).await?;
+        }
+    }
+    f.avisar_ponte(vec![rel(&p.raiz, &saida)]);
+    let mut resposta = json!({"arquivos": arquivos, "estatisticas": r["estatisticas"], "modelo": modelo, "ia": info,
+                              "vistas": vistas, "avisos": avisos});
+    if let Some(refe) = a.referencia.clone().filter(|s| !s.trim().is_empty()) {
+        let c = comparar_referencia(
+            f,
+            ArgsComparar {
+                projeto: a.projeto.clone(),
+                referencia: refe,
+                arquivo: saida.to_string_lossy().into_owned(),
+                vista: a.vista.clone(),
+                enquadramento: Some("corpo".into()),
+            },
+        )
+        .await;
+        resposta["comparacao"] = c.unwrap_or_else(|e| json!({"erro": e.to_string()}));
+    }
+    Ok(resposta)
+}
+
 pub async fn gerar_3d(f: &Fornalha, a: Args3d, quem: &str) -> Resultado<Value> {
     let p = f.projeto(a.projeto.as_deref())?;
     if let Some(img) = a.imagem.clone().filter(|s| !s.trim().is_empty()) {
         return gerar_3d_da_imagem(f, &p, &a, &img, quem).await;
+    }
+    // pelo pedido em texto (sem peças nem malha de fora): o conceito e o 3D pela IA
+    if a.pedido.as_deref().is_some_and(|s| !s.trim().is_empty()) && a.pecas.as_ref().is_none_or(|v| v.is_empty()) && a.entrada.is_none() {
+        return gerar_3d_da_imagem(f, &p, &a, "", quem).await;
     }
     let seed = a.seed.unwrap_or(1);
     let (tarefa, pasta, nome) = if let Some(entrada) = &a.entrada {
@@ -2291,6 +2441,20 @@ pub async fn rodar_teste(f: &Fornalha, a: ArgsTeste) -> Resultado<Value> {
     rel["avisos"] = json!(avisos);
     rel["pasta"] = json!(pasta);
     Ok(rel)
+}
+
+#[cfg(test)]
+mod testes_itens {
+    use super::*;
+
+    #[test]
+    fn tamanho_padrao_pelo_que_o_item_e() {
+        assert_eq!(altura_padrao_do_item("arma", "espada longa"), 1.0);
+        assert_eq!(altura_padrao_do_item("objeto", "casa de pedra de dois andares"), 6.0);
+        assert_eq!(altura_padrao_do_item("objeto", "Torre de vigia"), 6.0);
+        assert_eq!(altura_padrao_do_item("objeto", "árvore seca"), 5.0);
+        assert_eq!(altura_padrao_do_item("objeto", "baú de madeira"), 1.0);
+    }
 }
 
 #[cfg(test)]

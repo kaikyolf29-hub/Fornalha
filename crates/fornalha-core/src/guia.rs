@@ -88,10 +88,13 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    olhe as imagens (sozinha e no manequim de barro, frente, lado, costas e o tronco de perto) e ajuste até
    ficar como a referência; depois `dress_character` (placas rígidas no osso, pano dobra; `arma` põe a arma
    na mão) e confira o movimento vestido (`check_motion` e `show_motion`).
-5. **Armas, objetos e casas**: `generate_3d`. Para chegar perto de uma referência, monte a forma por
-   peças (`pecas`: caixa com chanfro, cilindro, esfera, torno pelo perfil, extrusão do contorno com gume,
-   tubo por pontos; `materiais` com cor e tipo) olhando a imagem, passe `referencia` e ajuste até ficar
-   perto. Placa NVIDIA: `imagem` faz o 3D direto da imagem (TRELLIS.2). **Mundo**: escreva o plano do mapa
+5. **Todos os itens do jogo** (armas, escudos, baús, barris, móveis, casas, torres, pedras, árvores):
+   `generate_3d`. Com `imagem` ou só com `pedido` em texto, o item sai pela IA de 3D (placa NVIDIA, API
+   ligada ou o TRELLIS.2 no processador, grátis; no Máximo leva a noite) com a textura refeita pelas
+   quatro vistas; diga o tamanho real em `altura_m`. Para acertar uma forma exata (lâmina, cabo, guarda)
+   ou sem o 3D pela IA instalado, monte por peças (`pecas`: caixa com chanfro, cilindro, esfera, torno
+   pelo perfil, extrusão do contorno com gume, tubo por pontos; `materiais` com cor e tipo) olhando a
+   imagem, passe `referencia` e ajuste até ficar perto. **Mundo**: escreva o plano do mapa
    e use `generate_map` (relevo, rio, estradas, vila, masmorra, vegetação, luz da hora; olhe o `mapa.png`,
    as medidas e as fotos de cada região no `run_test`); a vila usa as casas que você montou
    (`regioes[].casas`); `generate_blockout` só para um teste rápido.

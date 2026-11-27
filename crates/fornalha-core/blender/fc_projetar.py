@@ -154,7 +154,7 @@ def _caixa(mascara):
     return linhas[0], linhas[-1], colunas[0], colunas[-1]
 
 
-def _conceito_na_vista(conceito, alfa_frente):
+def _conceito_na_vista(conceito, alfa_frente, assunto="personagem"):
     """O conceito (foto de estúdio, fundo liso) no enquadramento da vista de frente: mesma altura e o
     mesmo centro da silhueta. Devolve a imagem RGBA (fundo cinza) ou None se não achar a figura."""
     px = _pixels(conceito)
@@ -259,11 +259,27 @@ def _conceito_na_vista(conceito, alfa_frente):
     # confiança (alfa): dentro da silhueta da malha, longe da beira, e nada nos pés (a sombra e o chão do
     # estúdio grudam neles no conceito); sobe em rampa para não deixar remendo com borda
     conf = _encolher(alfa_frente > 0.5, 4)
+    # o que no conceito tem cor de fundo de estúdio (chão claro entre as pernas e embaixo da barra, que a
+    # malha cobre um pouco diferente) não vale, com folga de alguns pixels: a borda entre o chão e a roupa
+    # virava linha clara e remendo na canela
+    fundo_no_conceito = (dist < 0.15)[y0, x0] & dentro
+    fundo_largo = fundo_no_conceito.copy()
+    for _ in range(5):
+        fundo_largo = fundo_largo | np.roll(fundo_largo, 1, 0) | np.roll(fundo_largo, -1, 0) | np.roll(fundo_largo, 1, 1) | np.roll(fundo_largo, -1, 1)
+    conf = conf * ~fundo_largo
     altura_fig = max(1, r1 - r0)
-    rampa_pes = np.clip((yy - (r0 + 0.1 * altura_fig)) / (0.1 * altura_fig), 0.0, 1.0)
+    if assunto == "personagem":
+        rampa_pes = np.clip((yy - (r0 + 0.1 * altura_fig)) / (0.1 * altura_fig), 0.0, 1.0)
+    else:
+        rampa_pes = np.ones_like(conf)  # objeto: a base é parte dele (só a sombra do chão sai, pela cor)
     out[..., 3] = conf * rampa_pes * dentro
+    # quanto a silhueta do conceito alinhado casa com a da malha (1 = igual): abaixo de 0,75 o conceito
+    # está em outro ângulo ou outra pose e não entra na frente (entraria torto)
+    fig_vista = figura[y0, x0] & dentro
+    m_r = alfa_frente > 0.5
+    iou = float((fig_vista & m_r).sum() / max(1, (fig_vista | m_r).sum()))
     return out, {"escala": round(float(s), 4), "caixa_conceito": [int(c0), int(c1), int(cc0), int(cc1)],
-                 "caixa_vista": [int(r0), int(r1), int(rc0), int(rc1)]}
+                 "caixa_vista": [int(r0), int(r1), int(rc0), int(rc1)], "silhueta_igual": round(iou, 3)}
 
 
 def _reamostrar(px, lado):
@@ -346,7 +362,11 @@ def tarefa_vistas(t):
             alfa_frente = a[..., 0]
         saida["vistas"][nome] = {"imagem": arq, "confianca": arq_conf, "direcao": list(d)}
     if t.get("conceito") and alfa_frente is not None:
-        r = _conceito_na_vista(t["conceito"], alfa_frente)
+        assunto = t.get("assunto", "personagem")
+        r = _conceito_na_vista(t["conceito"], alfa_frente, assunto)
+        if r is not None and r[1]["silhueta_igual"] < float(t.get("silhueta_minima", 0.75)):
+            saida["alinhamento"] = dict(r[1], usado=False)
+            r = None
         if r is not None:
             arq = os.path.join(pasta, "frente_conceito.png")
             _gravar(arq, r[0])
@@ -357,7 +377,7 @@ def tarefa_vistas(t):
             arq_conf = os.path.join(pasta, "frente_conceito_confianca.png")
             _gravar(arq_conf, conf)
             saida["frente_conceito_confianca"] = arq_conf
-            rosto = _rosto(r[0], alfa_frente, centro, escala, pasta)
+            rosto = _rosto(r[0], alfa_frente, centro, escala, pasta) if assunto == "personagem" else None
             if rosto is not None:
                 saida["vistas"]["rosto"] = rosto
     with open(os.path.join(pasta, "vistas.json"), "w", encoding="utf-8") as f:

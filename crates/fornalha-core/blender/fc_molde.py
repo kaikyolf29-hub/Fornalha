@@ -554,6 +554,8 @@ def rigar(obj, nome, altura, makehuman):
     # com saia (túnica, sobreveste, vestido), o pano abaixo dela é pano comprido, não calça
     perna_devolvida = pernas_sem_tronco(obj, arm, H, None, bool(capa)) if saia is None else 0
     print(f"[molde] calça atrás da perna devolvida à perna: {perna_devolvida} vértices")
+    joelhos = joelhos_suaves(obj, arm, H, None if saia is None else saia[0], bool(capa))
+    print(f"[molde] joelhos com a dobra suave: {joelhos} vértices")
     mao_solta = separar_bracos(obj, arm, H)
     print(f"[molde] braço solto do corpo: {mao_solta} arestas abertas")
     if capa:
@@ -577,7 +579,7 @@ def rigar(obj, nome, altura, makehuman):
     return arm, {"altura_m": round(H, 3), "pesos": "molde-makehuman", "ossos": len(arm.data.bones), "manopla_firme": manopla,
                  "pesos_pela_superficie": round(float(conhecido.mean()), 3), "molas": capa, "paineis": paineis,
                  "osso_da_saia": saia_osso, "pernas_separadas": pernas_separadas, "calca_devolvida_a_perna": perna_devolvida,
-                 "braco_solto_do_corpo": mao_solta}
+                 "braco_solto_do_corpo": mao_solta, "joelhos_suaves": joelhos}
 
 
 def separar_pernas(obj, arm, H, fora=None):
@@ -708,6 +710,55 @@ def separar_bracos(obj, arm, H):
     bm.free()
     obj.data.update()
     return len(cortar)
+
+
+def joelhos_suaves(obj, arm, H, fora=None, com_capa=False, faixa=0.045):
+    """A dobra do joelho: perto da junta, o peso passa da coxa para a canela aos poucos, pelo plano que
+    divide o ângulo entre os dois ossos (como numa dobra de verdade). Na malha da IA o molde encaixado
+    deixava a passagem torta, e a calça devolvida à perna vinha com peso cheio num osso só: o joelho
+    quebrava para dentro parado e fazia uma dobra escura andando. Só mexe na coxa e na canela (o resto do
+    peso fica). Devolve quantos vértices mudaram."""
+    mw = arm.matrix_world
+    ossos = arm.data.bones
+    gi = {g.name: g.index for g in obj.vertex_groups}
+    if not all(f"{n}_{lado}" in gi and ossos.get(f"{n}_{lado}") for n in ("thigh", "calf") for lado in "lr"):
+        return 0
+    pelvis = mw @ ossos["pelvis"].head_local
+    perna_y = float(np.mean([(mw @ ossos[f"thigh_{lado}"].head_local).y for lado in "lr"]))
+    co = _co(obj)
+    n_fora = len(fora) if fora is not None else 0
+    b = faixa * H
+    mudou = 0
+    for lado in "lr":
+        q = np.array(mw @ ossos[f"thigh_{lado}"].head_local)
+        k = np.array(mw @ ossos[f"calf_{lado}"].head_local)
+        t = np.array(mw @ ossos[f"calf_{lado}"].tail_local)
+        u = (k - q) / max(np.linalg.norm(k - q), 1e-9)
+        v = (t - k) / max(np.linalg.norm(t - k), 1e-9)
+        eixo = u + v
+        eixo /= max(np.linalg.norm(eixo), 1e-9)
+        gt, gc = gi[f"thigh_{lado}"], gi[f"calf_{lado}"]
+        d = (co - k) @ eixo
+        perto = np.abs(d) < 2 * b
+        perto &= (co[:, 0] > pelvis.x) if lado == "l" else (co[:, 0] <= pelvis.x)
+        perto &= np.linalg.norm(co - k, axis=1) < 0.16 * H
+        if com_capa:
+            perto &= co[:, 1] < perna_y + 0.07 * H
+        for i in np.nonzero(perto)[0]:
+            if i < n_fora and fora[i]:
+                continue
+            v_ = obj.data.vertices[int(i)]
+            pesos = {g.group: g.weight for g in v_.groups}
+            perna = pesos.get(gt, 0.0) + pesos.get(gc, 0.0)
+            total = sum(pesos.values())
+            if total <= 1e-6 or perna < 0.5 * total:
+                continue
+            x = float(np.clip((d[i] + b) / (2 * b), 0.0, 1.0))
+            canela = x * x * (3 - 2 * x)
+            obj.vertex_groups[gt].add([int(i)], perna * (1 - canela), "REPLACE")
+            obj.vertex_groups[gc].add([int(i)], perna * canela, "REPLACE")
+            mudou += 1
+    return mudou
 
 
 def pernas_sem_tronco(obj, arm, H, fora=None, com_capa=False):

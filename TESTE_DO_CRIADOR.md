@@ -174,11 +174,15 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
    `<id>_vistas/` com as imagens. **Olhe:** o rosto (olhos e boca no lugar, não manchas), o tecido e o couro
    parecidos com o conceito, sem remendo nem linha clara na roupa, os pés sem o chão do estúdio. **Me
    diga:** quanto tempo as vistas levaram no Ryzen 5 5500 e uma nota de 0 a 100 comparando com o conceito.
-2. **Cabelo fio a fio na Erethea** (personagem humano de cabelo comprido no nível Máximo, montado na
+2. **Qualquer item do jogo pelo processador** (*"faça um baú de madeira com ferragens de ferro, 0,7 m"*, ou
+   com uma imagem sua; nível Máximo, na fila da noite). **Esperado:** `generate_3d` com `pedido` faz o
+   conceito, o 3D pela IA no processador, as quatro vistas e o item limpo em Items/ (ou Weapons/). **Me
+   diga:** o tempo no Ryzen 5 5500 e uma nota de 0 a 100 comparando com o conceito.
+3. **Cabelo fio a fio na Erethea** (personagem humano de cabelo comprido no nível Máximo, montado na
    Erethea 1.0.2 ou mais nova). **Esperado:** na Erethea o cabelo aparece fio a fio (os cards somem); na
    Godot comum, os cards de sempre. **Olhe:** a coroa perto da risca (aqui, sem placa, ela saiu escura: me
    diga se na RX 580 também sai).
-3. **Erethea pelo botão** (Máquina → Programas → Erethea → *Baixar*). **Esperado:** baixa o instalador
+4. **Erethea pelo botão** (Máquina → Programas → Erethea → *Baixar*). **Esperado:** baixa o instalador
    1.0.2, confere a soma e instala sem perguntar dentro da pasta da Fornalha.
 
 ## 10. Leve em repouso

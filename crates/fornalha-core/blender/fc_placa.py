@@ -297,6 +297,33 @@ def caixa(objs):
     return c.caixa_envolvente(objs)
 
 
+def _limitar_inclinacao(img, z_min=0.7):
+    """O raio do assado às vezes pega a superfície errada (a outra perna, uma camada de dentro do pano) e a
+    normal sai deitada ou virada para trás: no jogo vira mancha preta (o jeans da malha da IA ficava com
+    manchas escuras e riscos no joelho). Nenhuma normal inclina mais que arccos(z_min) (45°) em relação à
+    superfície da malha leve: o relevo de verdade (dobra, costura) fica bem abaixo disso. Devolve quantos
+    pixels foram corrigidos."""
+    import numpy as np
+
+    w, h = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    n = px[..., :3] * 2.0 - 1.0
+    z = n[..., 2]
+    ruim = z < z_min
+    if not ruim.any():
+        return 0
+    xy = n[..., :2]
+    comp = np.linalg.norm(xy, axis=-1, keepdims=True)
+    lado = np.sqrt(1.0 - z_min * z_min)
+    novo_xy = np.where(comp > 1e-6, xy / np.maximum(comp, 1e-6) * lado, 0.0)
+    n[..., :2] = np.where(ruim[..., None], novo_xy, xy)
+    n[..., 2] = np.where(ruim, z_min, z)
+    px[..., :3] = n * 0.5 + 0.5
+    img.pixels.foreach_set(px.ravel())
+    img.update()
+    return int(ruim.sum())
+
+
 def assar_normal(alta, baixa, tamanho, nome):
     """Relevo da malha alta assado num mapa de normais na UV da malha leve (Cycles na CPU), ligado no
     material dela: a malha de jogo fica leve com o detalhe da alta. Devolve a imagem ou None."""
@@ -338,6 +365,7 @@ def assar_normal(alta, baixa, tamanho, nome):
         margin=8,
     )
     cena.render.engine = motor
+    _limitar_inclinacao(img)
     img.pack()
     for mat, tex in alvos:
         nt = mat.node_tree

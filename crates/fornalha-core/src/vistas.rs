@@ -24,12 +24,38 @@ pub const REFINAR: [(&str, &str, f64); 4] = [
     ("rosto", "extreme close-up portrait of the face, front view, sharp detailed eyes, skin pores", 0.42),
 ];
 
+/// O que está nas vistas: um personagem (com o close do rosto) ou um item do jogo (arma, baú, casa...).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Assunto {
+    Personagem,
+    Objeto,
+}
+
+impl Assunto {
+    pub fn id(self) -> &'static str {
+        match self {
+            Assunto::Personagem => "personagem",
+            Assunto::Objeto => "objeto",
+        }
+    }
+}
+
 /// O pedido do refino de uma vista: o mesmo personagem, só mais detalhe.
 pub fn pedido_da_vista(descricao: &str, como: &str) -> String {
+    pedido_da_vista_de(descricao, como, Assunto::Personagem)
+}
+
+/// O pedido do refino de uma vista, do personagem ou do objeto.
+pub fn pedido_da_vista_de(descricao: &str, como: &str, assunto: Assunto) -> String {
     let d = descricao.trim();
-    let d = if d.is_empty() { "the character in the image".to_string() } else { d.to_string() };
+    let (quem, material) = match assunto {
+        Assunto::Personagem => ("character", "colors, clothes and materials"),
+        Assunto::Objeto => ("object", "shape, colors and materials"),
+    };
+    let d = if d.is_empty() { format!("the {quem} in the image") } else { d.to_string() };
+    let como = if assunto == Assunto::Objeto { como.replace("full body ", "") } else { como.to_string() };
     format!(
-        "the same character, exactly the same design, colors, clothes and materials: {d}. {como}. Sharp focus, highly detailed, \
+        "the same {quem}, exactly the same design, {material}: {d}. {como}. Sharp focus, highly detailed, \
          realistic textures, plain light gray studio background, even soft lighting"
     )
 }
@@ -59,11 +85,31 @@ pub async fn refinar_textura(
     lado: u32,
     previa: Option<&Path>,
 ) -> Resultado<Value> {
+    refinar_textura_de(blender, pasta_dados, porta, malha, conceito, descricao, pasta, semente, saida, lado, previa, Assunto::Personagem)
+        .await
+}
+
+/// Como `refinar_textura`, para personagem ou objeto (objeto: sem o close do rosto e sem a rampa dos pés).
+#[allow(clippy::too_many_arguments)]
+pub async fn refinar_textura_de(
+    blender: &Achado,
+    pasta_dados: &Path,
+    porta: Option<u16>,
+    malha: &Path,
+    conceito: Option<&Path>,
+    descricao: &str,
+    pasta: &Path,
+    semente: u64,
+    saida: &Path,
+    lado: u32,
+    previa: Option<&Path>,
+    assunto: Assunto,
+) -> Resultado<Value> {
     std::fs::create_dir_all(pasta).map_err(|e| Erro::io(pasta, e))?;
     let r = crate::forja::rodar(
         blender,
         pasta_dados,
-        &json!({"tarefa": "vistas", "entrada": malha, "pasta": pasta, "conceito": conceito}),
+        &json!({"tarefa": "vistas", "entrada": malha, "pasta": pasta, "conceito": conceito, "assunto": assunto.id()}),
         Duration::from_secs(30 * 60),
     )
     .await?;
@@ -96,7 +142,7 @@ pub async fn refinar_textura(
                 porta,
                 png,
                 &format!("fornalha_vista_{nome}.png"),
-                &pedido_da_vista(descricao, como),
+                &pedido_da_vista_de(descricao, como, assunto),
                 largura,
                 altura,
                 semente.wrapping_add(k as u64),
@@ -140,6 +186,12 @@ mod testes {
         let p = pedido_da_vista("homem de jaqueta de couro", "back view");
         assert!(p.contains("the same character") && p.contains("homem de jaqueta de couro") && p.contains("back view"));
         assert!(pedido_da_vista("  ", "x").contains("the character in the image"));
+    }
+
+    #[test]
+    fn pedido_de_objeto_fala_de_objeto() {
+        let p = pedido_da_vista_de("baú de madeira", "left side view, full body profile", Assunto::Objeto);
+        assert!(p.contains("the same object") && p.contains("left side view, profile") && !p.contains("character"));
     }
 
     #[test]

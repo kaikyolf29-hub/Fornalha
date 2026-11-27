@@ -1,0 +1,95 @@
+name: Itens pela IA (caminho grátis)
+
+# Qualquer item do jogo pelo caminho grátis, sem placa e sem API: o pedido vira conceito pelo Z-Image no
+# processador, o conceito vira malha pelo TRELLIS.2 (MIT; o criador aceitou a licença do DINOv3 para estes
+# testes em 22/11/2026), a textura é refeita pelas quatro vistas de objeto e o Blender limpa o item
+# (tamanho, pivô, triângulos, colisão). Um item por máquina, em paralelo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pedido:
+        description: "Um item só (vazio = os três de exemplo)"
+        default: ""
+  push:
+    paths:
+      - "crates/fornalha-core/tests/item_real.rs"
+      - ".github/workflows/comfyui-itens.yml"
+
+concurrency:
+  group: comfyui-itens-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  item:
+    name: Item ${{ matrix.nome }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: bau
+            tipo: objeto
+            altura: "0.7"
+            pedido: "Baú de madeira escura com cantos e faixas de ferro rebitadas e uma fechadura de latão na frente, tampa fechada."
+          - nome: espada
+            tipo: arma
+            altura: "1.1"
+            pedido: "Espada longa medieval de aço polido, lâmina reta com sulco no meio, guarda em cruz dourada, cabo de couro marrom e pomo redondo."
+          - nome: casa
+            tipo: objeto
+            altura: "6.0"
+            pedido: "Casa medieval pequena de pedra com telhado de madeira escura, porta de madeira e duas janelas, chaminé de pedra."
+    env:
+      FORNALHA_HOME: ${{ github.workspace }}-home
+    steps:
+      - name: Espaço em disco (os modelos do 3D têm ~8,5 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliotecas do Blender
+        run: ./scripts/apt-instalar.sh libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libegl1 libxkbcommon0 libsm6
+      - name: Compilar a Fornalha (linha de comando) e o teste
+        run: |
+          cargo build -q -p fornalha-cli
+          cargo test -q -p fornalha-core --test item_real --no-run
+      - name: Baixar o Blender pelo botão da Fornalha
+        run: |
+          ./target/debug/fornalha-cli baixar-programa blender
+          echo "FORNALHA_TESTE_BLENDER=$FORNALHA_HOME/dados/ferramentas/blender/blender" >> "$GITHUB_ENV"
+      - name: Instalar o ComfyUI com o Z-Image e o 3D pela IA (pelo instalador da Fornalha) e abrir
+        run: |
+          ./target/debug/fornalha-cli comfyui instalar --backend cpu --modelos gguf --3d
+          ./target/debug/fornalha-cli comfyui abrir
+          df -h /
+      - name: O item pelo caminho grátis
+        env:
+          FORNALHA_TESTE_ITEM: ${{ github.event.inputs.pedido || matrix.pedido }}
+          FORNALHA_TESTE_TIPO: ${{ matrix.tipo }}
+          FORNALHA_TESTE_ALTURA_M: ${{ matrix.altura }}
+          FORNALHA_TESTE_COMFYUI: "8188"
+          FORNALHA_TESTE_HORAS: "3"
+          FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/item-saida
+          RUST_BACKTRACE: "1"
+        run: cargo test -p fornalha-core --test item_real -- --nocapture
+      - name: Registro
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/item-saida"
+          cp "$FORNALHA_HOME/dados/comfyui/comfyui.log" "$RUNNER_TEMP/item-saida/" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/item-saida/dados"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: item-${{ matrix.nome }}
+          path: ${{ runner.temp }}/item-saida

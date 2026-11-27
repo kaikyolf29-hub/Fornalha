@@ -44,6 +44,21 @@ textura), tudo grátis no processador.
   perna; abaixo da axila o braço é solto do corpo. Medido na jaqueta (arestas esticadas mais de 3×): andar
   1.560 → 711, correr 2.712 → 1.546, sem as pontas e as manchas escuras no jeans; no templário da IA (saia e
   capa) fica como estava. Sobra: polegar grudado na mão e o encontro das coxas na virilha.
+- **O joelho "estranho" da jaqueta (visto pelo criador):** não era só a dobra. (1) O mapa de normais assado
+  da malha alta para a leve pegava, em alguns pontos, a superfície errada (a outra perna, uma camada de
+  dentro) e virava manchas pretas e riscos no jeans; agora nenhuma normal inclina mais de 45° (o relevo de
+  verdade fica abaixo disso). (2) O chão claro do estúdio no conceito vazava para a canela nas quatro vistas
+  (remendo e linha clara): onde o conceito tem cor de fundo, com folga de alguns pixels, a confiança é zero.
+  (3) A dobra do joelho passa da coxa para a canela aos poucos, pelo plano entre os dois ossos. Visto de
+  perto: em repouso o jeans fica limpo; andando e correndo os joelhos dobram sem riscos escuros.
+- **Todos os itens do jogo pelo caminho grátis (`generate_3d`):** arma, escudo, baú, barril, móvel, casa,
+  torre, pedra, árvore — com `imagem` ou só com `pedido` em texto (a Fornalha faz o conceito pelo motor de
+  imagem). O 3D sai pela placa NVIDIA, senão pela API ligada, senão pelo TRELLIS.2 no processador (no
+  Máximo, o fluxo inteiro); nos níveis Qualidade e Máximo a textura é refeita pelas quatro vistas de objeto
+  (sem rosto e sem a rampa dos pés) e o item é limpo (tamanho real, pivô no chão, triângulos, colisão).
+  Antes, item a partir de imagem só saía com placa NVIDIA. Trava nova nas vistas: se a silhueta do
+  conceito alinhado não casar com a da malha (menos de 75%), o conceito não entra na frente (a jaqueta dá
+  95%). CI "Itens pela IA" com um baú, uma espada e uma casa, cada um numa máquina sem placa.
 - **CI do Windows com a Erethea 1.0.2 pelo botão:** baixou, conferiu a soma e instalou sem perguntas; o
   teste dela (`--agent-test`) passou; três testes reprovaram só pelo erro de placa de som da máquina do CI
   (`WASAPI: init_output_device`), agora ruído como o PulseAudio no Linux.

@@ -34,6 +34,19 @@ de outra conta e não chegou ao repositório até 25/11.
   grátis usa os dados e pessoas podem ler). **Provado** contra um servidor falso em 127.0.0.1 que fala
   como as duas APIs (`tests/cerebro_api.rs`); **falta provar com a chave de verdade** (o criador tem
   ~US$ 100 de crédito na Anthropic).
+- **Contrato com a Erethea (recado dela de 27/11, para o pacote de IA dela):** cada projeto ganha
+  `ai/contrato_da_engine.json` (refeito quando o projeto é criado ou aberto) e a ferramenta nova
+  `get_engine_contract` (48 no MCP): eixos (+Y para cima, personagem olhando para +Z, `_l` em +X, metros,
+  30 qps), os esqueletos `fornalha-jogo-1` (60 ossos no padrão da Unreal, 5 dedos por mão com 3 ossos cada,
+  rosto com mandíbula e pálpebras; roupa e cabelo podem trazer ossos próprios) e `fornalha-forja-1` (23
+  ossos, mão sem dedos), as regras do corpo, as animações (15 padrão com laço e o que é, 10 extras, 9 da
+  Forja, as de cada personagem já feito), a conferência da cena (personagens, objetos, mapa, estilo e 8
+  critérios com como medir: `take_screenshot` da Erethea → `check_style`/`compare_reference` da Fornalha,
+  `run_test`/`get_errors`) e a montagem (`run_script` com o `montar.gd` com o editor aberto; `--script` sem
+  ele). O teste do personagem realista confere que o glb de verdade tem os 60 ossos do contrato com os pais
+  certos (o herói tem 64: os 4 a mais são da roupa). **Quando a Erethea lançar o `run_script`:** o
+  `import_to_engine` passa a usar o MCP dela com o editor aberto e o `montar.gd` fica de alternativa —
+  falta o nome e os argumentos exatos da ferramenta dela.
 - **Itens pelo caminho grátis no CI (run 46036354882, processador de 4 núcleos):** a **espada** passou em
   1 h 40 no total (conceito 20 min, malha do TRELLIS.2 29 min, quatro vistas com os dois lados e as costas
   refinados, limpa em 20 mil triângulos e 1,1 m) e ficou fiel ao conceito (sulco na lâmina, guarda dourada
@@ -867,6 +880,9 @@ está abaixo: cabelo fio a fio (#40), pele que segue a superfície (#39), terren
 #50), sombras por ray tracing e de contato, materiais do glTF que a Godot ignora (coat, anisotropia, sheen
 do cabelo e da córnea da Fornalha, #44) e a ponte de 26/11 (#54: roda o `montar.gd` do projeto quando há
 `World/mapa/mapa.json`). Os pedidos 10 a 12 dela para a Fornalha foram atendidos (ver a rodada da noite).
+**Resposta ao recado de 27/11 (pacote de IA da Erethea):** o contrato (`get_engine_contract` e
+`ai/contrato_da_engine.json`) leva o esqueleto, as animações e os critérios da conferência; a Fornalha usa o
+`run_script` quando ele sair (nos mandem o nome e os argumentos) e mantém o `montar.gd`.
 **Pedido novo (27/11, noite): o teste dos dois juntos** — roteiro em TESTE_DO_CRIADOR.md (9g, item 5):
 projeto feito pela Fornalha aberto na Erethea, os dois MCP ligados no mesmo agente, `montar.gd` sem janela,
 cabelo fio a fio, `--agent-test`, anime e mapa. A Erethea confere o lado dela (o que abre, o que a ponte vê).

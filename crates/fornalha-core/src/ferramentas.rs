@@ -99,6 +99,13 @@ pub fn lista() -> Vec<Ferramenta> {
             so_leitura: true,
         },
         Ferramenta {
+            nome: "get_engine_contract",
+            titulo: "Contrato com a engine",
+            descricao: "O que a Fornalha entrega e o que a cena tem de ter, para montar e conferir na Erethea: os esqueletos (nomes dos ossos do esqueleto de jogo com 5 dedos por mão e o da Forja, eixos +Y para cima e +Z para a frente, em metros), as regras do corpo, as animações (as 15 padrão com o nome e se é laço, as extras e as de cada personagem já feito) e a conferência da cena (personagens, objetos, mapa, estilo e como medir cada um: take_screenshot da Erethea → check_style e compare_reference da Fornalha, run_test). Também grava ai/contrato_da_engine.json no projeto.",
+            esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional()}}),
+            so_leitura: false,
+        },
+        Ferramenta {
             nome: "update_project",
             titulo: "Atualizar a bíblia do jogo",
             descricao: "Muda a bíblia do jogo com um JSON Merge Patch: objetos se mesclam, null apaga o campo. Campos: nome, comercial, nivel (leve, equilibrado, qualidade, maximo), engine, conceito {genero, estilo, plataformas, camera, historia, ambientacao, mecanicas, publico, duracao, referencias_visuais}, guia_visual {texto_de_estilo, paleta (#RRGGBB), traco, render (realista ou anime: no jogo, luz em faixas e contorno em personagens e construções), referencias [{arquivo, aprovada, nota}], evitar}, personagens [{id, nome, papel, roupa, arma, descricao}], mundo {areas [{id, nome, tipo, descricao}]}. Listas são trocadas inteiras. id, formato, criado_em e atualizado_em não mudam.",
@@ -717,6 +724,14 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "biblia": p.biblia,
                 "proximo_passo": "Preencha o conceito e o guia visual com update_project antes de gerar assets.",
             }))
+        }
+        "get_engine_contract" => {
+            let a: ArgsProjeto = args(a)?;
+            let p = f.projeto(a.projeto.as_deref())?;
+            let arquivo = crate::contrato::escrever(&p)?;
+            let mut c = crate::contrato::contrato(&p);
+            c["arquivo"] = json!(arquivo);
+            Ok(c)
         }
         "open_project" => {
             let a: ArgsAbrir = args(a)?;

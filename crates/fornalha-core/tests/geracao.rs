@@ -202,6 +202,28 @@ async fn personagem_realista_com_pacotes_testado_na_engine() {
         assert!(nomes.contains(&n), "falta a animação {n}: {nomes:?}");
     }
     assert!(heroi["estatisticas"]["triangulos"].as_u64().unwrap() > 20000);
+    // o esqueleto do glb é o do contrato com a Erethea (nomes, pais e 5 dedos por mão)
+    let contrato = f.chamar("get_engine_contract", json!({}), "claude-code").await.unwrap();
+    let feito = contrato["conferencia_da_cena"]["personagens_no_disco"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["esqueleto"] == "fornalha-jogo-1")
+        .unwrap_or_else(|| panic!("o herói não tem o esqueleto de jogo: {}", contrato["conferencia_da_cena"]));
+    let glb = fornalha_core::bruto::json_do_glb(&raiz.join(feito["arquivo"].as_str().unwrap())).unwrap();
+    let nos = glb["nodes"].as_array().unwrap();
+    let juntas: Vec<&str> =
+        glb["skins"][0]["joints"].as_array().unwrap().iter().map(|i| nos[i.as_u64().unwrap() as usize]["name"].as_str().unwrap()).collect();
+    for (osso, pai) in fornalha_core::contrato::OSSOS_DO_JOGO {
+        assert!(juntas.contains(&osso), "o glb não tem o osso {osso} do contrato: {juntas:?}");
+        if !pai.is_empty() {
+            let filho = nos.iter().position(|n| n["name"] == osso).unwrap();
+            let o_pai =
+                nos.iter().find(|n| n["children"].as_array().is_some_and(|c| c.iter().any(|x| x.as_u64() == Some(filho as u64)))).unwrap();
+            assert_eq!(o_pai["name"], pai, "pai de {osso}");
+        }
+    }
+    assert!(raiz.join(fornalha_core::contrato::ARQUIVO).is_file());
     // templário: as placas viraram uma malha só (atlas com desgaste)
     let pecas: Vec<&str> = heroi["estatisticas"]["pecas"].as_array().unwrap().iter().filter_map(|p| p.as_str()).collect();
     assert!(pecas.iter().any(|p| p.ends_with("_armadura")), "{pecas:?}");

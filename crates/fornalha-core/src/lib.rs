@@ -15,6 +15,7 @@ pub mod comfyui;
 pub mod comfyui_ui;
 pub mod config;
 pub mod consts;
+pub mod contrato;
 pub mod distro;
 pub mod engine;
 pub mod erro;

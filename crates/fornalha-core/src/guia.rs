@@ -109,7 +109,12 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    **Cena curta**: `create_cutscene` com o roteiro (quem fala, o texto, enquadramento close/medio/aberto/
    ombro/dois, animação, para quem olha); no jogo, `CenasCurtas.tocar("id")`.
 7. **Montar e testar**: `import_to_engine` e `run_test` (na Erethea roda também o teste de agente dela);
-   veja as capturas e o vídeo.
+   veja as capturas e o vídeo. **Contrato com a Erethea**: `get_engine_contract` (e
+   `ai/contrato_da_engine.json`) traz os esqueletos (nomes dos ossos, 5 dedos por mão, eixos), as animações
+   com o nome certo e a conferência da cena. Com o editor da Erethea aberto, monte pelo MCP dela
+   (`run_script` com o `montar.gd`, que tem desfazer), tire `take_screenshot` e confira cada critério do
+   contrato (a captura vai para `check_style` e `compare_reference` da Fornalha); sem o editor, o
+   `import_to_engine` roda o `montar.gd` sozinho.
 8. **Antes de vender**: `check_licenses` e `export_credits` (créditos obrigatórios, como ACCAD e 100STYLE).
 
 ## Regras
@@ -157,6 +162,8 @@ pub fn escrever(p: &Projeto) -> Resultado<Vec<String>> {
     };
     std::fs::write(&agentes, texto).map_err(|e| Erro::io(&agentes, e))?;
     feitos.push("AGENTS.md".to_string());
+    // o contrato com a engine (esqueleto, animações, conferência da cena), sempre refeito
+    feitos.push(crate::contrato::escrever(p)?);
     // ponteiros para os agentes que leem outro arquivo
     let ponteiro_claude = "@AGENTS.md\n";
     let cursor = format!("---\ndescription: Guia do jogo (Erethea + Fornalha)\nalwaysApply: true\n---\n{PONTEIRO}");

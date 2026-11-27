@@ -549,6 +549,13 @@ def rigar(obj, nome, altura, makehuman):
                 if n and w > 0.01:
                     g = obj.vertex_groups.get(n) or obj.vertex_groups.new(name=n)
                     g.add([int(vi)], w, "REPLACE")
+    pernas_separadas = separar_pernas(obj, arm, H, None if saia is None else saia[0])
+    print(f"[molde] pernas separadas: {pernas_separadas} arestas abertas entre as pernas")
+    # com saia (túnica, sobreveste, vestido), o pano abaixo dela é pano comprido, não calça
+    perna_devolvida = pernas_sem_tronco(obj, arm, H, None, bool(capa)) if saia is None else 0
+    print(f"[molde] calça atrás da perna devolvida à perna: {perna_devolvida} vértices")
+    mao_solta = separar_bracos(obj, arm, H)
+    print(f"[molde] braço solto do corpo: {mao_solta} arestas abertas")
     if capa:
         fc_rig_ia.pesar_capa(obj, arm, H)
     _ativo(obj)
@@ -569,7 +576,188 @@ def rigar(obj, nome, altura, makehuman):
     mod.object = arm
     return arm, {"altura_m": round(H, 3), "pesos": "molde-makehuman", "ossos": len(arm.data.bones), "manopla_firme": manopla,
                  "pesos_pela_superficie": round(float(conhecido.mean()), 3), "molas": capa, "paineis": paineis,
-                 "osso_da_saia": saia_osso}
+                 "osso_da_saia": saia_osso, "pernas_separadas": pernas_separadas, "calca_devolvida_a_perna": perna_devolvida,
+                 "braco_solto_do_corpo": mao_solta}
+
+
+def separar_pernas(obj, arm, H, fora=None):
+    """A malha da IA vem com as pernas grudadas por uma membrana (da virilha até o meio da coxa, às vezes
+    atrás das canelas). Com o peso das duas pernas, ela esticava em pontas ao andar (a calça "rasgava").
+    Abaixo da virilha, perto dos ossos da perna, cada face fica com a perna do lado dela: a costura entre
+    os dois lados é aberta (cada lado com os seus vértices) e cada lado perde o peso da outra perna.
+    Saia (`fora`) e capa (atrás das pernas) ficam como estão: abrir o pano rasgaria. Devolve quantas
+    arestas foram abertas."""
+    import bmesh
+
+    mw = arm.matrix_world
+    ossos = arm.data.bones
+    if not all(ossos.get(f"{n}_{lado}") for n in ("thigh", "calf") for lado in "lr"):
+        return 0
+    pelvis = mw @ ossos["pelvis"].head_local
+    perna_y = float(np.mean([(mw @ ossos[f"thigh_{lado}"].head_local).y for lado in "lr"]))
+    virilha = min((mw @ ossos[f"thigh_{lado}"].head_local).z for lado in "lr") - 0.03 * H
+    segs = [(np.array(mw @ ossos[f"{n}_{lado}"].head_local), np.array(mw @ ossos[f"{n}_{lado}"].tail_local))
+            for n in ("thigh", "calf") for lado in "lr"]
+    fora_set = set(np.nonzero(fora)[0].tolist()) if fora is not None else set()
+    mo = obj.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.verts.ensure_lookup_table()
+    centros = np.array([(mo @ f.calc_center_median())[:] for f in bm.faces])
+    d_perna = np.full(len(centros), np.inf)
+    for a, b in segs:
+        d_perna = np.minimum(d_perna, fc_rig_ia._seg(centros, a, b))
+    lado = {}
+    for f, c, d in zip(bm.faces, centros, d_perna):
+        if c[2] >= virilha or d > 0.09 * H or c[1] > perna_y + 0.06 * H:
+            continue
+        if fora_set and any(v.index in fora_set for v in f.verts):
+            continue
+        lado[f] = "l" if c[0] > pelvis.x else "r"
+    cortar = [e for e in bm.edges if len({lado[f] for f in e.link_faces if f in lado}) == 2]
+    if not cortar:
+        bm.free()
+        return 0
+    bmesh.ops.split_edges(bm, edges=cortar)
+    camada = bm.verts.layers.deform.active
+    gi = {g.name: g.index for g in obj.vertex_groups}
+    da_perna = {s: [gi[f"{n}_{s}"] for n in ("thigh", "calf", "foot", "ball") if f"{n}_{s}" in gi] for s in "lr"}
+    if camada is not None:
+        for v in bm.verts:
+            lados = {lado.get(f) for f in v.link_faces}
+            if len(lados) != 1 or None in lados:
+                continue
+            s = lados.pop()
+            outro = "r" if s == "l" else "l"
+            dv = v[camada]
+            for g in da_perna[outro]:
+                if g in dv:
+                    del dv[g]
+            total = sum(dv.values())
+            if total > 1e-6:
+                for k in list(dv.keys()):
+                    dv[k] = dv[k] / total
+            elif da_perna[s]:
+                dv[da_perna[s][0]] = 1.0
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    return len(cortar)
+
+
+def separar_bracos(obj, arm, H):
+    """A malha da IA cola a mão (e às vezes o antebraço) na coxa ou no quadril. Com os dois pesos, a
+    pele entre eles esticava em pontas quando o braço balança. Abaixo da axila, cada face fica com o
+    braço (se o peso dele domina) ou com o corpo; a costura entre os dois é aberta e cada lado perde os
+    ossos do outro. Devolve quantas arestas foram abertas."""
+    import bmesh
+
+    ossos = arm.data.bones
+    mw = arm.matrix_world
+    if not all(ossos.get(f"upperarm_{lado}") for lado in "lr"):
+        return 0
+    axila = min((mw @ ossos[f"upperarm_{lado}"].head_local).z for lado in "lr") - 0.06 * H
+    dedos = ("thumb", "index", "middle", "ring", "pinky")
+    gi = {g.name: g.index for g in obj.vertex_groups}
+    do_braco = {lado: {gi[n] for n in gi if n.endswith(f"_{lado}") and (n.split("_")[0] in ("upperarm", "lowerarm", "hand") + dedos)}
+                for lado in "lr"}
+    todos_braco = do_braco["l"] | do_braco["r"]
+    mo = obj.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    camada = bm.verts.layers.deform.active
+    if camada is None:
+        bm.free()
+        return 0
+
+    def peso_braco(v, lado):
+        dv = v[camada]
+        return sum(w for g, w in dv.items() if g in do_braco[lado])
+
+    classe = {}
+    for f in bm.faces:
+        if (mo @ f.calc_center_median()).z >= axila:
+            continue
+        pl = sum(peso_braco(v, "l") for v in f.verts) / len(f.verts)
+        pr = sum(peso_braco(v, "r") for v in f.verts) / len(f.verts)
+        classe[f] = "l" if pl > 0.5 else ("r" if pr > 0.5 else "corpo")
+    cortar = [e for e in bm.edges if len({classe[f] for f in e.link_faces if f in classe}) == 2]
+    if not cortar:
+        bm.free()
+        return 0
+    bmesh.ops.split_edges(bm, edges=cortar)
+    for v in bm.verts:
+        cl = {classe.get(f) for f in v.link_faces}
+        if len(cl) != 1 or None in cl:
+            continue
+        c = cl.pop()
+        dv = v[camada]
+        manter = do_braco[c] if c in "lr" else None
+        for g in list(dv.keys()):
+            if (manter is not None and g not in manter) or (manter is None and g in todos_braco):
+                del dv[g]
+        total = sum(dv.values())
+        if total > 1e-6:
+            for k in list(dv.keys()):
+                dv[k] = dv[k] / total
+        elif manter:
+            dv[max(manter)] = 1.0
+        elif "pelvis" in gi:
+            dv[gi["pelvis"]] = 1.0
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    return len(cortar)
+
+
+def pernas_sem_tronco(obj, arm, H, fora=None, com_capa=False):
+    """Abaixo da virilha, pano que não é saia nem capa e ficou só com peso de tronco (a parte de trás da
+    calça larga passa da distância da regra "pano atrás da perna é capa") volta para a perna do lado dele:
+    com peso de quadril e coluna na altura da canela, a calça esticava em pontas ao andar. Devolve quantos
+    vértices voltaram."""
+    mw = arm.matrix_world
+    ossos = arm.data.bones
+    if not all(ossos.get(f"{n}_{lado}") for n in ("thigh", "calf") for lado in "lr"):
+        return 0
+    pelvis = mw @ ossos["pelvis"].head_local
+    perna_y = float(np.mean([(mw @ ossos[f"thigh_{lado}"].head_local).y for lado in "lr"]))
+    virilha = min((mw @ ossos[f"thigh_{lado}"].head_local).z for lado in "lr") - 0.03 * H
+    perna = {f"{n}_{lado}" for n in ("thigh", "calf", "foot", "ball") for lado in "lr"}
+    gi = {g.index: g.name for g in obj.vertex_groups}
+    co = _co(obj)
+    n_fora = len(fora) if fora is not None else 0
+    segs = {n: (np.array(mw @ ossos[n].head_local), np.array(mw @ ossos[n].tail_local))
+            for n in perna if ossos.get(n) is not None}
+    devolvidos = 0
+    for v in obj.data.vertices:
+        i = v.index
+        p = co[i]
+        if p[2] >= virilha or (i < n_fora and fora[i]):
+            continue
+        if com_capa and p[1] > perna_y + 0.07 * H:
+            continue
+        d_perna = min(float(fc_rig_ia._seg(p[None, :], *segs[n])[0]) for n in segs)
+        if d_perna > 0.16 * H:
+            continue  # longe das pernas: pano solto, não calça
+        pesos = {gi[g.group]: g.weight for g in v.groups if g.weight > 1e-4}
+        if sum(w for n, w in pesos.items() if n in perna) >= 0.5:
+            continue
+        lado = "l" if p[0] > pelvis.x else "r"
+        melhor, dmin = None, np.inf
+        for n in (f"thigh_{lado}", f"calf_{lado}", f"foot_{lado}"):
+            if n not in segs:
+                continue
+            d = float(fc_rig_ia._seg(p[None, :], *segs[n])[0])
+            if d < dmin:
+                melhor, dmin = n, d
+        if melhor is None:
+            continue
+        for g in list(v.groups):
+            obj.vertex_groups[g.group].remove([i])
+        g = obj.vertex_groups.get(melhor) or obj.vertex_groups.new(name=melhor)
+        g.add([i], 1.0, "REPLACE")
+        devolvidos += 1
+    return devolvidos
 
 
 def _manopla_firme(obj, arm, raio=0.11):

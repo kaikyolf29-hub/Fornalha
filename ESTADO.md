@@ -29,8 +29,24 @@ textura), tudo grátis no processador.
   silhueta, trava onde a vista foge demais da cor que a malha tinha), assada em 2048 (4096 no Máximo). Sem o
   Z-Image aberto, entram só o conceito e o rosto dele. **Provado aqui** (Blender 5.3, sem o Z-Image) na
   jaqueta do CI de 26/11: o rosto deixa de ser mancha (olhos, sobrancelhas, rugas), o couro ganha as
-  rachaduras e o tom do conceito, a camisa os botões; pés limpos. Teste na forja (`quatro_vistas_...`) e o
-  CI "Quatro vistas" (jaqueta + Z-Image no processador) para o refino de lados, costas e rosto.
+  rachaduras e o tom do conceito, a camisa os botões; pés limpos. Teste na forja (`quatro_vistas_...`).
+  **Provado no CI "Quatro vistas" (27/11, sem placa):** a jaqueta de 26/11 com o Z-Image GGUF no processador
+  de 4 núcleos — cada refino de vista levou ~19 min (lados e costas 640×1024, rosto 768×768; 1h17 no
+  total), textura de 4096; o rosto refinado é a mesma pessoa, com olhos, poros e barba nítidos; lados e
+  costas ganham o desgaste do jeans e a textura do couro. No PC do criador (Ryzen 5 5500, 6 núcleos) deve
+  ser parecido ou menos.
+- **Pesos da malha da IA (o jeans rasgava ao andar):** a regra da saia lia a membrana entre as coxas (a IA
+  gruda as pernas) e a barra da jaqueta aberta como barra de túnica, e dava à calça peso de quadril com
+  canela; a parte de trás da calça larga caía no peso do tronco ("pano atrás da perna é capa"); e a mão
+  grudada na coxa esticava entre as duas. Agora: saia só com pano bem à frente das pernas (≥ 0,08 H) e
+  comprido (barra ≥ 0,15 H abaixo do quadril); abaixo da virilha as pernas são separadas (a costura entre
+  os lados se abre e cada lado perde o peso da outra perna); sem saia, a calça perto da perna volta para a
+  perna; abaixo da axila o braço é solto do corpo. Medido na jaqueta (arestas esticadas mais de 3×): andar
+  1.560 → 711, correr 2.712 → 1.546, sem as pontas e as manchas escuras no jeans; no templário da IA (saia e
+  capa) fica como estava. Sobra: polegar grudado na mão e o encontro das coxas na virilha.
+- **CI do Windows com a Erethea 1.0.2 pelo botão:** baixou, conferiu a soma e instalou sem perguntas; o
+  teste dela (`--agent-test`) passou; três testes reprovaram só pelo erro de placa de som da máquina do CI
+  (`WASAPI: init_output_device`), agora ruído como o PulseAudio no Linux.
 - **Pedido 13 (guia do MCP da Erethea):** a linha da Erethea no AGENTS.md diz que o MCP liga sozinho na
   1.0.2, `ERETHEA_MCP_PORT` para outra porta e `editor/erethea_fornalha/mcp_server=false` para desligar.
 - **Pedido 14 (instalador público):** Máquina → Programas baixa a Erethea 1.0.2 (instalador do Windows,

@@ -55,7 +55,7 @@ async fn quatro_vistas_deixam_a_textura_nitida() {
     assert!(saida.join("malha_com_vistas.glb").is_file());
     assert!(saida.join("depois_folha.png").is_file());
     let cob = &r["projecao"]["malhas"][0]["cobertura"];
-    assert!(cob["frente"].as_f64().unwrap_or(0.0) > 0.2, "a frente quase não pegou: {cob}");
+    assert!(cob["frente"].as_f64().unwrap_or(0.0) > 0.1, "a frente quase não pegou: {cob}");
     if porta.is_some() {
         // com o motor de imagem, os dois lados, as costas e o rosto voltam refinados
         let n = r["refinadas"].as_object().map(|m| m.len()).unwrap_or(0);

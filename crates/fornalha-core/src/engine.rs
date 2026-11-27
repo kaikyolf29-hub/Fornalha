@@ -311,8 +311,12 @@ pub fn erros_da_saida(texto: &str) -> Vec<String> {
         let t = limpa.trim();
         let erro = t.starts_with("ERROR:") || t.starts_with("SCRIPT ERROR:") || t.starts_with("USER ERROR:") || t.contains("Parse Error:");
         // Avisos conhecidos de máquina sem placa/som não são do jogo.
+        // No Windows sem saída de som (CI), o WASAPI falha ao abrir o aparelho: a linha do WASAPI e a da
+        // condição HRESULT que vem com ela (a Erethea 1.0.2 mostra as duas; o jogo roda mudo).
         let ruido = t.contains("ALSA")
             || t.contains("PulseAudio")
+            || t.contains("WASAPI")
+            || t.contains("\"hr != ((HRESULT)0L)\" is true. Returning: ERR_CANT_OPEN")
             || t.contains("vkCreateInstance")
             || t.contains("Your video card drivers seem not to support");
         if erro && !ruido && !v.iter().any(|x| x == t) {
@@ -562,4 +566,16 @@ fn walk_glb(raiz: &Path) -> Vec<PathBuf> {
     }
     v.sort();
     v
+}
+
+#[cfg(test)]
+mod testes_da_saida {
+    use super::*;
+
+    #[test]
+    fn som_do_windows_sem_aparelho_e_ruido() {
+        let saida = "ERROR: Condition \"hr != ((HRESULT)0L)\" is true. Returning: ERR_CANT_OPEN\n\
+                     ERROR: WASAPI: init_output_device error.\nSCRIPT ERROR: de verdade";
+        assert_eq!(erros_da_saida(saida), vec!["SCRIPT ERROR: de verdade".to_string()]);
+    }
 }

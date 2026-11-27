@@ -213,11 +213,17 @@ def _saia(co, H, arm, mw):
     perna_y = float(np.mean([(mw @ arm.data.bones[f"thigh_{l}"].head_local).y for l in "lr"]))
     barra = None
     for z in np.arange(0.12 * H, quadril - 0.04 * H, 0.01 * H):
-        meio = (np.abs(co[:, 2] - z) < 0.006 * H) & (np.abs(co[:, 0]) < 0.02 * H) & (co[:, 1] < perna_y)
+        # pano bem à frente das pernas (painel da túnica: 0,13 a 0,15 H no templário). A malha da IA muitas
+        # vezes vem com as coxas grudadas por uma membrana até o meio da coxa: ela fica entre as pernas
+        # (0,01 a 0,07 H à frente), e contava como barra de saia — a calça rasgava em pontas ao andar
+        meio = (np.abs(co[:, 2] - z) < 0.006 * H) & (np.abs(co[:, 0]) < 0.02 * H) & (co[:, 1] < perna_y - 0.08 * H)
         if meio.sum() >= 3:
             barra = float(z)
             break
-    if barra is None or barra > quadril - 0.06 * H:
+    # saia é pano comprido (a túnica do templário desce até 0,20 H): barra de jaqueta ou camisa logo abaixo
+    # do quadril não é saia. Com a margem de 0,06 H a jaqueta aberta virava "saia" e a calça embaixo dela
+    # ganhava peso de quadril com canela, sem a coxa: rasgava em pontas ao andar
+    if barra is None or barra > quadril - 0.15 * H:
         return None
     dy = co[:, 1] - perna_y
     # na frente o painel da sobreveste fica bem à frente das pernas (no cavaleiro de referência, 0,124 H):

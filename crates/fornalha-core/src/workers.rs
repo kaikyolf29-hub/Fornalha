@@ -195,7 +195,7 @@ pub async fn rodar(paths: &Paths, w: Worker, inst: &Instalacao, tarefa: &Value, 
     if std::env::var_os("HF_HOME").is_none() {
         env.push(("HF_HOME", hf.as_str()));
     }
-    let saida = externas::rodar_com_env(&inst.python, &[&script, &t_s, &r_s], tempo, Some(&inst.repo), &env).await?;
+    let saida = externas::rodar_pesado(&inst.python, &[&script, &t_s, &r_s], tempo, Some(&inst.repo), &env).await?;
     let _ = std::fs::remove_file(&arq_tarefa);
     let resultado: Option<Value> = std::fs::read(&arq_resultado).ok().and_then(|b| serde_json::from_slice(&b).ok());
     let _ = std::fs::remove_file(&arq_resultado);

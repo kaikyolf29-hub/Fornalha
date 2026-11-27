@@ -634,10 +634,8 @@ async fn abrir_em(pasta_comfy: &std::path::Path, porta: u16) -> Resultado<Estado
             cmd.env(k, v);
         }
     }
-    #[cfg(windows)]
-    {
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    // sem placa ele faz a conta toda no processador: prioridade baixa (e metade dos núcleos no modo "metade")
+    crate::util::processo_pesado(&mut cmd);
     cmd.kill_on_drop(false);
     cmd.spawn().map_err(|e| Erro::novo("comfyui_fora", format!("Não consegui abrir o ComfyUI: {e}")))?;
     let inicio = Instant::now();

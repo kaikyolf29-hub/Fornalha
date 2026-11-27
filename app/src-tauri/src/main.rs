@@ -189,6 +189,7 @@ mod nucleo {
             "pasta_projetos_escolhida": cfg.pasta_projetos.is_some(),
             "nivel_da_maquina": cfg.nivel,
             "noite": cfg.noite,
+            "processador": cfg.processador.clone().unwrap_or_else(|| "inteiro".into()),
             "estilo_janela": cfg.estilo_janela.unwrap_or_else(|| "auto".into()),
             "estudio": cfg.estudio,
             "grupos_de_aceite": f.catalogo.grupos_de_aceite,
@@ -224,6 +225,9 @@ mod nucleo {
                         .into_response()
                 }
             }
+        }
+        if let Some(u) = v.get("processador").and_then(|u| u.as_str()) {
+            r = r.and(f.definir_processador(u));
         }
         if let Some(e) = v.get("estilo_janela") {
             let estilo = e.as_str().filter(|s| fornalha_core::janela::ESTILOS.contains(s) && *s != "auto").map(String::from);

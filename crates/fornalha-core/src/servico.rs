@@ -41,6 +41,7 @@ impl Fornalha {
     pub fn new(paths: Paths) -> Arc<Self> {
         let _ = paths.ensure();
         let config = Config::carregar(&paths);
+        crate::util::definir_metade_do_processador(config.processador.as_deref() == Some("metade"));
         // reabre o último projeto que ainda existe
         let ultimo = config.projetos_recentes.iter().find(|r| r.join(projeto::ARQUIVO_BIBLIA).is_file()).cloned();
         Arc::new(Self {
@@ -152,6 +153,16 @@ impl Fornalha {
             return Err(crate::erro::Erro::argumento("As horas da noite vão de 0 a 23."));
         }
         self.mudar_config(|c| c.noite = noite)
+    }
+
+    /// Uso do processador no trabalho pesado: "inteiro" ou "metade". Vale na hora para o Blender e os workers;
+    /// o ComfyUI já aberto pega na próxima vez que abrir.
+    pub fn definir_processador(&self, uso: &str) -> Resultado<()> {
+        if !["inteiro", "metade"].contains(&uso) {
+            return Err(crate::erro::Erro::argumento("Uso do processador: inteiro ou metade."));
+        }
+        crate::util::definir_metade_do_processador(uso == "metade");
+        self.mudar_config(|c| c.processador = Some(uso.to_string()))
     }
 
     pub fn definir_estilo_janela(&self, estilo: Option<String>) -> Resultado<()> {

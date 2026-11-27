@@ -317,6 +317,23 @@ pub async fn rodar(caminho: &Path, args: &[&str], tempo: Duration, pasta: Option
 }
 
 pub async fn rodar_com_env(caminho: &Path, args: &[&str], tempo: Duration, pasta: Option<&Path>, env: &[(&str, &str)]) -> Resultado<Saida> {
+    rodar_em(caminho, args, tempo, pasta, env, false).await
+}
+
+/// Como `rodar_com_env`, para trabalho pesado (Blender, IA no processador): prioridade baixa e, no modo
+/// "metade" dos Ajustes, metade dos núcleos.
+pub async fn rodar_pesado(caminho: &Path, args: &[&str], tempo: Duration, pasta: Option<&Path>, env: &[(&str, &str)]) -> Resultado<Saida> {
+    rodar_em(caminho, args, tempo, pasta, env, true).await
+}
+
+async fn rodar_em(
+    caminho: &Path,
+    args: &[&str],
+    tempo: Duration,
+    pasta: Option<&Path>,
+    env: &[(&str, &str)],
+    pesado: bool,
+) -> Resultado<Saida> {
     let mut cmd = tokio::process::Command::new(caminho);
     cmd.args(args)
         .stdin(std::process::Stdio::null())
@@ -329,7 +346,11 @@ pub async fn rodar_com_env(caminho: &Path, args: &[&str], tempo: Duration, pasta
     if let Some(p) = pasta {
         cmd.current_dir(p);
     }
-    crate::util::hide_console(&mut cmd);
+    if pesado {
+        crate::util::processo_pesado(&mut cmd);
+    } else {
+        crate::util::hide_console(&mut cmd);
+    }
     let inicio = std::time::Instant::now();
     let filho = cmd.spawn().map_err(|e| Erro::novo("programa_nao_abriu", format!("Não consegui abrir {}: {e}", caminho.display())))?;
     match tokio::time::timeout(tempo, filho.wait_with_output()).await {

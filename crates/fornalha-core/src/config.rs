@@ -31,6 +31,9 @@ pub struct Config {
     pub estudio: Estudio,
     /// Horário da fila da noite (hora local, 0–23). Padrão: das 23h às 7h.
     pub noite: Noite,
+    /// Uso do processador no trabalho pesado: "inteiro" (padrão) ou "metade" (enquanto a pessoa trabalha).
+    /// Prioridade baixa vale sempre.
+    pub processador: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

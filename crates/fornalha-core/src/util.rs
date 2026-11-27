@@ -13,6 +13,50 @@ pub fn hide_console(cmd: &mut tokio::process::Command) {
     let _ = cmd;
 }
 
+static METADE_DO_PROCESSADOR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// "Metade dos núcleos" (Ajustes → Uso do processador): o trabalho pesado deixa a outra metade para a pessoa.
+pub fn definir_metade_do_processador(metade: bool) {
+    METADE_DO_PROCESSADOR.store(metade, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn metade_do_processador() -> bool {
+    METADE_DO_PROCESSADOR.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Núcleos para o trabalho pesado no modo "metade" (None = todos).
+pub fn nucleos_do_pesado() -> Option<usize> {
+    metade_do_processador().then(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).div_ceil(2).max(1))
+}
+
+/// Programa pesado (Blender, a IA no processador): sem janela de console e sempre em prioridade baixa (o que a
+/// pessoa está usando vem primeiro; parado, ele usa o processador todo). No modo "metade", as bibliotecas de
+/// conta (PyTorch, NumPy) usam só metade dos núcleos.
+pub fn processo_pesado(cmd: &mut tokio::process::Command) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+        cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: só chama nice(2) no processo filho entre o fork e o exec (seguro para sinal, sem alocar)
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::nice(10);
+                Ok(())
+            });
+        }
+    }
+    if let Some(n) = nucleos_do_pesado() {
+        let n = n.to_string();
+        for k in ["OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"] {
+            cmd.env(k, &n);
+        }
+    }
+}
+
 /// (total, disponível) de RAM em MB.
 pub fn system_memory_mb() -> (u64, u64) {
     #[cfg(target_os = "linux")]

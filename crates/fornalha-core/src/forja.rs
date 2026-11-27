@@ -98,13 +98,13 @@ pub async fn rodar(blender: &Achado, pasta_dados: &Path, tarefa: &Value, tempo: 
     let principal_s = principal.to_string_lossy().into_owned();
     let t_s = arq_tarefa.to_string_lossy().into_owned();
     let r_s = arq_resultado.to_string_lossy().into_owned();
-    let saida = externas::rodar(
-        &blender.caminho,
-        &["-b", "--factory-startup", "--python-exit-code", "1", "-P", &principal_s, "--", &t_s, &r_s],
-        tempo,
-        None,
-    )
-    .await?;
+    let nucleos = crate::util::nucleos_do_pesado().map(|n| n.to_string());
+    let mut args: Vec<&str> = vec!["-b", "--factory-startup", "--python-exit-code", "1"];
+    if let Some(n) = nucleos.as_deref() {
+        args.extend(["-t", n]);
+    }
+    args.extend(["-P", &principal_s, "--", &t_s, &r_s]);
+    let saida = externas::rodar_pesado(&blender.caminho, &args, tempo, None, &[]).await?;
     let _ = std::fs::remove_file(&arq_tarefa);
     let resultado: Option<Value> = std::fs::read(&arq_resultado).ok().and_then(|b| serde_json::from_slice(&b).ok());
     let _ = std::fs::remove_file(&arq_resultado);

@@ -1027,6 +1027,7 @@ function pintarAjustes() {
   $("ajuste-pasta").textContent = info.pasta_projetos;
   const n = info.noite || { inicio_hora: 23, fim_hora: 7 };
   $("noite-inicio").value = n.inicio_hora; $("noite-fim").value = n.fim_hora;
+  $("processador").value = info.processador || "inteiro";
   $("versao").textContent = `Fornalha ${info.versao} · ${info.exe}`;
 }
 $("estilo-janela").addEventListener("change", async (e) => {
@@ -1036,6 +1037,9 @@ for (const id of ["noite-inicio", "noite-fim"]) $(id).addEventListener("change",
   const inicio_hora = Math.min(23, Math.max(0, parseInt($("noite-inicio").value || "23", 10)));
   const fim_hora = Math.min(23, Math.max(0, parseInt($("noite-fim").value || "7", 10)));
   try { await api("POST", "/janela/ajustes", { noite: { inicio_hora, fim_hora } }); info.noite = { inicio_hora, fim_hora }; mensagem("Horário da noite salvo."); } catch (err) { mensagem(err.message, "erro"); }
+});
+$("processador").addEventListener("change", async (e) => {
+  try { await api("POST", "/janela/ajustes", { processador: e.target.value }); info.processador = e.target.value; mensagem(e.target.value === "metade" ? "O trabalho pesado vai usar metade dos núcleos." : "O trabalho pesado vai usar o processador inteiro (em prioridade baixa)."); } catch (err) { mensagem(err.message, "erro"); }
 });
 $("ajuste-escolher-pasta").addEventListener("click", async () => {
   const p = await escolherPasta("Pasta dos projetos novos");

@@ -166,6 +166,21 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
    rápida na RX 580) e aparece a linha "3D pela IA no processador: instalado". Peça um personagem no nível
    **Máximo** na fila da noite. **Me diga:** quanto tempo levou no Ryzen 5 5500 e como ficou a malha.
 
+## 9f. Caminho grátis no Máximo: quatro vistas, cabelo fio a fio e Erethea (novo em 27/11)
+1. **Personagem pelo 3D da IA no processador, nível Máximo** (fila da noite; sem placa NVIDIA e sem API).
+   **Esperado:** depois da malha do TRELLIS.2, a Fornalha faz as **quatro vistas**: a malha vista de frente,
+   dos lados e de costas, a frente pelo próprio conceito, os lados e as costas refinados pelo Z-Image (no
+   processador) e o **rosto em close**; tudo volta na textura (4096 no Máximo). Na pasta do personagem fica
+   `<id>_vistas/` com as imagens. **Olhe:** o rosto (olhos e boca no lugar, não manchas), o tecido e o couro
+   parecidos com o conceito, sem remendo nem linha clara na roupa, os pés sem o chão do estúdio. **Me
+   diga:** quanto tempo as vistas levaram no Ryzen 5 5500 e uma nota de 0 a 100 comparando com o conceito.
+2. **Cabelo fio a fio na Erethea** (personagem humano de cabelo comprido no nível Máximo, montado na
+   Erethea 1.0.2 ou mais nova). **Esperado:** na Erethea o cabelo aparece fio a fio (os cards somem); na
+   Godot comum, os cards de sempre. **Olhe:** a coroa perto da risca (aqui, sem placa, ela saiu escura: me
+   diga se na RX 580 também sai).
+3. **Erethea pelo botão** (Máquina → Programas → Erethea → *Baixar*). **Esperado:** baixa o instalador
+   1.0.2, confere a soma e instala sem perguntar dentro da pasta da Fornalha.
+
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.
 Meta de referência (a do Ignis): perto de 60 MB e processador perto de 0%. Me diga o número.

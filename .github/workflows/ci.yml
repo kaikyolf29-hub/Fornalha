@@ -151,6 +151,38 @@ jobs:
             cargo test -p fornalha-core --test forja --test engine --test geracao --test workers -- --test-threads 1 --nocapture
           fi
 
+      # Pedido 14 da Erethea: a engine principal instalada pelo botão da Fornalha (instalador público,
+      # versão fixa e SHA-256 conferido) e os testes de engine rodando nela também, não só na Godot
+      - name: Baixar a Erethea pelo botão da Fornalha (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          src=crates/fornalha-core/src/programas.rs
+          versao=$(grep -o 'ERETHEA_VERSAO: &str = "[^"]*"' $src | grep -o '"[^"]*"' | tr -d '"')
+          fixada=$(grep -A1 'arquivo: "erethea-setup-x86_64.exe"' $src | grep -o '[0-9a-f]\{64\}')
+          publicada=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/kaikyolf29-hub/-Erethea-Engine/releases/tags/v$versao" \
+            | python -c "import json,sys; r=json.load(sys.stdin); print(next(a['digest'] for a in r['assets'] if a['name']=='erethea-setup-x86_64.exe').split(':')[-1])")
+          echo "Erethea $versao: soma fixada $fixada, publicada $publicada"
+          [ -n "$fixada" ] && [ "$fixada" = "$publicada" ]
+          ultima=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/kaikyolf29-hub/-Erethea-Engine/releases/latest | python -c "import json,sys; print(json.load(sys.stdin)['tag_name'])" || true)
+          [ "$ultima" != "v$versao" ] && echo "::warning::Há Erethea mais nova ($ultima): atualize ERETHEA_VERSAO e a soma no programas.rs"
+          base="$(cygpath -w "$HOME/ferramentas-fornalha")"
+          FORNALHA_HOME="$base" ./target/debug/fornalha-cli baixar-programa erethea
+          echo "FORNALHA_TESTE_ERETHEA=$(cygpath -w "$HOME/ferramentas-fornalha/dados/ferramentas/erethea/erethea.console.exe")" >> "$GITHUB_ENV"
+
+      - name: Testes de engine na Erethea (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          FORNALHA_TESTE_SAIDA: ${{ github.workspace }}/geracoes/erethea
+          RUST_BACKTRACE: "1"
+        run: |
+          mkdir -p geracoes/erethea
+          "$FORNALHA_TESTE_ERETHEA" --version || true
+          cargo test -p fornalha-core --test engine -- --test-threads 1 --nocapture
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

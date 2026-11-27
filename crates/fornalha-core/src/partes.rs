@@ -218,6 +218,7 @@ pub async fn cabeca_no_comfyui(
         "fornalha_cabeca_recorte.png",
         &pedido_da_cabeca(descricao),
         1024,
+        1024,
         semente,
         0.5,
     )

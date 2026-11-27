@@ -11,6 +11,64 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Rodada da madrugada (27/11): pedidos 13 a 15 da Erethea, templário mais detalhado, foco no grátis
+**Decisão do criador (27/11):** por enquanto sem dinheiro para API paga e sem placa NVIDIA, o foco é a
+**melhor qualidade pelo caminho grátis, no processador, no nível Máximo** (pode demorar). As APIs pagas e o
+caminho NVIDIA ficam prontos no app para quando ele ligar. A referência de qualidade é o homem de jaqueta
+feito pelo TRELLIS.2 no processador (CI de 26/11): bonito, mas meio borrado e menos fiel ao conceito,
+porque o 3D só vê a frente. Próximo passo combinado: **quatro vistas** (girar o modelo nas 4 direções,
+refinar cada vista pelo Z-Image imagem → imagem, a frente pelo próprio conceito, e projetar de volta na
+textura), tudo grátis no processador.
+- **Quatro vistas (`vistas.rs` + `fc_projetar.py`), o primeiro passo do caminho grátis:** depois da malha
+  do TRELLIS.2 (nível Qualidade e Máximo, 3D local), a malha é vista de frente, dos dois lados e de costas
+  sem luz (ortográfica, mesmo enquadramento); o conceito é alinhado à vista de frente pela silhueta (altura
+  pelo pé e alto da cabeça; na largura, linha a linha e pedaço por pedaço — cada perna, braço e o tronco com
+  o seu par —, com o chão do estúdio filtrado); os lados e as costas são refinados pelo Z-Image (imagem →
+  imagem, denoise 0,35) e o **rosto em close** (recorte do conceito ampliado, denoise 0,42); tudo volta
+  projetado na textura (peso pelo ângulo, ponto escondido não pega, confiança zero nos pés e na beira da
+  silhueta, trava onde a vista foge demais da cor que a malha tinha), assada em 2048 (4096 no Máximo). Sem o
+  Z-Image aberto, entram só o conceito e o rosto dele. **Provado aqui** (Blender 5.3, sem o Z-Image) na
+  jaqueta do CI de 26/11: o rosto deixa de ser mancha (olhos, sobrancelhas, rugas), o couro ganha as
+  rachaduras e o tom do conceito, a camisa os botões; pés limpos. Teste na forja (`quatro_vistas_...`) e o
+  CI "Quatro vistas" (jaqueta + Z-Image no processador) para o refino de lados, costas e rosto.
+- **Pedido 13 (guia do MCP da Erethea):** a linha da Erethea no AGENTS.md diz que o MCP liga sozinho na
+  1.0.2, `ERETHEA_MCP_PORT` para outra porta e `editor/erethea_fornalha/mcp_server=false` para desligar.
+- **Pedido 14 (instalador público):** Máquina → Programas baixa a Erethea 1.0.2 (instalador do Windows,
+  SHA-256 conferido) e instala sem perguntas na pasta da Fornalha (`/VERYSILENT ... /DIR=`); `baixar-programa
+  erethea` na linha de comando; o CI do Windows instala por esse botão e roda os testes de engine nela
+  (`FORNALHA_TESTE_ERETHEA`).
+- **Pedido 15 (cabelo fio a fio):** no nível Máximo o penteado também sai como `<id>_hair_strands`: malha
+  sem faces, cada fio uma cadeia de arestas da raiz à ponta (até 16 pontos), presa à cabeça (ou com os
+  pesos da malha-guia no cabelo comprido, que segue pescoço e costas), material `<id>_cabelo_fios_70`
+  (0,7 mm). O exportador liga as arestas no glTF (`use_mesh_edges`, Blender 5.3) só quando há fios, e tira
+  as arestas soltas das outras malhas (não viram linha na engine). No jogo (`fisica.gd`): na Erethea vira
+  um `EretheaHairStrands` (largura pelo nome do material, cor da raiz e da ponta pelo material, `skin` e
+  `skeleton` da malha importada) e os cards saem (o couro cabeludo e a camada de baixo ficam;
+  `fornalha/cabelo/cards_com_fios = true` mantém os dois); na Godot comum as linhas ficam escondidas e os
+  cards seguem. **Provado aqui:** o glb tem uma primitiva LINES com JOINTS/WEIGHTS e o material certo; na
+  Erethea do `main` (dc68b4e, compilada aqui, renderizador de compatibilidade no Xvfb, sem placa) os fios
+  aparecem fio a fio no lugar dos cards; na mesma Erethea sem os fios e na Godot, os cards. **Visto:** a
+  coroa (perto da risca) fica escura nos fios, mesmo com os cards por baixo — vem do sombreamento dos fios
+  nesse renderizador, não dos dados (pedido para a Erethea abaixo). Falta provar no Vulkan e numa placa.
+- **Templário pelas peças no manequim (`create_garment`):** lâminas na ombreira, cotoveleira e sabatão
+  (`laminas`), cintos cruzados (`inclinacao`), **rebites** pela beira das placas e tachas no cinto (tipo
+  novo `rebites`), metal com riscos, manchas e pontos de uso (`desgaste`), cruz do peito assentada como
+  decalque (`conformar`), correia pendente, broche, bainha com boca, ponteira, guarda e pomo, barra da
+  sobreveste em V com bordado, pano sobre o ombro direito, **elmo fechado** (`forma: "elmo_fechado"`:
+  frente chata, nervura, topo achatado) com fendas, respiro e testeira; `perto_de` para cotoveleira; erro
+  do adorno diz onde a parte está. `dress_character` ganhou `arma` e `escudo`. A cadeia inteira pela linha
+  de comando (roupa → vestir com espada → conferir e corrigir → golpe de espada → ver) **aprovada pela
+  régua**. **Honesto:** não está igual à foto. A composição bate (cruzes, cintos, bainha, broche, barra), mas
+  pano liso sem caimento, ombreira e manoplas sem articulação, porte do manequim básico; cascas no manequim
+  têm esse teto. O templário pelo 3D da IA no processador (CI de 27/11, fluxo reduzido, 3,9 h) tem cara de
+  armadura de verdade, mas seguiu o conceito do Z-Image (duas ombreiras, sem o capuz por cima do elmo) —
+  por isso o próximo passo é a fidelidade ao conceito (quatro vistas) e, com a foto da pessoa, ela entra
+  direto como imagem (sem conceito no meio).
+- **Comparação com a referência (`compare_reference`):** o personagem entra na animação de parado (ou na
+  pose de repouso), não no primeiro quadro do golpe; a esfera de 1 m que o importador de glTF cria para
+  desenhar ossos saía na conta do enquadramento (personagem minúsculo) e agora sai logo depois de importar;
+  sem céu HDRI, os reflexos veem um estúdio cinza (o metal saía preto contra o fundo escuro).
+
 ### Rodada da noite (26/11): as duas etapas — estúdio, régua visual, roupa no manequim, soco
 Pedido do criador: separar o que falta em duas etapas e ir até o fim; a IA (e a pessoa) **verem** o
 movimento e mexerem nele; roupa feita separada, com detalhe, depois vestida no manequim, depois o
@@ -234,7 +292,9 @@ a referência; mola nas mechas.
   e 0 avisos da engine. O `run_test` na Erethea agora roda os dois testes (o `--agent-test` dela, com
   desempenho e avisos, e o da Fornalha, com o jogador andando e o inimigo reagindo) e junta. O aviso da
   4.8 sobre ponto do BlendSpace sem nome foi corrigido (`_ponto_no_blend`, que continua valendo na 4.6).
-  O CI da Fornalha continua na Godot 4.6.1 (sem build da Erethea para baixar): a prova na Erethea é daqui.
+  Desde 27/11 a Erethea tem instalador público (Windows, 1.0.2): a Fornalha baixa e instala pelo botão
+  (Máquina → Programas, SHA-256 do `digest` da release conferido) e o CI do Windows roda os testes de
+  engine também nela (`FORNALHA_TESTE_ERETHEA`), além da Godot 4.6.1. No Linux ainda não há build público.
 Falta na Etapa 1: o CI das gerações verde no Windows e no Linux, e o teste no PC do criador.
 
 ### Teste no PC do criador (RX 580 2048SP, Windows 11, 25/11) — relatório da sessão local
@@ -729,7 +789,13 @@ está abaixo: cabelo fio a fio (#40), pele que segue a superfície (#39), terren
 #50), sombras por ray tracing e de contato, materiais do glTF que a Godot ignora (coat, anisotropia, sheen
 do cabelo e da córnea da Fornalha, #44) e a ponte de 26/11 (#54: roda o `montar.gd` do projeto quando há
 `World/mapa/mapa.json`). Os pedidos 10 a 12 dela para a Fornalha foram atendidos (ver a rodada da noite).
-**Pedido novo (26/11):**
+**Pedido novo (27/11):**
+7. **Cabelo fio a fio escuro perto da risca:** com o penteado da Fornalha (`<id>_hair_strands`, ~10 mil
+   fios de 0,7 mm, pedido 15 de vocês atendido), no renderizador de compatibilidade (Xvfb, sem placa) a
+   região da coroa perto da risca sai quase preta nos fios, mesmo com os cards e a camada de baixo atrás; os
+   cards no mesmo lugar ficam claros. Parece a luz/normal dos fios quase deitados na risca. Confiram no
+   Vulkan; se for do construtor das fitas, um piso de luz ambiente nos fios resolveria.
+**Pedido de 26/11:**
 6. **Visual anime nativo:** contorno por pós-processo (profundidade + normal, grossura em pixels) e luz em
    faixas como opção de material/ambiente. A Fornalha já faz no script do jogo (`anime.gdshader` +
    `contorno.gdshader` pela casca invertida, ligado por `guia_visual.render = "anime"` na bíblia); com a

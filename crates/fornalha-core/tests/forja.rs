@@ -579,3 +579,39 @@ async fn roupa_moderna_de_jaqueta() {
     }
     assert_eq!(r["estatisticas"]["qa"]["passou"], true, "{}", r["estatisticas"]["qa"]);
 }
+
+/// Quatro vistas sem o motor de imagem: a malha é vista de frente, dos lados e de costas (sem luz) e as
+/// vistas voltam projetadas numa textura nova (o caminho do 3D pela IA; aqui num objeto da Forja).
+#[tokio::test]
+async fn quatro_vistas_projetam_de_volta_na_textura() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let glb = tmp.path().join("barril.glb");
+    forja::rodar(&blender, tmp.path(), &json!({"tarefa": "objeto", "objeto": {"tipo": "barril", "id": "barril"}, "saida": glb}), TEMPO)
+        .await
+        .unwrap();
+    let pasta = tmp.path().join("vistas");
+    let r = forja::rodar(&blender, tmp.path(), &json!({"tarefa": "vistas", "entrada": glb, "pasta": pasta}), TEMPO).await.unwrap();
+    for v in ["frente", "esquerda", "costas", "direita"] {
+        assert!(pasta.join(format!("vista_{v}.png")).is_file(), "sem a vista {v}: {r}");
+    }
+    let imagens: serde_json::Map<String, serde_json::Value> =
+        ["frente", "esquerda", "costas", "direita"].iter().map(|v| (v.to_string(), json!(pasta.join(format!("vista_{v}.png"))))).collect();
+    let saida = tmp.path().join("barril_vistas.glb");
+    let p = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "projetar", "entrada": glb, "vistas": pasta.join("vistas.json"), "imagens": imagens, "saida": saida, "lado": 512}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert!(saida.is_file(), "{p}");
+    let cob = &p["projecao"]["malhas"][0]["cobertura"];
+    assert!(cob["frente"].as_f64().unwrap() > 0.05 && cob["costas"].as_f64().unwrap() > 0.05, "cobertura: {cob}");
+    // a textura nova vai dentro do glb
+    let b = std::fs::read(&saida).unwrap();
+    let n = u32::from_le_bytes(b[12..16].try_into().unwrap()) as usize;
+    let g: serde_json::Value = serde_json::from_slice(&b[20..20 + n]).unwrap();
+    assert!(g["images"].as_array().is_some_and(|i| !i.is_empty()), "sem imagem no glb");
+}

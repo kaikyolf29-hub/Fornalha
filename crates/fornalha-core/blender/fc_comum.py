@@ -233,6 +233,18 @@ def caixa_envolvente(objs):
     return mn, mx
 
 
+def tirar_ajudantes_do_gltf():
+    """O importador de glTF do Blender cria uma esfera de 1 m para desenhar os ossos (coleção
+    glTF_not_exported). Ela não é do modelo: entrava na conta do enquadramento (a comparação saía com o
+    personagem pequeno) e podia entrar numa junção de malhas. Sai logo depois de importar."""
+    col = bpy.data.collections.get("glTF_not_exported")
+    if col is None:
+        return
+    for o in list(col.objects):
+        bpy.data.objects.remove(o, do_unlink=True)
+    bpy.data.collections.remove(col)
+
+
 def exportar_glb(caminho, selecionados=None, animacoes=True, imagens=None):
     if PBR["ativo"]:
         uv_mundo(selecionados if selecionados is not None else list(bpy.context.scene.objects))
@@ -256,6 +268,21 @@ def exportar_glb(caminho, selecionados=None, animacoes=True, imagens=None):
     )
     if imagens:
         opcoes["export_image_format"] = imagens  # "JPEG": arquivo bem menor (mundo, vegetação)
+    objs = selecionados if selecionados is not None else list(bpy.context.scene.objects)
+    if any(o.type == "MESH" and o.get("fornalha_fios") for o in objs):
+        # cabelo fio a fio: as arestas soltas viram LINES no glTF (o nome da opção mudou no Blender 4.x).
+        # Nas outras malhas, aresta solta é sobra invisível: sai, para não virar linha na engine
+        opcoes["use_mesh_edges"] = True
+        opcoes["export_loose_edges"] = True
+        for o in objs:
+            if o.type == "MESH" and not o.get("fornalha_fios") and o.data.users == 1:
+                bm = bmesh.new()
+                bm.from_mesh(o.data)
+                soltas = [e for e in bm.edges if not e.link_faces]
+                if soltas:
+                    bmesh.ops.delete(bm, geom=soltas, context="EDGES")
+                    bm.to_mesh(o.data)
+                bm.free()
     # Algumas opções mudam de nome entre versões: tira a que o exportador não conhece e tenta de novo.
     for _ in range(len(opcoes)):
         try:
@@ -326,6 +353,29 @@ def _preparar_render(largura, altura, amostras=24):
                 arv.links.new(caminho_luz.outputs["Is Camera Ray"], mistura.inputs[0])
                 arv.links.new(luz.outputs["Background"], mistura.inputs[1])
                 arv.links.new(fundo.outputs["Background"], mistura.inputs[2])
+                arv.links.new(mistura.outputs["Shader"], saida.inputs["Surface"])
+            elif not CEU["hdri"] and not arv.nodes.get("estudio_reflexo"):
+                # sem céu HDRI, o metal refletia só o fundo escuro e saía preto (a foto de referência é
+                # de estúdio): os reflexos veem um estúdio cinza, claro em cima e escuro embaixo; a
+                # câmera e a luz difusa continuam como antes
+                coord = arv.nodes.new("ShaderNodeTexCoord")
+                sep = arv.nodes.new("ShaderNodeSeparateXYZ")
+                faixa = arv.nodes.new("ShaderNodeMapRange")
+                faixa.inputs["From Min"].default_value = -0.6
+                faixa.inputs["From Max"].default_value = 0.9
+                faixa.inputs["To Min"].default_value = 0.05
+                faixa.inputs["To Max"].default_value = 0.75
+                estudio = arv.nodes.new("ShaderNodeBackground")
+                estudio.name = "estudio_reflexo"
+                arv.links.new(coord.outputs["Generated"], sep.inputs[0])
+                arv.links.new(sep.outputs["Z"], faixa.inputs["Value"])
+                arv.links.new(faixa.outputs["Result"], estudio.inputs["Color"])
+                caminho_luz = arv.nodes.new("ShaderNodeLightPath")
+                mistura = arv.nodes.new("ShaderNodeMixShader")
+                saida = next(n for n in arv.nodes if n.type == "OUTPUT_WORLD")
+                arv.links.new(caminho_luz.outputs["Is Glossy Ray"], mistura.inputs[0])
+                arv.links.new(fundo.outputs["Background"], mistura.inputs[1])
+                arv.links.new(estudio.outputs["Background"], mistura.inputs[2])
                 arv.links.new(mistura.outputs["Shader"], saida.inputs["Surface"])
     else:
         mundo.color = (0.045, 0.04, 0.05)

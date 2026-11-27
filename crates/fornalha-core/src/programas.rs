@@ -1,6 +1,8 @@
-//! Baixar o Blender e a Godot para a pasta da Fornalha, só quando a pessoa clica (Máquina →
+//! Baixar o Blender, a Godot e a Erethea para a pasta da Fornalha, só quando a pessoa clica (Máquina →
 //! Programas → Baixar) ou pede pela linha de comando. Versões fixas, conferidas pela soma publicada
-//! pelo próprio projeto (Blender: SHA-256 de download.blender.org; Godot: SHA-512 de SHA512-SUMS.txt).
+//! pelo próprio projeto (Blender: SHA-256 de download.blender.org; Godot: SHA-512 de SHA512-SUMS.txt;
+//! Erethea: SHA-256 do "digest" do instalador na release do GitHub). A Erethea vem como instalador do
+//! Windows (sem perguntas, na pasta da Fornalha); no Linux ainda não há build público.
 //!
 //! O núcleo continua sem HTTPS de saída: o download é o `curl` do sistema (no Windows 10/11 o de
 //! System32) e a extração é o `tar` do sistema (no Windows o bsdtar de System32, que abre zip). Os
@@ -40,8 +42,9 @@ pub struct Download {
 
 pub const BLENDER_VERSAO: &str = "5.3.0";
 pub const GODOT_VERSAO: &str = "4.6.1";
+pub const ERETHEA_VERSAO: &str = "1.0.2";
 
-/// O download do programa para o sistema (só Blender e Godot; a Erethea é do criador).
+/// O download do programa para o sistema (a Erethea só no Windows: é o build público que existe).
 pub fn download(programa: Programa, windows: bool) -> Option<Download> {
     let d = match (programa, windows) {
         (Programa::Blender, true) => Download {
@@ -90,7 +93,16 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             ),
             tamanho: "≈ 70 MB",
         },
-        (Programa::Erethea, _) => return None,
+        (Programa::Erethea, true) => Download {
+            programa,
+            versao: ERETHEA_VERSAO,
+            url: "https://github.com/kaikyolf29-hub/-Erethea-Engine/releases/download/v1.0.2/erethea-setup-x86_64.exe",
+            espelhos: &[],
+            arquivo: "erethea-setup-x86_64.exe",
+            soma: Soma::Sha256("82f5b737ea80a519c596f159d445eb2a2e01f1354e79697c0b00c7f63d286f9f"),
+            tamanho: "≈ 100 MB",
+        },
+        (Programa::Erethea, false) => return None,
     };
     Some(d)
 }
@@ -111,7 +123,7 @@ fn log(paths: &Paths, p: Programa) -> PathBuf {
 /// Situação dos downloads, para a janela: baixando (com MB já recebidos) e a última linha do registro.
 pub fn estado(paths: &Paths) -> Value {
     let mut m = serde_json::Map::new();
-    for p in [Programa::Blender, Programa::Godot] {
+    for p in [Programa::Blender, Programa::Godot, Programa::Erethea] {
         let Some(d) = download(p, cfg!(windows)) else { continue };
         let parte = pasta(paths).join(format!("{}.parte", d.arquivo));
         let mb = std::fs::metadata(&parte).map(|m| m.len() / (1024 * 1024)).unwrap_or(0);
@@ -191,6 +203,7 @@ pub fn executavel(paths: &Paths, p: Programa) -> PathBuf {
     match p {
         Programa::Blender => pasta(paths).join("blender").join(exe("blender")),
         Programa::Godot if cfg!(windows) => pasta(paths).join("godot").join("godot_console.exe"),
+        Programa::Erethea if cfg!(windows) => pasta(paths).join("erethea").join("erethea.console.exe"),
         _ => pasta(paths).join(p.id()).join(p.id()),
     }
 }
@@ -248,6 +261,9 @@ async fn instalar(paths: &Paths, d: &Download, base: &Path) -> Resultado<PathBuf
     // (a versão antiga continua funcionando até lá)
     let arquivo = base.join(d.arquivo);
     std::fs::rename(&parte, &arquivo).map_err(|e| Erro::io(&arquivo, e))?;
+    if p == Programa::Erethea {
+        return instalar_erethea(paths, d, base, &arquivo).await;
+    }
     let novo = base.join(format!("{}.novo", p.id()));
     let _ = std::fs::remove_dir_all(&novo);
     std::fs::create_dir_all(&novo).map_err(|e| Erro::io(&novo, e))?;
@@ -302,6 +318,38 @@ async fn instalar(paths: &Paths, d: &Download, base: &Path) -> Resultado<PathBuf
     let exe = executavel(paths, p);
     if !exe.is_file() {
         return Err(Erro::novo("download_estranho", format!("Depois de extrair, o {} não apareceu em {}.", p.nome(), exe.display())));
+    }
+    std::fs::write(
+        destino.join("fornalha-download.json"),
+        serde_json::to_string_pretty(&json!({"versao": d.versao, "url": d.url, "baixado_em": crate::util::agora_iso()}))
+            .unwrap_or_default(),
+    )
+    .ok();
+    Ok(exe)
+}
+
+/// A Erethea vem como instalador do Windows (Inno Setup): roda sem perguntas, só para esta pessoa e na
+/// pasta da Fornalha (onde a detecção procura). Uma versão antiga ali é atualizada pelo próprio instalador.
+async fn instalar_erethea(paths: &Paths, d: &Download, base: &Path, instalador: &Path) -> Resultado<PathBuf> {
+    let p = d.programa;
+    let destino = base.join(p.id());
+    registrar(paths, p, "instalando (sem perguntas, na pasta da Fornalha)");
+    let dir = format!("/DIR={}", destino.display());
+    let s = crate::externas::rodar(
+        instalador,
+        &["/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", &dir],
+        Duration::from_secs(30 * 60),
+        Some(base),
+    )
+    .await;
+    let _ = std::fs::remove_file(instalador);
+    let s = s.map_err(|e| Erro::novo("instalacao_falhou", format!("Não consegui abrir o instalador da Erethea: {}", e.mensagem)))?;
+    if !s.ok() {
+        return Err(Erro::novo("instalacao_falhou", format!("O instalador da Erethea falhou: {}", s.final_da_saida(3))));
+    }
+    let exe = executavel(paths, p);
+    if !exe.is_file() {
+        return Err(Erro::novo("download_estranho", format!("Depois de instalar, a Erethea não apareceu em {}.", exe.display())));
     }
     std::fs::write(
         destino.join("fornalha-download.json"),
@@ -380,7 +428,12 @@ mod testes {
                 }
             }
         }
-        assert!(download(Programa::Erethea, true).is_none());
+        // a Erethea: instalador público só para Windows, com o SHA-256 do "digest" da release
+        let e = download(Programa::Erethea, true).unwrap();
+        assert!(e.url.starts_with("https://github.com/kaikyolf29-hub/-Erethea-Engine/releases/download/v") && e.url.ends_with(e.arquivo));
+        assert!(e.url.contains(&format!("/v{}/", e.versao)), "a versão do endereço é a fixada: {e:?}");
+        assert!(matches!(e.soma, Soma::Sha256(h) if h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit())));
+        assert!(download(Programa::Erethea, false).is_none(), "no Linux ainda não há build público");
     }
 
     #[test]

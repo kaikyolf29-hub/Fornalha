@@ -335,8 +335,9 @@ mod nucleo {
         let p = match v["id"].as_str() {
             Some("blender") => Programa::Blender,
             Some("godot") => Programa::Godot,
+            Some("erethea") => Programa::Erethea,
             _ => {
-                return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "A Fornalha baixa só o Blender e a Godot."}})))
+                return (StatusCode::BAD_REQUEST, Json(json!({"erro": {"mensagem": "A Fornalha baixa o Blender, a Godot e a Erethea."}})))
                     .into_response()
             }
         };

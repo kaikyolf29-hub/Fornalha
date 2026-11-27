@@ -719,6 +719,40 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
         if pronto {
             if let Some(info) = malha_pela_ia(f, &img, &alta, &id, seed, nivel == crate::niveis::Nivel::Maximo, &mut avisos).await {
                 let base = crate::pacotes::para_a_forja(&f.paths).unwrap_or(json!({}));
+                // quatro vistas (Qualidade e Máximo, 3D local): a textura borrada do processador fica nítida e
+                // fiel ao conceito (frente pelo conceito, lados e costas refinados pelo Z-Image, rosto em close)
+                let mut alta = alta.clone();
+                let mut vistas = Value::Null;
+                if info["modelo"] == "trellis2-comfyui" && matches!(nivel, crate::niveis::Nivel::Qualidade | crate::niveis::Nivel::Maximo) {
+                    let com_vistas = pasta.join(format!("{id}_ia_vistas.glb"));
+                    let porta = porta_com_motor_de_imagem(f).await;
+                    let descricao = descrever_para_3d(&p, &ficha);
+                    match blender(f).await {
+                        Ok(b) => match crate::vistas::refinar_textura(
+                            &b,
+                            &f.paths.data_dir,
+                            porta,
+                            &alta,
+                            Some(&img),
+                            &descricao,
+                            &pasta.join(format!("{id}_vistas")),
+                            seed,
+                            &com_vistas,
+                            crate::vistas::lado_da_textura(nivel == crate::niveis::Nivel::Maximo),
+                            None,
+                        )
+                        .await
+                        {
+                            Ok(v) => {
+                                avisos.extend(v["avisos"].as_array().into_iter().flatten().filter_map(|a| a.as_str().map(String::from)));
+                                vistas = v;
+                                alta = com_vistas;
+                            }
+                            Err(e) => avisos.push(format!("As quatro vistas não saíram ({}): ficou a textura da IA.", e.mensagem)),
+                        },
+                        Err(e) => avisos.push(format!("Sem o Blender para as quatro vistas ({}).", e.mensagem)),
+                    }
+                }
                 // por partes (Qualidade e Máximo): a cabeça recortada do conceito, refinada em close e
                 // feita malha própria, entra no lugar da cabeça do corpo
                 // só com placa (CUDA/ROCm): no processador do CI a cabeça em close passou de 6 h só na
@@ -776,6 +810,7 @@ pub async fn criar_personagem(f: &Fornalha, a: ArgsPersonagem, quem: &str) -> Re
                     Ok(mut rr) => {
                         modelo_3d = info["modelo"].as_str().unwrap_or("trellis2-comfyui").to_string();
                         rr["ia"] = info;
+                        rr["vistas"] = vistas;
                         arquivos.insert("conceito_3d".into(), json!(img));
                         r = rr;
                     }
@@ -1005,6 +1040,16 @@ async fn pode_3d_pela_ia(f: &Fornalha) -> bool {
     (crate::comfyui::instalacao(&f.paths).is_some() && crate::comfyui::motor_vulkan(&f.paths).is_none())
         || crate::comfyui::instalacao_3d(&f.paths).is_some()
         || crate::comfyui::consultar(f.porta_comfyui()).await.conectado
+}
+
+/// O ComfyUI aberto que tem o Z-Image (o do 3D no processador ou o principal), para o refino das vistas.
+async fn porta_com_motor_de_imagem(f: &Fornalha) -> Option<u16> {
+    for porta in [crate::comfyui::porta_3d(f.porta_comfyui()), f.porta_comfyui()] {
+        if crate::comfyui::modelo_de_imagem(porta).await.is_some() {
+            return Some(porta);
+        }
+    }
+    None
 }
 
 /// `completo` (nível Máximo): no processador, o fluxo inteiro do TRELLIS.2 (uma noite) em vez do reduzido.

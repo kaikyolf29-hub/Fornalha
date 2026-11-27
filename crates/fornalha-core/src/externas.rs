@@ -169,6 +169,10 @@ pub fn candidatos(programa: Programa, a: &Ambiente) -> Vec<PathBuf> {
                     c.push(h.join(".local/share/erethea/erethea"));
                 }
             }
+            if a.windows {
+                // instalada pelo botão Baixar da Fornalha (o executável de linha de comando primeiro)
+                c.push(a.pasta_fornalha.join("erethea").join("erethea.console.exe"));
+            }
             c.push(a.pasta_fornalha.join("erethea").join(exe("erethea")));
         }
     }

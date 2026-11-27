@@ -447,6 +447,56 @@ def malha_de_fios(nome, P, cor, n_jogo, largura=0.0005, arm=None, semente=5):
     return obj
 
 
+LARGURA_DO_FIO = 0.0007  # 0,7 mm: com ~10 mil fios a fita cobre como cabelo (o fio real tem 0,07 mm)
+
+
+def linhas_de_fios(nome, fios, cor, largura=LARGURA_DO_FIO, arm=None, pesar=None):
+    """O penteado fio a fio para a engine que desenha fios (Erethea: EretheaHairStrands): uma malha SEM
+    faces, cada fio uma cadeia de arestas da raiz para a ponta (0 → 1, 1 → 2...), sem vértice solto; o
+    glTF grava LINES (exportar_glb liga as arestas quando ela está no arquivo). Nome <id>_hair_strands e a
+    largura do fio no nome do material (_cabelo_fios_70 = 0,7 mm). Presa à cabeça (peso 1,0 no head) ou
+    pelos pesos que `pesar(obj, pontos)` der (cabelo comprido segue pescoço e costas, como os cards)."""
+    V, E = [], []
+    for f in fios:
+        f = np.asarray(f, dtype=np.float64)
+        if len(f) < 2:
+            continue
+        base = len(V)
+        V.extend(f.tolist())
+        E.extend((base + i, base + i + 1) for i in range(len(f) - 1))
+    if not E:
+        return None
+    malha = bpy.data.meshes.new(f"{nome}_hair_strands")
+    malha.from_pydata(V, E, [])
+    obj = bpy.data.objects.new(malha.name, malha)
+    bpy.context.scene.collection.objects.link(obj)
+    mat = bpy.data.materials.new(f"{nome}_cabelo_fios_{int(round(largura * 1e5))}")
+    mat.use_nodes = True
+    bsdf = next(nd for nd in mat.node_tree.nodes if nd.type == "BSDF_PRINCIPLED")
+    cl = np.array(c.cor_hex(cor))
+    lum = float(cl @ np.array([0.2126, 0.7152, 0.0722]))
+    cl = (lum + (cl - lum) * 0.75) * 0.7
+    bsdf.inputs["Base Color"].default_value = (*cl.tolist(), 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.45
+    mat["fornalha_cabelo"] = True
+    malha.materials.append(mat)
+    obj["fornalha_fios"] = True
+    obj["fios"] = sum(1 for f in fios if len(f) >= 2)
+    if arm is not None:
+        if pesar is not None:
+            pesar(obj, np.array(V))
+        else:
+            g = obj.vertex_groups.new(name="head")
+            g.add(list(range(len(V))), 1.0, "REPLACE")
+        mod = obj.modifiers.new("esqueleto", "ARMATURE")
+        mod.object = arm
+        obj.parent = arm
+        obj.matrix_parent_inverse = arm.matrix_world.inverted()
+    # no render aparecem os cards; esta malha é a da engine que desenha fios
+    obj.hide_render = True
+    return obj
+
+
 # ------------------------------------------------------------------ cards em 4 camadas (padrão AAA)
 # Bíblia técnica, seção 4: o penteado de fios é a FONTE; o jogo recebe
 #   camada 0: couro cabeludo (casca a 0,5 mm com fade na linha do cabelo),
@@ -809,11 +859,18 @@ def normais_de_capsula(cards, pontos):
         print(f"[cabelo] normais de cápsula falharam: {e}")
 
 
-def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n=1.0, res_atlas=2048, grisalho=0.0):
-    """Pipeline completo de cabelo AAA. Devolve [couro_cabeludo, cards] (objetos do jogo)."""
+def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n=1.0, res_atlas=2048, grisalho=0.0, fios=0):
+    """Pipeline completo de cabelo AAA. Devolve [couro_cabeludo, cards] (objetos do jogo) e, com `fios`,
+    também o penteado fio a fio em linhas (nível Máximo)."""
     P, raios, campo = crescer_fios(corpo, pontos, cabeca_peso, estilo, devolver_campo=True)
     if P is None:
         return []
+    linhas = None
+    if fios:
+        rng_f = np.random.default_rng(11)
+        escolha = rng_f.choice(len(P), size=min(int(fios), len(P)), replace=False)
+        Q = P[escolha] @ np.array(corpo.matrix_world)[:3, :3].T + np.array(corpo.matrix_world)[:3, 3]
+        linhas = linhas_de_fios(nome, list(Q), cor, arm=arm)
     img_cor, img_dados, img_normal = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
     V, F, UV = cards_do_penteado(P, campo, pontos, escala_n=escala_n, longo=estilo != "curto")
     malha = bpy.data.meshes.new(f"{nome}_hair")
@@ -861,7 +918,7 @@ def cabelo_em_cards(nome, corpo, pontos, cabeca_peso, cor, estilo, arm, escala_n
             mod = o.modifiers.new("esqueleto", "ARMATURE")
             mod.object = arm
             o.parent = arm
-    return objs
+    return objs + ([linhas] if linhas is not None else [])
 
 
 # ---------------- cards guiados pela malha do penteado (médio e comprido) ----------------
@@ -1081,7 +1138,8 @@ def _rente(guia, corpo, rente, minimo=0.004):
     return movidos
 
 
-def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048, estilo=None, penteado="", corpo=None):
+def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, res_atlas=2048, estilo=None, penteado="", corpo=None,
+                  fios_por_card=0):
     """Cards traçados SOBRE a malha do penteado (o cabelo do pacote), da raiz à ponta, seguindo a
     direção dos fios dada pelo UV dela. A malha vira a camada de baixo (mais escura, cobre o couro) e
     os cards por cima dão os fios e a silhueta, sem espetar para fora da forma do penteado."""
@@ -1159,6 +1217,7 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
     img_cor, img_dados, img_normal = atlas_de_mechas(cor, res_atlas, grisalho=grisalho)
     verts, faces, uvs, tons = [], [], [], []
     comprimentos = []
+    trilhas = []  # fios em linhas (nível Máximo): nas mesmas trilhas dos cards, espalhados na largura
 
     def seguir(p, sentido, maximo):
         pts = [p]
@@ -1281,6 +1340,21 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
             rw = np.cumsum(rng.normal(0, 1, (len(linha), 2)), axis=0) / np.sqrt(np.arange(1, len(linha) + 1))[:, None]
             a_ = friz * 0.004 * sfr ** 1.5 * min(1.0, total / 0.3)
             pos += lados_ * (rw[:, 0] * a_)[:, None] + nrms * (np.abs(rw[:, 1]) * a_)[:, None]
+        if fios_por_card:
+            ss = sfr
+            wl = larg * np.minimum(1.0, 0.25 + ss * 12.0) * (1.0 - 0.65 * ss ** 1.5) / 2
+            ld = lados_ * np.cos(giro) + nrms * np.sin(giro)
+            # até ~16 pontos por fio: a Erethea curva a fita entre eles (mais pontos só pesam no arquivo)
+            passo_f = max(1, int(np.ceil(len(linha) / 16)))
+            for _ in range(int(fios_por_card)):
+                o_ = rng.uniform(-0.9, 0.9)
+                # cada fio sai um pouco da mecha rumo à ponta (o contorno não é uma fita lisa)
+                solto_f = rng.normal(0, 1, 3) * (0.0015 + 0.004 * friz) * (ss ** 1.5)[:, None]
+                f_ = pos + ld * (wl * o_)[:, None] + nrms * (rng.uniform(0, 0.0015)) + solto_f
+                idx_f = list(range(0, len(f_), passo_f))
+                if idx_f[-1] != len(f_) - 1:
+                    idx_f.append(len(f_) - 1)
+                trilhas.append(f_[idx_f])
         base = len(verts)
         for i in range(len(linha)):
             n_ = nrms[i]
@@ -1318,6 +1392,7 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
     # própria imagem (o glTF não leva nós de multiplicar: na engine ela chegava laranja e rala)
     _escurecer_camada_de_baixo(guia, cor)
     # pesos da malha-guia (o comprido segue pescoço e costas como o cabelo do pacote)
+    pesar = None
     if guia.vertex_groups:
         limpar_pesos_cabelo(guia)
         gv = {g.index: g.name for g in guia.vertex_groups}
@@ -1328,22 +1403,26 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
         for i, p in enumerate(V):
             kd.insert(Vector(p), i)
         kd.balance()
-        grupos = {}
-        for i, q in enumerate(verts):
-            perto = kd.find_n(Vector(q), 3)
-            soma = {}
-            tot = 0.0
-            for _co, j, d in perto:
-                w = 1.0 / max(d, 1e-4)
-                tot += w
-                for nome_g, peso in pesos_guia[j].items():
-                    soma[nome_g] = soma.get(nome_g, 0.0) + peso * w
-            for nome_g, peso in soma.items():
-                grupos.setdefault(nome_g, []).append((i, peso / tot))
-        for nome_g, lista in grupos.items():
-            g = cards.vertex_groups.new(name=nome_g)
-            for i, peso in lista:
-                g.add([i], peso, "REPLACE")
+
+        def pesar(obj, pontos):
+            grupos = {}
+            for i, q in enumerate(pontos):
+                perto = kd.find_n(Vector(q), 3)
+                soma = {}
+                tot = 0.0
+                for _co, j, d in perto:
+                    w = 1.0 / max(d, 1e-4)
+                    tot += w
+                    for nome_g, peso in pesos_guia[j].items():
+                        soma[nome_g] = soma.get(nome_g, 0.0) + peso * w
+                for nome_g, peso in soma.items():
+                    grupos.setdefault(nome_g, []).append((i, peso / tot))
+            for nome_g, lista in grupos.items():
+                g = obj.vertex_groups.new(name=nome_g)
+                for i, peso in lista:
+                    g.add([i], peso, "REPLACE")
+
+        pesar(cards, verts)
     elif arm is not None:
         g = cards.vertex_groups.new(name="head")
         g.add(list(range(len(cards.data.vertices))), 1.0, "REPLACE")
@@ -1359,6 +1438,11 @@ def cards_guiados(nome, guia, cor, arm, n_cards=800, semente=7, grisalho=0.0, re
                                "descola_do_penteado_cm": round(float(np.mean(deslocamentos)) * 100, 2) if deslocamentos else 0.0,
                                "estilo": est,
                                "comprimento_medio_cm": round(float(np.mean(comprimentos)) * 100, 1) if comprimentos else 0.0}
+    if trilhas:
+        linhas = linhas_de_fios(nome, trilhas, cor, arm=arm, pesar=pesar)
+        if linhas is not None:
+            cards["medidas_cabelo"]["fios_em_linhas"] = int(linhas["fios"])
+            return [cards, linhas]
     return [cards]
 
 

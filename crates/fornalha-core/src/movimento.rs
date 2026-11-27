@@ -689,7 +689,7 @@ pub struct ArgsRoupa {
     pub materiais: Option<Value>,
 }
 
-pub const TIPOS_DE_PARTE_DA_ROUPA: [&str; 4] = ["casca", "faixa", "saia", "adorno"];
+pub const TIPOS_DE_PARTE_DA_ROUPA: [&str; 5] = ["casca", "faixa", "saia", "adorno", "rebites"];
 
 /// create_garment: roupa ou armadura separada, feita no corpo do manequim, para vestir depois.
 pub async fn criar_roupa(f: &Fornalha, a: ArgsRoupa, quem: &str) -> Resultado<Value> {
@@ -699,7 +699,7 @@ pub async fn criar_roupa(f: &Fornalha, a: ArgsRoupa, quem: &str) -> Resultado<Va
         return Err(Erro::argumento(format!("Não achei o corpo {} (um personagem com esqueleto).", corpo.display())));
     }
     if a.pecas.is_empty() {
-        return Err(Erro::argumento("Diga as partes da roupa (pecas): casca, faixa, saia ou adorno."));
+        return Err(Erro::argumento("Diga as partes da roupa (pecas): casca, faixa, saia, adorno ou rebites."));
     }
     if a.pecas.len() > 200 {
         return Err(Erro::argumento("No máximo 200 partes por roupa."));
@@ -759,6 +759,10 @@ pub struct ArgsVestir {
     pub encaixar: bool,
     /// Onde gravar (padrão: o próprio personagem).
     pub saida: Option<String>,
+    /// Arma na mão direita depois de vestir (espada, machado, lanca, martelo, adaga, cajado).
+    pub arma: Option<String>,
+    /// Escudo na mão esquerda.
+    pub escudo: bool,
 }
 
 /// dress_character: roupa por cima de um personagem que já se mexe.
@@ -775,10 +779,18 @@ pub async fn vestir(f: &Fornalha, a: ArgsVestir, quem: &str) -> Resultado<Value>
     if !["auto", "sim", "nao"].contains(&rigido.as_str()) {
         return Err(Erro::argumento("rigido: auto, sim ou nao."));
     }
+    if let Some(arma) = a.arma.as_deref() {
+        if arma != "nenhuma" && !crate::forja::ARMAS.contains(&arma) {
+            return Err(Erro::argumento(format!("arma: {} ou nenhuma.", crate::forja::ARMAS.join(", "))));
+        }
+    }
+    let escudo = a.escudo || a.arma.as_deref() == Some("escudo");
+    let arma = a.arma.as_deref().filter(|x| *x != "escudo");
     let saida = a.saida.as_deref().map(|s| f.resolver_no_projeto(&p, s)).unwrap_or_else(|| arquivo.clone());
     let r = forjar(
         f,
-        &json!({"tarefa": "vestir", "entrada": arquivo, "roupa": roupa, "saida": saida, "rigido": rigido, "encaixar": a.encaixar, "materiais": null}),
+        &json!({"tarefa": "vestir", "entrada": arquivo, "roupa": roupa, "saida": saida, "rigido": rigido, "encaixar": a.encaixar, "materiais": null,
+                "arma": arma, "escudo": escudo}),
     )
     .await?;
     recibo(f, &p, &saida, "forja-3d", None, None, json!({"bancada": "roupa", "roupa": a.roupa, "rigido": rigido}), quem).await?;

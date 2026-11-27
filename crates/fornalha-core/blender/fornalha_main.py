@@ -336,6 +336,7 @@ def _importar(caminho):
     ext = os.path.splitext(caminho)[1].lower()
     if ext in (".glb", ".gltf"):
         bpy.ops.import_scene.gltf(filepath=caminho)
+        c.tirar_ajudantes_do_gltf()
     elif ext == ".obj":
         bpy.ops.wm.obj_import(filepath=caminho)
     elif ext == ".fbx":
@@ -1199,6 +1200,29 @@ def tarefa_vestir(t):
     if escala:
         resumo["escala_do_encaixe"] = round(escala, 3)
     acoes = sorted((a for a in bpy.data.actions if a.use_fake_user), key=lambda a: a.name)
+    arma = t.get("arma")
+    if arma and arma != "nenhuma" or t.get("escudo"):
+        import fc_armas_pbr
+
+        nome = os.path.splitext(os.path.basename(t.get("saida") or t["entrada"]))[0]
+        presos = {o.parent_bone for o in bpy.context.scene.objects if o.parent == arm and o.parent_type == "BONE"}
+        if arma and arma != "nenhuma":
+            if presos & {"hand_r", "RightHand", "mixamorig:RightHand"}:
+                raise ValueError("o personagem já tem uma arma na mão direita")
+            if arma == "espada":
+                o = fc_armas_pbr.espada_longa(nome, t.get("cores_arma"))
+            else:
+                import fc_armas
+
+                o = fc_armas.criar_arma({"tipo": arma, "id": f"{nome}_{arma}", "escala": 1.0})
+            fc_armas_pbr.prender_na_mao(o, arm, "r")
+            if acoes and "thumb_01_r" not in arm.data.bones:
+                resumo["giro_da_arma_graus"] = fc_armas_pbr.acertar_giro(o, arm, acoes, "r")
+            resumo["arma"] = arma
+        if t.get("escudo"):
+            e = fc_armas_pbr.escudo_pipa(nome)
+            fc_armas_pbr.prender_na_mao(e, arm, "l", escudo=True)
+            resumo["escudo"] = True
     res = []
     arquivos = {}
     saida = t.get("saida") or t["entrada"]
@@ -1438,6 +1462,9 @@ TAREFAS = {
     "ver_movimento": tarefa_ver_movimento,
     "editar_movimento": tarefa_editar_movimento,
     "roupa": tarefa_roupa,
+    "vistas": lambda t: __import__("fc_projetar").tarefa_vistas(t),
+    "projetar": lambda t: __import__("fc_projetar").tarefa_projetar(t),
+    "projetar_folha": lambda t: __import__("fc_projetar").tarefa_folha(t),
 }
 
 

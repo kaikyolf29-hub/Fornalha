@@ -19,7 +19,7 @@ Uso:
   fornalha-cli modelos                     modelos de placa (TRELLIS.2, UniRig, HY-Motion)
   fornalha-cli pacotes                     pacotes de conteúdo (MakeHuman, animações, materiais)
   fornalha-cli baixar-pacote <id>          baixa um pacote de conteúdo CC0 (makehuman, animacoes, materiais)
-  fornalha-cli baixar-programa <id>        baixa o Blender ou a Godot (versão fixa, soma conferida) para a pasta da Fornalha
+  fornalha-cli baixar-programa <id>        baixa o Blender, a Godot ou a Erethea (versão fixa, soma conferida) para a pasta da Fornalha
   fornalha-cli instalar-modelo <id> [--pular-pesos]   instala e verifica um modelo de placa
   fornalha-cli teste-bruto [--nivel qualidade|maximo|equilibrado|leve] [--casos protagonista,inimigo,zumbi,dragao] [--sem-engine]
                                            suíte de ponta a ponta (protagonista, inimigo armado, dragão, jogo na engine)
@@ -128,8 +128,9 @@ async fn principal() {
             let p = match args.get(1).map(String::as_str) {
                 Some("blender") => Programa::Blender,
                 Some("godot") => Programa::Godot,
+                Some("erethea") => Programa::Erethea,
                 _ => {
-                    eprintln!("Diga qual: blender ou godot.");
+                    eprintln!("Diga qual: blender, godot ou erethea (a Erethea só no Windows).");
                     std::process::exit(2);
                 }
             };

@@ -89,6 +89,25 @@ def _silhueta(mask):
     return {"altura_sobre_largura": round(float(h / w), 3), "preenchimento": round(float(mask.sum() / (h * w)), 3)}
 
 
+def _pose_parada(arm):
+    """A foto de referência é de alguém parado: o personagem entra na animação de parado (quadro 1) ou,
+    sem ela, na pose de repouso. O importador deixa ativa a primeira animação do arquivo (que pode ser um
+    golpe, agachado e virado)."""
+    ad = arm.animation_data
+    acoes = [a for a in bpy.data.actions if a.users or a.use_fake_user]
+    parado = next((a for a in acoes if a.name.lower().split("|")[-1] in ("parado", "idle")), None) or \
+        next((a for a in acoes if "parado" in a.name.lower() or "idle" in a.name.lower()), None)
+    if ad is not None:
+        ad.action = parado
+    for pb in arm.pose.bones:
+        pb.location = (0.0, 0.0, 0.0)
+        pb.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        pb.rotation_euler = (0.0, 0.0, 0.0)
+        pb.scale = (1.0, 1.0, 1.0)
+    bpy.context.scene.frame_set(1)
+    bpy.context.view_layer.update()
+
+
 def _bracos_para_baixo(arm, folga_graus=22.0):
     """Pose em T/A → braços quase junto do corpo (como nas fotos de referência): o braço gira em volta
     da frente até ficar a `folga_graus` da vertical."""
@@ -122,12 +141,14 @@ def tarefa(t):
         antes = set(bpy.data.objects)
         if arq.lower().endswith((".glb", ".gltf")):
             bpy.ops.import_scene.gltf(filepath=arq)
+            c.tirar_ajudantes_do_gltf()
         elif arq.lower().endswith(".obj"):
             bpy.ops.wm.obj_import(filepath=arq)
         else:
             bpy.ops.import_scene.fbx(filepath=arq)
         objs = [o for o in bpy.data.objects if o not in antes and o.type == "MESH"]
         for arm in [o for o in bpy.data.objects if o not in antes and o.type == "ARMATURE"]:
+            _pose_parada(arm)
             _bracos_para_baixo(arm)
         bpy.context.view_layer.update()
         refpx = _carregar(ref)

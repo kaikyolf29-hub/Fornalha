@@ -42,8 +42,9 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
 - Fornalha: `http://127.0.0.1:{porta}/mcp` (a Fornalha aberta na bandeja). Sem ela aberta, use o stdio com o
   caminho do programa (`"<caminho>/fornalha" --mcp`); a janela da Fornalha, em **Agentes**, mostra o comando
   certo para copiar.
-- Erethea: `http://127.0.0.1:{pe}/mcp` (ligue em Configurações do Editor › Erethea › MCP, ou
-  `ERETHEA_MCP_PORT={pe}`). Ferramentas da cena, `take_screenshot`, `run_test`, `get_errors`,
+- Erethea: `http://127.0.0.1:{pe}/mcp` (liga sozinho quando o projeto abre na Erethea 1.0.2 ou mais nova;
+  noutra porta, `ERETHEA_MCP_PORT=<porta>`; para desligar num projeto, `editor/erethea_fornalha/mcp_server=false`
+  no `project.godot`). Ferramentas da cena, `take_screenshot`, `run_test`, `get_errors`,
   `build_fornalha_scenes`, `check_export`.
 - Os arquivos de MCP para Claude Code, Cursor, VS Code/Copilot e Gemini CLI já estão nesta pasta. No Codex,
   cole no `~/.codex/config.toml`:
@@ -80,11 +81,13 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    Estúdio 3D da janela (estação Movimento).
 4. **Roupa separada, depois vestida**: com referência de roupa ou armadura, faça um manequim
    (`create_character` com `roupa: {{estilo: "manequim"}}`), faça a roupa no corpo dele com
-   `create_garment` (casca do corpo para peitoral, espaldar, ombreira, braçal, greva e camisa; faixa para
-   cinto, gola e punho; saia para túnica e sobreveste; adorno para cruz, rebite e fivela), olhe as imagens
-   (sozinha e no manequim de barro, frente, lado e costas) e ajuste até ficar como a referência; depois
-   `dress_character` (placas rígidas no osso, pano dobra) e confira o movimento vestido (`check_motion` e
-   `show_motion`).
+   `create_garment` (casca do corpo para peitoral, espaldar, ombreira, braçal, greva e camisa, `convexa` e
+   `laminas` para placa de metal em lâminas; faixa para cinto, gola e punho, com `inclinacao` para o cinto
+   cruzado; saia para túnica, sobreveste e capa; adorno para cruz, fivela, broche, bainha e bordado;
+   rebites pela beira da placa ou do cinto; `desgaste` no material de metal para riscos e marcas de uso),
+   olhe as imagens (sozinha e no manequim de barro, frente, lado, costas e o tronco de perto) e ajuste até
+   ficar como a referência; depois `dress_character` (placas rígidas no osso, pano dobra; `arma` põe a arma
+   na mão) e confira o movimento vestido (`check_motion` e `show_motion`).
 5. **Armas, objetos e casas**: `generate_3d`. Para chegar perto de uma referência, monte a forma por
    peças (`pecas`: caixa com chanfro, cilindro, esfera, torno pelo perfil, extrusão do contorno com gume,
    tubo por pontos; `materiais` com cor e tipo) olhando a imagem, passe `referencia` e ajuste até ficar

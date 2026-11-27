@@ -806,7 +806,7 @@ async function pintarMaquina() {
     const p = prog[id] || {}, d = baixando[id];
     const situacao = d && d.baixando ? `Baixando ${d.versao}… ${d.mb ? d.mb + " MB" : ""}`
       : p.achado ? p.caminho : d && d.ultima && d.ultima.includes("ERRO") ? d.ultima : "Não encontrado";
-    // Blender e Godot: a Fornalha baixa a versão testada (soma conferida); a Erethea é do criador
+    // a Fornalha baixa a versão testada de cada um (soma conferida); a Erethea, pelo instalador público (Windows)
     const baixar = p.achado || (d && d.baixando) ? ""
       : d ? `<button class="botao" data-baixar-programa="${id}">Baixar ${esc(d.versao)} (${esc(d.tamanho)})</button>`
       : `<a href="#" data-link="${esc(p.pagina || "")}">Baixar</a>`;

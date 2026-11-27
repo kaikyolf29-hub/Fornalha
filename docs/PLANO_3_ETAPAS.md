@@ -127,6 +127,17 @@ geradores de sala e masmorra.
   vestido → 15/15 animações conferidas → soco e gancho de captura real (ACCAD) com o punho fechado → vistos
   quadro a quadro, em material e em anime. Teste do criador: seção 9e do TESTE_DO_CRIADOR.md.
 
+## Rodada de 27/11: o caminho grátis no Máximo (decisão do criador)
+Sem dinheiro para API paga e sem placa NVIDIA por enquanto: a melhor qualidade sai **pelo processador, no
+nível Máximo** (pode levar a noite). APIs pagas (Meshy, Tripo, Rodin) e o caminho NVIDIA continuam prontos
+no app, desligados até ele ligar.
+1. **Quatro vistas** (feito; prova do refino no CI "Quatro vistas"): textura da malha da IA refeita pela
+   frente do conceito, lados e costas refinados pelo Z-Image e o rosto em close.
+2. **Próximos, na mesma linha:** a malha completa (fluxo inteiro do TRELLIS.2) também para a cabeça por partes
+   no processador do PC dele (no CI não cabe em 6 h); escolher o melhor conceito entre algumas sementes pela
+   comparação com a referência; a foto da pessoa direto no 3D (sem conceito no meio) quando ela tiver uma.
+3. Pedidos 13 a 15 da Erethea (guia do MCP, instalador público, cabelo fio a fio em linhas) atendidos.
+
 ## Fica para depois
 Retopologia de verdade, mapa grande por regiões, aranha e outros corpos que só geram malha com placa
 (até lá: Forja ou API), captura de duas mãos própria, nível máximo das referências (RE4 Remake,

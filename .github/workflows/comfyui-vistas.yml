@@ -1,0 +1,92 @@
+name: Quatro vistas (textura da malha da IA)
+
+# A malha do 3D pela IA feita no processador (TRELLIS.2, de uma execução anterior do "ComfyUI 3D") ganha a
+# textura refeita pelas quatro vistas: a frente pelo conceito alinhado à silhueta, os dois lados e as
+# costas refinados pelo Z-Image (imagem → imagem, no processador) e o rosto em close, tudo projetado de
+# volta pelo Blender. Sem placa e sem API: o caminho grátis do nível Máximo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      execucao:
+        description: "Execução do \"ComfyUI 3D\" com a malha (artefato comfyui-3d-malha)"
+        default: "45866756046"
+      nivel:
+        description: "qualidade (textura de 2048) ou maximo (4096)"
+        default: "maximo"
+  push:
+    paths:
+      - "crates/fornalha-core/src/vistas.rs"
+      - "crates/fornalha-core/blender/fc_projetar.py"
+      - "crates/fornalha-core/tests/vistas_real.rs"
+      - ".github/workflows/comfyui-vistas.yml"
+
+concurrency:
+  group: comfyui-vistas-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  vistas:
+    name: Quatro vistas no processador
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      FORNALHA_HOME: ${{ github.workspace }}-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliotecas do Blender
+        run: ./scripts/apt-instalar.sh libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libegl1 libxkbcommon0 libsm6
+      - name: Compilar a Fornalha (linha de comando) e o teste
+        run: |
+          cargo build -q -p fornalha-cli
+          cargo test -q -p fornalha-core --test vistas_real --no-run
+      - name: Baixar o Blender pelo botão da Fornalha
+        run: |
+          ./target/debug/fornalha-cli baixar-programa blender
+          echo "FORNALHA_TESTE_BLENDER=$FORNALHA_HOME/dados/ferramentas/blender/blender" >> "$GITHUB_ENV"
+      - name: Instalar o ComfyUI com o Z-Image (pelo instalador da Fornalha) e abrir
+        run: |
+          ./target/debug/fornalha-cli comfyui instalar --backend cpu --modelos gguf
+          ./target/debug/fornalha-cli comfyui abrir
+      - name: A malha da IA (execução anterior)
+        uses: actions/download-artifact@v4
+        with:
+          name: comfyui-3d-malha
+          path: malha
+          run-id: ${{ github.event.inputs.execucao || '45866756046' }}
+          github-token: ${{ github.token }}
+      - name: Quatro vistas
+        env:
+          FORNALHA_TESTE_VISTAS_MALHA: ${{ github.workspace }}/malha/templario_trellis2.glb
+          FORNALHA_TESTE_VISTAS_CONCEITO: ${{ github.workspace }}/malha/conceito.png
+          FORNALHA_TESTE_COMFYUI: "8188"
+          FORNALHA_TESTE_NIVEL: ${{ github.event.inputs.nivel || 'maximo' }}
+          FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/vistas-saida
+          RUST_BACKTRACE: "1"
+        run: |
+          ls -la malha
+          export FORNALHA_TESTE_VISTAS_PEDIDO="$(cat malha/pedido.txt 2>/dev/null || true)"
+          cargo test -p fornalha-core --test vistas_real -- --nocapture
+      - name: Registro
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/vistas-saida"
+          cp "$FORNALHA_HOME/dados/comfyui/comfyui.log" "$RUNNER_TEMP/vistas-saida/" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/vistas-saida/dados"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quatro-vistas
+          path: ${{ runner.temp }}/vistas-saida

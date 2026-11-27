@@ -33,6 +33,7 @@ static func esqueleto(no: Node) -> Skeleton3D:
 
 ## Prepara a física do personagem. Devolve o simulador do ragdoll (ou null).
 static func preparar(modelo: Node3D, corpo: PhysicsBody3D) -> PhysicalBoneSimulator3D:
+	fios(modelo)
 	materiais(modelo)
 	var sk := esqueleto(modelo)
 	if sk == null:
@@ -122,12 +123,60 @@ static func render() -> String:
 	return _render
 
 
+## Cabelo fio a fio (nível Máximo): a malha <id>_hair_strands traz cada fio como uma cadeia de arestas
+## (LINES), com a largura do fio no nome do material (_cabelo_fios_70 = 0,7 mm). Na Erethea vira um
+## EretheaHairStrands (fitas viradas para a câmera, brilho de cabelo, presas ao esqueleto) e os fios
+## tomam o lugar dos cards (o couro cabeludo e a camada de baixo ficam); com
+## fornalha/cabelo/cards_com_fios = true, os dois juntos. Na Godot comum as linhas ficam escondidas (linha
+## de 1 px não é cabelo) e os cards seguem fazendo o cabelo. Devolve quantos penteados viraram fios.
+static func fios(no: Node) -> int:
+	var feitos := 0
+	var erethea := ClassDB.class_exists("EretheaHairStrands") and render() != "anime"
+	for n in no.find_children("*_hair_strands*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or mi.has_meta("fios_feitos"):
+			continue
+		mi.set_meta("fios_feitos", true)
+		mi.visible = false
+		if not erethea:
+			continue
+		var largura := 0.0007
+		var cor := Color(0.25, 0.17, 0.11)
+		var mat := mi.mesh.surface_get_material(0) as BaseMaterial3D
+		if mat != null:
+			cor = mat.albedo_color
+			var nome := String(mat.resource_name)
+			var i := nome.rfind("_cabelo_fios_")
+			if i >= 0 and nome.substr(i + 13).is_valid_int():
+				largura = nome.substr(i + 13).to_int() * 0.00001
+		var cabelo: MeshInstance3D = ClassDB.instantiate("EretheaHairStrands")
+		cabelo.name = String(mi.name) + "_erethea"
+		cabelo.set("source_mesh", mi.mesh)
+		cabelo.set("width", largura)
+		cabelo.set("color_root", cor * 0.85)
+		cabelo.set("color_tip", cor)
+		cabelo.skin = mi.skin
+		mi.get_parent().add_child(cabelo)
+		cabelo.transform = mi.transform
+		# os nós são irmãos: o mesmo caminho até o esqueleto (sob o Skeleton3D, NodePath(".."))
+		cabelo.skeleton = mi.skeleton if not mi.skeleton.is_empty() else NodePath("..")
+		if not ProjectSettings.get_setting("fornalha/cabelo/cards_com_fios", false):
+			# os cards (material <id>_cabelo_cards) saem; a camada de baixo e o couro cabeludo ficam
+			for c in mi.get_parent().find_children("*", "MeshInstance3D", true, false):
+				var cm := c as MeshInstance3D
+				if cm.mesh != null and cm.mesh.get_surface_count() > 0 and cm.mesh.surface_get_material(0) != null \
+						and String(cm.mesh.surface_get_material(0).resource_name).contains("cabelo_cards"):
+					cm.visible = false
+		feitos += 1
+	return feitos
+
+
 ## Visual anime: troca o material de cada peça pelo de faixas (com a textura e a cor dele) e põe o
 ## contorno; cabelo em cards recorta pelo alfa e não leva contorno (seria uma linha em cada card).
 static func materiais_anime(no: Node) -> int:
 	var feitos := 0
 	var mi := no as MeshInstance3D
-	if mi != null and mi.mesh != null:
+	if mi != null and mi.mesh != null and not String(mi.name).contains("_hair_strands"):
 		for i in mi.mesh.get_surface_count():
 			var base := mi.get_active_material(i) as BaseMaterial3D
 			if base == null:

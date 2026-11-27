@@ -630,6 +630,9 @@ def criar_humano(dados, assets, ficha):
     # médio e comprido em cards: o cabelo do pacote guia a forma e vira a camada de baixo
     # (padrão no caminho de qualidade; "cabelo_em_cards": false deixa só o do pacote)
     guiado = bool(res_pele) and tem_cabelo and not cards and ficha.get("cabelo_em_cards") is not False
+    # nível Máximo: o penteado também vai fio a fio, em linhas (a Erethea desenha os fios; a Godot comum
+    # segue com os cards). "cabelo_fios": false desliga
+    fios_em_linhas = res_pele >= 4096 and ficha.get("cabelo_fios", True) is not False
     if tem_cabelo and not cards:
         acessorios.append(("hair", ficha.get("cabelo", "short02"), True, ficha.get("cor_cabelo")))
     for roupa in ficha.get("roupas_makehuman", []):
@@ -692,7 +695,8 @@ def criar_humano(dados, assets, ficha):
             idade = float(ficha.get("macro", {}).get("idade", 0.5))
             pecas.extend(fc_cabelo.cabelo_em_cards(nome, corpo, pontos, peso, cor_cab, fc_cabelo.estilo_de(ficha.get("cabelo")), arm,
                                                    escala_n=1.0 if res_pele >= 4096 else 0.7,
-                                                   grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))))
+                                                   grisalho=float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7)),
+                                                   fios=12000 if fios_em_linhas else 0))
     if guiado:
         guia = next((o for o in pecas if o.name.endswith("_hair")), None)
         if guia is not None:
@@ -701,7 +705,7 @@ def criar_humano(dados, assets, ficha):
                                                  n_cards=900 if res_pele >= 4096 else (700 if res_pele >= 2048 else 500),
                                                  estilo=ficha.get("cabelo_estilo"), penteado=ficha.get("cabelo") or "",
                                                  grisalho=_grisalho(ficha.get("cabelo_estilo"), float(np.clip((idade - 0.62) / 0.3, 0.0, 0.7))),
-                                                 corpo=corpo))
+                                                 corpo=corpo, fios_por_card=12 if fios_em_linhas else 0))
     if not guiado and not cards:
         # só o cabelo do pacote (níveis leves): preso à cabeça e ao pescoço (o pacote prende na mandíbula e
         # o cabelo abria com a fala), na cor pedida e denso (sem couro aparecendo), borda suave

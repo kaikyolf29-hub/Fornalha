@@ -145,6 +145,81 @@ def tirar_trancos(arm, acao, problemas, rodadas=4):
     return feitos
 
 
+def _gravar_seq(arm, acao, n, v):
+    pb = arm.pose.bones[n]
+    pb.rotation_mode = "QUATERNION"
+    for q, rot in zip(_quadros(acao), v):
+        pb.rotation_quaternion = rot
+        pb.keyframe_insert("rotation_quaternion", frame=q, group=n)
+    return len(v)
+
+
+def suavizar_tremedeira(arm, acao, problemas, rodadas=4):
+    """Osso que treme (vai e volta de um quadro para o outro, ruído de captura nos dedos do pé e nas mãos, ou
+    ajuste quadro a quadro mal feito) passa por um filtro leve (1-4-6-4-1) até parar de tremer. Golpe e
+    passada quase não mudam: o filtro só tira o que inverte de um quadro para o outro."""
+    nomes = sorted({p["osso"] for p in problemas if p["tipo"] == "tremedeira" and p["osso"] in arm.pose.bones})
+    if not nomes:
+        return 0
+    laco = bool(acao.get("laco", getattr(acao, "use_cyclic", False)))
+    seq = _sequencia(arm, acao, nomes)
+    feitos = 0
+    for n in nomes:
+        v = seq[n]
+        for i in range(1, len(v)):
+            if v[i - 1].dot(v[i]) < 0:
+                v[i] = -v[i]
+        a = np.array([(q.w, q.x, q.y, q.z) for q in v], dtype=np.float64)
+        for _ in range(rodadas):
+            m = len(a)
+            if m < 5:
+                break
+            pad = np.concatenate([a[-2:], a, a[:2]]) if laco else np.concatenate([a[:1], a[:1], a, a[-1:], a[-1:]])
+            novo = (pad[:-4] + 4 * pad[1:-3] + 6 * pad[2:-2] + 4 * pad[3:-1] + pad[4:]) / 16.0
+            if not laco:
+                novo[0], novo[-1] = a[0], a[-1]  # o começo e o fim ficam onde estavam (encaixe com o próximo clipe)
+            novo /= np.linalg.norm(novo, axis=1, keepdims=True)
+            a = novo
+            r = np.array([tuple(Quaternion(x).to_axis_angle()[0] * math.degrees(Quaternion(x).to_axis_angle()[1])) for x in a])
+            vel = np.diff(r, axis=0)
+            mexe = np.linalg.norm(vel, axis=1) > fc_conferir.TREME_MIN_GRAUS
+            pares = mexe[:-1] & mexe[1:]
+            volta = (np.einsum("ij,ij->i", vel[:-1], vel[1:]) < 0) & pares
+            if pares.sum() < fc_conferir.TREME_MIN_VEZES or volta.sum() / max(pares.sum(), 1) <= fc_conferir.TREME_FRACAO * 0.6:
+                break
+        feitos += _gravar_seq(arm, acao, n, [Quaternion(x) for x in a])
+    return feitos
+
+
+def limitar_dedos(arm, acao, conf, problemas):
+    """Dedo para trás, para o lado ou torcido volta para dentro do limite da junta (o fechar para a palma
+    fica como está, até o punho fechado)."""
+    nomes = sorted({p["osso"] for p in problemas if p["tipo"].startswith("dedo") and p["osso"] in conf.dedos})
+    if not nomes:
+        return 0
+    seq = _sequencia(arm, acao, nomes)
+    feitos = 0
+    for n in nomes:
+        tipo, junta, e_fecha, e_lado, e_eixo = conf.dedos[n]
+        lim_tras, lim_lado, lim_torcao = fc_conferir.DEDO_LIMITES["thumb" if tipo == "thumb" else "dedo"][junta]
+        novo = []
+        for q in seq[n]:
+            qq = q if q.w >= 0 else -q
+            eixo, ang = qq.to_axis_angle()
+            rv = Vector(eixo) * ang
+            f, l, t = rv.dot(e_fecha), rv.dot(e_lado), rv.dot(e_eixo)
+            # 1° para dentro do limite (no limite exato a conferência ainda reprova pelo arredondamento)
+            if lim_tras is not None:
+                f = min(max(f, -math.radians(lim_tras - 1)), math.radians(fc_conferir.DEDO_FECHA_MAX - 1))
+            if lim_lado is not None:
+                l = max(-math.radians(lim_lado - 1), min(math.radians(lim_lado - 1), l))
+            t = max(-math.radians(lim_torcao - 1), min(math.radians(lim_torcao - 1), t))
+            rv2 = e_fecha * f + e_lado * l + e_eixo * t
+            novo.append(Quaternion(rv2.normalized(), rv2.length) if rv2.length > 1e-9 else Quaternion())
+        feitos += _gravar_seq(arm, acao, n, novo)
+    return feitos
+
+
 def _giro_da_dobradica(P, conf, p, c):
     """Quanto o osso de cima precisa girar em volta do próprio eixo para a junta dobrar no plano certo,
     para o lado natural (radianos), e o peso (0 com a junta quase esticada)."""
@@ -597,6 +672,10 @@ def corrigir(arm, acoes, conf, resultados, quais=("trancos", "dobradicas", "pes"
         try:
             if "trancos" in quais and "salto" in tipos:
                 log["trancos"] = tirar_trancos(arm, acao, r["problemas"])
+            if "trancos" in quais and "tremedeira" in tipos:
+                log["tremedeira"] = suavizar_tremedeira(arm, acao, r["problemas"])
+            if "dobradicas" in quais and any(t.startswith("dedo") for t in tipos):
+                log["dedos"] = limitar_dedos(arm, acao, conf, r["problemas"])
             if "dobradicas" in quais and tipos & {"ao_contrario", "de_lado"}:
                 log["dobradicas"] = endireitar(arm, acao, conf)
             if "corpo_solido" in quais and "atravessa" in tipos:

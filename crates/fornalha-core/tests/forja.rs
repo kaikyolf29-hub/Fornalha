@@ -288,6 +288,53 @@ async fn conferencia_do_movimento_reprova_e_corrige() {
     assert!(gltf["animations"].as_array().unwrap().len() >= 9);
 }
 
+/// Fluidez: um ajuste quadro a quadro mal feito (o antebraço vai e volta 12° a cada quadro) é reprovado como
+/// tremedeira, e a correção automática suaviza só aquele osso até ficar fluido. As regras do corpo voltam
+/// em palavras para a IA.
+#[tokio::test]
+async fn tremedeira_reprovada_e_suavizada() {
+    let blender = blender_ou_pula!();
+    let tmp = tempfile::tempdir().unwrap();
+    let saida = tmp.path().join("aren.glb");
+    forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "personagem", "saida": saida, "previa": false, "personagem": {"id": "aren", "tipo": "humano", "arma": "machado"}}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    let meio = (12f64.to_radians() / 2.0).sin();
+    let cos = (12f64.to_radians() / 2.0).cos();
+    let edicoes: Vec<serde_json::Value> = (1..=24)
+        .map(|q| json!({"osso": "RightLowerArm", "quadro": q, "suavizar": 0, "giro": [if q % 2 == 0 { meio } else { -meio }, 0.0, 0.0, cos]}))
+        .collect();
+    let tremendo = tmp.path().join("aren_tremendo.glb");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "editar_movimento", "entrada": saida, "saida": tremendo, "animacao": "parado", "edicoes": edicoes}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    let probs = r.to_string();
+    assert!(probs.contains("tremedeira") && probs.contains("RightLowerArm"), "o vai e volta é tremedeira: {r}");
+    let r = forja::rodar(
+        &blender,
+        tmp.path(),
+        &json!({"tarefa": "conferir", "entrada": tremendo, "animacoes": ["parado"], "corrigir": true, "imagens": "nenhuma"}),
+        TEMPO,
+    )
+    .await
+    .unwrap();
+    assert_eq!(r["aprovado"], true, "suavizado: {}", r["clipes"]);
+    assert!(r["correcoes"]["parado"].to_string().contains("tremedeira"), "{}", r["correcoes"]);
+    let regras = r["regras_do_corpo"].to_string();
+    assert!(regras.contains("5 dedos") && regras.contains("não tem física"), "{regras}");
+    assert_eq!(r["regras"]["dedos_por_mao"], 5);
+}
+
 /// BVH com os nomes do ACCAD (Mixamo sem prefixo, com ToSpine), 40 quadros de passada.
 fn bvh_de_teste() -> String {
     let mut h =

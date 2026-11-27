@@ -1033,6 +1033,7 @@ def tarefa_conferir(t):
         "chao_do_descanso_cm": conf.chao_descanso_cm,
         "pes": conf.pes,
         "regras": fc_conferir.regras(),
+        "regras_do_corpo": fc_conferir.regras_do_corpo(),
     }
 
 

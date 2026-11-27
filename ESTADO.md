@@ -11,6 +11,53 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Rodada da noite (27/11): uso do processador, cérebro por API (Claude e Gemini), regras do corpo
+- **Uso do processador (Ajustes):** todo trabalho pesado (Blender, modelos de placa, ComfyUI do 3D no
+  processador) roda **sempre em prioridade baixa** (Windows: abaixo do normal; Linux: nice 10), então a
+  pessoa pode trabalhar de dia com a Fornalha gerando. Opção nova **"Metade dos núcleos"**: o pesado usa só
+  metade (threads do OpenMP/MKL/OpenBLAS e `-t` do Blender) e deixa a outra metade livre. Não há regra de
+  "só à noite": a fila da noite é só um jeito de agendar. Testes e MCP verdes aqui; **falta provar no PC**.
+- **Cérebro por API (opcional, pago; Agentes → Cérebro por API):** o Claude (API da Anthropic) ou o Gemini
+  (API do Google), desligados por padrão, chave só pela janela (mesmo arquivo das APIs de 3D, nunca no
+  estado nem na linha de comando: o `curl` do sistema recebe a configuração pela entrada padrão), um por
+  vez, preço e termos à vista. A pessoa escolhe o modelo (botão "Atualizar lista" pergunta à API quais a
+  chave enxerga). **Sugestão econômica:** Claude Haiku 5.5 (US$ 0,10/0,50 por milhão de tokens até 100 mil
+  tokens por pedido) e Gemini 3.5 Flash-Lite (US$ 0,30/2,50); também Sonnet 5.5, Opus 5.5, Gemini 3.1
+  Flash-Lite, 3.8 Flash e 4 Hydrogen (preços conferidos nas páginas em 27/11/2026). Dois usos: (1) quando o
+  Ignis está fechado, ele escreve a ficha do personagem e o plano do pedido (`plan_request`), com o recibo
+  dizendo qual cérebro foi; (2) **"Pedir à IA"**: o modelo conduz as próprias ferramentas da Fornalha (as 47
+  do MCP), uma etapa por vez, com teto de gasto por pedido (padrão US$ 0,50), 40 voltas no máximo, botão
+  Parar e o passo a passo na tela. Claude: Messages API com ferramentas, cache do prompt, esforço médio, o
+  pensamento devolvido sem mexer; Gemini: `generateContent` com `parametersJsonSchema` e a assinatura do
+  pensamento devolvida. Licença no manifesto (`claude-api`, `gemini-api`): Termos Comerciais da Anthropic
+  (saída é do cliente, sem treino) e Termos da API do Gemini (o Google não reivindica a saída; no plano
+  grátis usa os dados e pessoas podem ler). **Provado** contra um servidor falso em 127.0.0.1 que fala
+  como as duas APIs (`tests/cerebro_api.rs`); **falta provar com a chave de verdade** (o criador tem
+  ~US$ 100 de crédito na Anthropic).
+- **Itens pelo caminho grátis no CI (run 46036354882, processador de 4 núcleos):** a **espada** passou em
+  1 h 40 no total (conceito 20 min, malha do TRELLIS.2 29 min, quatro vistas com os dois lados e as costas
+  refinados, limpa em 20 mil triângulos e 1,1 m) e ficou fiel ao conceito (sulco na lâmina, guarda dourada
+  com rebites, cabo de couro, pomo vermelho). O **baú** e a **casa** estouraram as 3 h do teste dentro do
+  TRELLIS.2: objeto cheio tem muito mais superfície que uma lâmina fina (baú: refino da forma a 1024 com
+  24 min por passo, 12 passos; casa: 1 h 54 só na forma básica). O refino não desce de 1024 (mínimo do nó
+  do ComfyUI), então o fluxo reduzido do processador agora corta passos: forma básica 20 → 14, refino 12 →
+  8, textura 12 → 8 (a textura é refeita pelas quatro vistas). O CI dos itens ganhou 4 h para o 3D. **Falta
+  medir de novo** o baú e a casa; casa e construção grande no processador podem continuar passando de uma
+  noite — para elas, as peças (`pecas`, blockout e kit de masmorra) continuam o caminho rápido.
+- **Universal Animation Library 2 (Quaternius, CC0):** já estava no banco desde 25/11 — a versão grátis
+  (Standard: 43 clipes, mais 46 da biblioteca 1 = 89). O kit de 130+ é a versão "Source" paga do autor
+  (também CC0); se o criador comprar, entra pelo `import_motion` (mesmo esqueleto).
+- **Regras do corpo (para a IA saber o que está fazendo):** a conferência ganhou **dedos** (5 por mão; cada
+  junta só fecha para a palma; para trás, para o lado e torção com limite por junta; o polegar, que fecha
+  atravessando a palma, só na torção) e **tremedeira** (osso que inverte o giro de um quadro para o outro).
+  Calibrado nas capturas: nenhum clipe da UAL2 reprova; 24 de 60 tomadas do ACCAD tremiam de verdade (ruído
+  de captura nos dedos do pé e nas mãos) e a correção nova (filtro leve 1-4-6-4-1 só no osso que treme)
+  deixou 0 tremendo sem criar problema novo; dedo dobrado 60° para trás volta para dentro do limite. As
+  regras em palavras voltam no `check_motion` (`regras_do_corpo`), estão no guia de cada projeto e no
+  cérebro por API: a animação **não tem física** (equilíbrio, peso e contato são de quem anima), juntas
+  dobram para um lado só, fluido = entrada e saída suaves, antecipação e continuação, sem tranco nem
+  tremedeira, ciclo fechado.
+
 ### Rodada da madrugada (27/11): pedidos 13 a 15 da Erethea, templário mais detalhado, foco no grátis
 **Decisão do criador (27/11):** por enquanto sem dinheiro para API paga e sem placa NVIDIA, o foco é a
 **melhor qualidade pelo caminho grátis, no processador, no nível Máximo** (pode demorar). As APIs pagas e o
@@ -820,6 +867,9 @@ está abaixo: cabelo fio a fio (#40), pele que segue a superfície (#39), terren
 #50), sombras por ray tracing e de contato, materiais do glTF que a Godot ignora (coat, anisotropia, sheen
 do cabelo e da córnea da Fornalha, #44) e a ponte de 26/11 (#54: roda o `montar.gd` do projeto quando há
 `World/mapa/mapa.json`). Os pedidos 10 a 12 dela para a Fornalha foram atendidos (ver a rodada da noite).
+**Pedido novo (27/11, noite): o teste dos dois juntos** — roteiro em TESTE_DO_CRIADOR.md (9g, item 5):
+projeto feito pela Fornalha aberto na Erethea, os dois MCP ligados no mesmo agente, `montar.gd` sem janela,
+cabelo fio a fio, `--agent-test`, anime e mapa. A Erethea confere o lado dela (o que abre, o que a ponte vê).
 **Pedido novo (27/11):**
 7. **Cabelo fio a fio escuro perto da risca:** com o penteado da Fornalha (`<id>_hair_strands`, ~10 mil
    fios de 0,7 mm, pedido 15 de vocês atendido), no renderizador de compatibilidade (Xvfb, sem placa) a

@@ -733,8 +733,37 @@ pub fn fluxo_trellis2(object_info: &Value, imagem: &str, reduzido: bool, semente
         trocar_valor(&mut api, "PrimitiveInt", &json!(4096), json!(2048));
         trocar_valor(&mut api, "DecimateMesh", &json!(700000), json!(200000));
         trocar_valor(&mut api, "RemeshMesh", &json!(768), json!(512));
+        menos_passos(&mut api);
     }
     Ok(api)
+}
+
+/// Passos de cada estágio no fluxo reduzido (processador). Medido no CI de 27/11 (4 núcleos): a espada
+/// (fina) sai em 29 min, mas no baú o refino da forma a 1024 levou 24 min por passo (12 passos = 4,8 h) e a
+/// casa gastou 1 h 54 só na forma básica. O refino não desce de 1024 (mínimo do nó), então o que dá para
+/// cortar são os passos: forma básica 20 → 14, refino da forma 12 → 8 e textura 12 → 8 (a textura é refeita
+/// depois pelas quatro vistas). A estrutura (rápida) fica com os 12.
+const PASSOS_REDUZIDOS: [(&str, u64); 3] = [("Trellis2ShapeStage", 14), ("Trellis2UpsampleStage", 8), ("Trellis2TextureStage", 8)];
+
+fn menos_passos(api: &mut Value) -> usize {
+    let tipos: std::collections::HashMap<String, String> =
+        api.as_object().into_iter().flatten().map(|(id, no)| (id.clone(), no["class_type"].as_str().unwrap_or("").to_string())).collect();
+    let mut n = 0;
+    for no in api.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+        if no["class_type"] != "KSampler" {
+            continue;
+        }
+        // o estágio é o nó que manda o latente (ou o modelo) para este KSampler
+        let de = |chave: &str| no["inputs"][chave][0].as_str().and_then(|id| tipos.get(id)).cloned().unwrap_or_default();
+        let fontes = [de("latent_image"), de("positive"), de("model")];
+        if let Some((_, passos)) = PASSOS_REDUZIDOS.iter().find(|(t, _)| fontes.iter().any(|f| f == t)) {
+            if no["inputs"]["steps"].as_u64().is_some_and(|atual| atual > *passos) {
+                no["inputs"]["steps"] = json!(passos);
+                n += 1;
+            }
+        }
+    }
+    n
 }
 
 /// Imagem → malha texturizada (.glb) pelo TRELLIS.2 no ComfyUI aberto. No processador pode levar horas.
@@ -930,6 +959,27 @@ mod testes {
         let info: Value = serde_json::from_str(&std::fs::read_to_string(arq).unwrap()).unwrap();
         let f = fluxo_trellis2(&info, "conceito.png", true, 7).unwrap();
         println!("{}", serde_json::to_string_pretty(&f).unwrap());
+    }
+
+    #[test]
+    fn fluxo_reduzido_corta_os_passos_dos_estagios_caros() {
+        // como o fluxo fica na API: a estrutura (vazia → 12 passos), a forma (20), o refino (12) e a textura (12)
+        let mut api = json!({
+            "87": {"class_type": "EmptyTrellis2LatentStructure", "inputs": {}},
+            "3": {"class_type": "KSampler", "inputs": {"latent_image": ["87", 0], "steps": 12}},
+            "91": {"class_type": "Trellis2ShapeStage", "inputs": {}},
+            "18": {"class_type": "KSampler", "inputs": {"latent_image": ["91", 1], "positive": ["91", 0], "steps": 20}},
+            "94": {"class_type": "Trellis2UpsampleStage", "inputs": {}},
+            "23": {"class_type": "KSampler", "inputs": {"latent_image": ["94", 1], "steps": 12}},
+            "98": {"class_type": "Trellis2TextureStage", "inputs": {}},
+            "12": {"class_type": "KSampler", "inputs": {"latent_image": ["98", 1], "steps": 12}}
+        });
+        assert_eq!(menos_passos(&mut api), 3);
+        assert_eq!(api["3"]["inputs"]["steps"], 12, "a estrutura fica");
+        assert_eq!(api["18"]["inputs"]["steps"], 14);
+        assert_eq!(api["23"]["inputs"]["steps"], 8);
+        assert_eq!(api["12"]["inputs"]["steps"], 8);
+        assert_eq!(menos_passos(&mut api), 0, "não corta duas vezes");
     }
 
     fn s(v: &[&str]) -> Vec<String> {

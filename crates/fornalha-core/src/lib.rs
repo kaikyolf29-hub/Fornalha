@@ -10,6 +10,7 @@ pub mod api;
 pub mod apis;
 pub mod audio;
 pub mod bruto;
+pub mod cerebro_api;
 pub mod comfyui;
 pub mod comfyui_ui;
 pub mod config;

@@ -35,6 +35,8 @@ pub struct Fornalha {
     cenas_da_engine: Mutex<Option<Value>>,
     /// Uma tarefa da fila por vez (a placa e o Blender são um só).
     pub(crate) fila: tokio::sync::Mutex<()>,
+    /// "Pedir à IA" pelo cérebro por API (Claude ou Gemini), um por vez.
+    conversa_ia: crate::cerebro_api::Conversa,
 }
 
 impl Fornalha {
@@ -59,6 +61,7 @@ impl Fornalha {
             engine_ao_vivo: Mutex::new(None),
             cenas_da_engine: Mutex::new(None),
             fila: tokio::sync::Mutex::new(()),
+            conversa_ia: Default::default(),
         })
     }
 
@@ -83,6 +86,7 @@ impl Fornalha {
             engine_ao_vivo: Mutex::new(None),
             cenas_da_engine: Mutex::new(None),
             fila: tokio::sync::Mutex::new(()),
+            conversa_ia: Default::default(),
         })
     }
 
@@ -108,6 +112,11 @@ impl Fornalha {
     /// Estado do Ignis (guardado por 10 s).
     pub async fn estado_ignis(&self) -> crate::ignis::EstadoIgnis {
         self.ignis.consultar(self.porta_ignis()).await
+    }
+
+    /// O "Pedir à IA" (cérebro por API) em andamento ou o último.
+    pub fn conversa_ia(&self) -> &crate::cerebro_api::Conversa {
+        &self.conversa_ia
     }
 
     pub fn porta_ignis(&self) -> u16 {

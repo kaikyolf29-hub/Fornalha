@@ -185,6 +185,31 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
 4. **Erethea pelo botão** (Máquina → Programas → Erethea → *Baixar*). **Esperado:** baixa o instalador
    1.0.2, confere a soma e instala sem perguntar dentro da pasta da Fornalha.
 
+## 9g. Uso do processador, cérebro por API, regras do corpo e o teste dos dois juntos (novo na noite de 27/11)
+1. **Trabalhar enquanto a Fornalha gera** (Ajustes → Uso do processador → *Metade dos núcleos*; peça um item
+   no Máximo). **Esperado:** o Gerenciador de Tarefas mostra o Blender/Python em prioridade *Abaixo do normal*
+   e o PC continua usável (navegador, editor). **Me diga:** se travou alguma coisa e quanto a geração demorou
+   a mais com metade dos núcleos.
+2. **Cérebro por API (Agentes → Cérebro por API)**: cole a chave da Anthropic (Console → API Keys), deixe o
+   *Claude Haiku 5.5 — econômico*, clique em *Atualizar lista* e ligue. Em **Pedir à IA**, com teto US$ 0,50:
+   *"olhe o estado da Fornalha e me diga o que falta instalar"*. **Esperado:** o passo a passo aparece
+   (chamou get_status, resultado, resposta) e o gasto fica em centavos. Depois: *"faça um plano para um
+   ferreiro que martela na bigorna, aplique o movimento e confira"*. **Me diga:** o gasto mostrado, se bate
+   com o Console da Anthropic, e se a resposta fez sentido. (O Gemini é igual, com a chave do AI Studio; no
+   plano grátis o Google lê o que você manda.)
+3. **Plano sem o Ignis:** com o Ignis fechado e o Claude ligado, `plan_request` pelo Claude Code.
+   **Esperado:** `origem: "cerebro"` e `cerebro: "api:claude-haiku-5-5"` no resultado.
+4. **Regras do corpo:** num personagem com dedos (humano realista), `check_motion` com `corrigir`.
+   **Esperado:** no resultado, `regras_do_corpo` e, em cada clipe, `dedos_por_mao: 5`; captura do ACCAD que
+   tremia sai suavizada. **Olhe** no Estúdio 3D as mãos no soco e no "pegar": dedo nenhum dobrado para trás.
+5. **Os dois juntos (Fornalha + Erethea):** com a Erethea 1.0.2 ou mais nova instalada pelo botão,
+   (a) crie um projeto pequeno na Fornalha (um personagem humano Máximo com cabelo comprido, um baú e a vila
+   de blockout); (b) `import_to_engine` e `run_test` com a Erethea escolhida; (c) abra o projeto no editor da
+   Erethea: o personagem anda, o cabelo aparece fio a fio, o mapa monta sozinho (`montar.gd`); (d) ligue os
+   dois MCP no Claude Code (`claude mcp add` da Fornalha, em Agentes, e o da Erethea) e peça *"mude a cor da
+   capa do personagem na Fornalha e mostre na Erethea"*. **Me diga:** o que abriu, o que não abriu, e as
+   imagens do `take_screenshot` da Erethea.
+
 ## 10. Leve em repouso
 Feche a janela, espere 1 minuto e veja no Gerenciador de Tarefas a memória do `fornalha.exe`.
 Meta de referência (a do Ignis): perto de 60 MB e processador perto de 0%. Me diga o número.

@@ -326,7 +326,7 @@ pub fn lista() -> Vec<Ferramenta> {
         Ferramenta {
             nome: "check_motion",
             titulo: "Conferir o movimento",
-            descricao: "Mede todas as animações de um personagem e reprova o que fica feio no jogo: osso torcido além do natural (braço virado), cotovelo ou joelho dobrando ao contrário ou de lado, tranco (osso que vira de um quadro para o outro), corpo sólido (braço atravessando o tronco, pernas se cruzando), pé escorregando no chão, corpo entrando no chão ou flutuando. Vale para humano e para criaturas (as regras de humano só entram com os ossos de humano). Com corrigir: true, corrige sozinho e regrava o glb. Devolve números por animação, o pior quadro de cada problema e uma imagem com os ossos ruins em vermelho.",
+            descricao: "Mede todas as animações de um personagem e reprova o que fica feio no jogo: osso torcido além do natural (braço virado), cotovelo ou joelho dobrando ao contrário ou de lado, tranco (osso que vira de um quadro para o outro), corpo sólido (braço atravessando o tronco, pernas se cruzando), pé escorregando no chão, corpo entrando no chão ou flutuando, dedo dobrando para trás, para o lado ou torcido (5 dedos por mão; cada junta só fecha para a palma) e tremedeira (osso indo e voltando de um quadro para o outro: movimento que não é fluido). Devolve também as regras do corpo em palavras (a animação não tem física: equilíbrio, peso e contato são de quem anima). Vale para humano e para criaturas (as regras de humano só entram com os ossos de humano). Com corrigir: true, corrige sozinho e regrava o glb. Devolve números por animação, o pior quadro de cada problema e uma imagem com os ossos ruins em vermelho.",
             esquema: json!({"type": "object", "properties": {"projeto": projeto_opcional(), "arquivo": {"type": "string"},
                 "animacoes": {"type": "array", "items": {"type": "string"}}, "corrigir": {"type": "boolean"},
                 "imagens": {"type": "string", "enum": ["reprovados", "todas", "nenhuma"]}}, "required": ["arquivo"]}),
@@ -687,6 +687,7 @@ pub async fn chamar(f: &Fornalha, nome: &str, a: Value, quem: &str) -> Resultado
                 "programas": programas,
                 "downloads_de_programas": crate::programas::estado(&f.paths),
                 "apis_3d": crate::apis::estado(&f.paths),
+                "cerebro_api": crate::cerebro_api::estado(&f.paths),
                 "modelos_de_placa": crate::workers::estado(&f.paths),
                 "pacotes": crate::pacotes::estado(&f.paths),
             }))

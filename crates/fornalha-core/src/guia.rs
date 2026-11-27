@@ -79,6 +79,13 @@ Este jogo é feito pela IA (você) com duas ferramentas que trabalham juntas:
    perto; estilos material, barro e anime). Para ajustar um quadro: `edit_motion` (girar/mover um osso,
    espalhado suave nos vizinhos; `salvar_como` guarda a original) e veja de novo. A pessoa faz o mesmo no
    Estúdio 3D da janela (estação Movimento).
+   **Regras do corpo** (luta e tudo mais: andar, pegar, sentar, colher, nadar, gesto): 2 braços, 2 pernas
+   e 5 dedos por mão (polegar com 2 juntas, os outros com 3); cada junta de dedo só fecha para a palma;
+   cotovelo e joelho dobram para um lado só; a animação **não tem física** — equilíbrio, peso e contato são
+   seus (quadril sobre os pés quando parado, pé que pisa não escorrega, nada entra no chão nem atravessa o
+   corpo); fluido = entrada e saída suaves, antecipação antes do golpe e continuação depois, sem tranco e
+   sem tremedeira; ciclo fecha no mesmo quadro. O `check_motion` mede tudo isso (inclusive dedos e
+   tremedeira) e o `corrigir` suaviza o que treme e põe o dedo de volta no limite.
 4. **Roupa separada, depois vestida**: com referência de roupa ou armadura, faça um manequim
    (`create_character` com `roupa: {{estilo: "manequim"}}`), faça a roupa no corpo dele com
    `create_garment` (casca do corpo para peitoral, espaldar, ombreira, braçal, greva e camisa, `convexa` e

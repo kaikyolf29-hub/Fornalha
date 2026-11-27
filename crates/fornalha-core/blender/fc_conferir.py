@@ -5,7 +5,9 @@
 # - salto brusco de rotação de um quadro para o outro (osso que "vira" de repente), em qualquer corpo;
 # - corpo sólido: braço atravessando o tronco, pernas atravessando uma a outra (cápsulas por osso);
 # - pé (ou pata) escorregando enquanto está no chão;
-# - corpo abaixo do chão, ou flutuando quando devia pisar.
+# - corpo abaixo do chão, ou flutuando quando devia pisar;
+# - dedo dobrando para trás, para o lado ou torcido (a mão tem 5 dedos e cada junta só fecha para a palma);
+# - tremedeira: o osso vai e volta de um quadro para o outro (movimento que não é fluido).
 # Vale para o esqueleto de jogo do humano (nomes Unreal), o esqueleto padrão da Forja e as criaturas
 # (as regras de humano só entram quando os ossos existem; as gerais valem para todos).
 import math
@@ -53,6 +55,23 @@ PERNA_PARES = (("thigh_l", "thigh_r"), ("calf_l", "calf_r"), ("LeftUpperLeg", "R
 PES = re.compile(r"^(foot_[lr]|(Left|Right)Foot|.*_pe|pata_\d+_pe|pe_.*)$")
 MAOS = re.compile(r"^(hand_[lr]|(mixamorig:)?(Left|Right)Hand)$")
 PES_HUMANOS = re.compile(r"^(foot_[lr]|(mixamorig:)?(Left|Right)Foot)$")
+# dedos (esqueleto de jogo e UAL2: thumb/index/middle/ring/pinky_01..03_l/r): (para trás, para o lado,
+# torção) máximos em graus por junta (1 = base, 2 = meio, 3 = ponta); fechar para a palma é livre até 120°.
+# Calibrado nas capturas da Quaternius (UAL2): a base do dedo se estica até ~40° para trás ao apoiar a mão
+# (escalar). O polegar fecha atravessando a palma, num eixo que muda de pessoa para pessoa: nele só a torção
+# é conferida (None = não confere).
+DEDOS = ("thumb", "index", "middle", "ring", "pinky")
+DEDO_LIMITES = {
+    "dedo": {1: (45.0, 35.0, 30.0), 2: (20.0, 20.0, 25.0), 3: (30.0, 20.0, 25.0)},
+    "thumb": {1: (None, None, 60.0), 2: (None, None, 50.0), 3: (None, None, 40.0)},
+}
+DEDO_FECHA_MAX = 120.0
+# tremedeira: o osso inverte o sentido do giro de um quadro para o outro em mais desta fração dos quadros em
+# que ele se mexe de verdade (acima de TREME_MIN_GRAUS por quadro), e pelo menos TREME_MIN_VEZES vezes
+# (calibrado: nas capturas limpas o pior foi 41% em 7 vezes, o pé tropeçando no Hit_Knockback)
+TREME_FRACAO = 0.5
+TREME_MIN_GRAUS = 0.6
+TREME_MIN_VEZES = 8
 # régua visual: o que a pessoa vê de longe e os ossos sozinhos não contam
 MALHA_SOLTA_CM = 2.5  # a mão/o pé da malha se afasta do próprio osso (peso errado: manopla no antebraço)
 ARMA_FORA_CM = 3.0  # a pegada da arma fora do volume da mão da malha
@@ -61,7 +80,22 @@ ARMA_FORA_CM = 3.0  # a pegada da arma fora do volume da mão da malha
 def regras():
     return {"tronco_torcao_graus": TRONCO_TORCAO_MAX, "tronco_dobra_graus": TRONCO_DOBRA_MAX, "torcao_graus": TORCAO, "ao_contrario_graus": AO_CONTRARIO_MAX, "de_lado_graus": DE_LADO_MAX, "salto_graus_por_quadro": SALTO_MAX,
             "atravessa_cm": ATRAVESSA_MAX_CM, "escorrega_cm": ESCORREGA_MAX_CM, "abaixo_do_chao_cm": CHAO_MAX_CM, "flutua_cm": FLUTUA_MIN_CM,
-            "malha_solta_cm": MALHA_SOLTA_CM, "arma_fora_da_mao_cm": ARMA_FORA_CM}
+            "malha_solta_cm": MALHA_SOLTA_CM, "arma_fora_da_mao_cm": ARMA_FORA_CM,
+            "dedos_por_mao": 5, "dedo_limites_graus": {k: {str(j): {"para_tras": v[0], "para_o_lado": v[1], "torcao": v[2]} for j, v in d.items()} for k, d in DEDO_LIMITES.items()},
+            "dedo_fecha_max_graus": DEDO_FECHA_MAX, "tremedeira_fracao": TREME_FRACAO, "tremedeira_min_graus_por_quadro": TREME_MIN_GRAUS}
+
+
+def regras_do_corpo():
+    """As regras em palavras, para qualquer IA que mexe em movimento (guia, check_motion, cérebro por API)."""
+    return [
+        "Um humano tem 2 braços, 2 pernas e 5 dedos em cada mão: o polegar com 2 juntas que dobram, os outros 4 com 3.",
+        "Cada junta de dedo só fecha para a palma (até ~120° somados por junta); para trás quase nada, para o lado pouco, sem torcer.",
+        "Cotovelo e joelho dobram para um lado só; nenhum osso torce além do limite dele (antebraço, braço, coxa, pescoço).",
+        "A animação não tem física: equilíbrio, peso e contato são garantidos por quem anima. Parado, o quadril fica sobre os pés; o pé que pisa não escorrega; nada entra no chão nem atravessa o próprio corpo.",
+        "Fluido: começa e termina devagar (entrada e saída), antecipa antes do golpe e continua depois; nenhum osso vira de repente nem treme indo e voltando de um quadro para o outro.",
+        "Ciclo (andar, correr, parado) fecha no mesmo quadro em que começa.",
+        "Prefira captura do banco (list_motions/apply_motion) a inventar; confira com check_motion e corrija com edit_motion o que for reprovado. Aprovado = a régua não achou o que ela mede; olhe as folhas antes de dizer que ficou bom.",
+    ]
 
 
 # ------------------------------------------------------------------ geometria
@@ -301,6 +335,43 @@ class Conferencia:
             self.tronco_eixo = (mw3 @ (bc.head_local - bp.head_local)).normalized()
         self._descanso()
         self._pontas_da_malha()
+        self._dedos_init()
+
+    def _dedos_init(self):
+        """Eixos de cada junta de dedo no espaço do osso: fechar (para a palma), lado e torção. A palma sai
+        da mão no descanso (indicador → mindinho) e o lado dela é o do polegar, como no punho fechado."""
+        self.dedos = {}
+        self.dedos_por_mao = {}
+        ossos = self.arm.data.bones
+        for lado in ("l", "r"):
+            mao, ind, mind = ossos.get(f"hand_{lado}"), ossos.get(f"index_01_{lado}"), ossos.get(f"pinky_01_{lado}")
+            if mao is None or ind is None or mind is None:
+                continue
+            pol = ossos.get(f"thumb_01_{lado}")
+            ao_longo = (mao.tail_local - mao.head_local).normalized()
+            atraves = (mind.head_local - ind.head_local).normalized()
+            palma = ao_longo.cross(atraves).normalized()
+            if pol is not None and (pol.tail_local - mao.head_local).dot(palma) < 0:
+                palma = -palma
+            achados = set()
+            for b in ossos:
+                partes = b.name.split("_")
+                if len(partes) != 3 or partes[0] not in DEDOS or partes[2] != lado or not partes[1].isdigit():
+                    continue
+                junta = int(partes[1])
+                if not 1 <= junta <= 3:
+                    continue
+                achados.add(partes[0])
+                d = (b.tail_local - b.head_local).normalized()
+                fecha = d.cross(palma)
+                if fecha.length < 1e-6:
+                    continue
+                Binv = b.matrix_local.to_3x3().inverted()
+                e_fecha = (Binv @ fecha.normalized()).normalized()
+                e_eixo = Vector((0.0, 1.0, 0.0))
+                e_lado = e_eixo.cross(e_fecha).normalized()
+                self.dedos[b.name] = (partes[0], junta, e_fecha, e_lado, e_eixo)
+            self.dedos_por_mao[lado] = len(achados)
 
     def _pontas_da_malha(self):
         """Mãos e pés da malha, escolhidos pelo lugar (não pelo peso): os vértices depois do pulso/tornozelo
@@ -482,6 +553,8 @@ class Conferencia:
         anterior = None
         # medida dos ossos com a malha desligada (rápido); a malha entra só nas amostras do chão
         tronco = {"torcao": (0.0, None), "dobra": (0.0, None)}
+        dedos = {}  # osso → {"tras": (v, q), "lado": (v, q), "torcao": (v, q), "fecha": (v, q)}
+        giros = {}  # osso → [vetor de rotação local em graus por quadro] (tremedeira)
         mods = [m for o in self.malhas for m in o.modifiers if m.type == "ARMATURE"]
         estados = [m.show_viewport for m in mods]
         for m in mods:
@@ -502,6 +575,17 @@ class Conferencia:
                             torcao[pb.name] = (tw, q)
                     if anterior is not None:
                         salto.setdefault(pb.name, []).append((_angulo_quat(anterior[pb.name], b), q))
+                    bb = b if b.w >= 0 else -b
+                    eixo_q, ang_q = bb.to_axis_angle()
+                    rv = Vector(eixo_q) * math.degrees(ang_q)
+                    giros.setdefault(pb.name, []).append((rv.x, rv.y, rv.z))
+                    dd = self.dedos.get(pb.name)
+                    if dd:
+                        _, _, e_fecha, e_lado, e_eixo = dd
+                        m = dedos.setdefault(pb.name, {})
+                        for chave, valor in (("fecha", rv.dot(e_fecha)), ("tras", -rv.dot(e_fecha)), ("lado", abs(rv.dot(e_lado))), ("torcao", abs(rv.dot(e_eixo)))):
+                            if valor > m.get(chave, (0.0, None))[0]:
+                                m[chave] = (valor, q)
                 anterior = rot
                 for p, f, para, rotulo in self.dobradicas:
                     if p not in self.eixos:
@@ -578,7 +662,31 @@ class Conferencia:
         salto = self._trancos(salto)
         self._ultimo_tronco = tronco
         self._ultima_regua = regua
+        self._ultimos_dedos = dedos
+        self._ultima_tremedeira = self._tremedeira(giros, quadros)
         return self._julgar(nome, quadros, laco, sem_chao, torcao, contrario, de_lado, salto, atravessa, escorrega, min_z)
+
+    def _tremedeira(self, giros, quadros):
+        """Por osso: (fração das voltas, vezes, quadro da pior) em que o giro inverte o sentido de um quadro
+        para o outro enquanto o osso se mexe de verdade. Golpe e passada invertem poucas vezes por ciclo; ruído
+        de captura ou ajuste quadro a quadro mal feito inverte quase todo quadro."""
+        out = {}
+        for n, seq in giros.items():
+            if len(seq) < 8:
+                continue
+            r = np.array(seq, dtype=np.float64)
+            v = np.diff(r, axis=0)
+            vel = np.linalg.norm(v, axis=1)
+            mexe = vel > TREME_MIN_GRAUS
+            pares = mexe[:-1] & mexe[1:]
+            if pares.sum() < TREME_MIN_VEZES:
+                continue
+            volta = (np.einsum("ij,ij->i", v[:-1], v[1:]) < 0) & pares
+            vezes = int(volta.sum())
+            fracao = vezes / max(int(pares.sum()), 1)
+            k = int(np.argmax(volta)) if vezes else 0
+            out[n] = (round(float(fracao), 3), vezes, quadros[min(k + 1, len(quadros) - 1)])
+        return out
 
     def _trancos(self, seqs):
         """Tranco: um quadro gira muito mais que os vizinhos (osso virando de repente), não um golpe rápido."""
@@ -670,6 +778,23 @@ class Conferencia:
         for chave, (v, q, osso) in regua["arma"].items():
             if v > ARMA_FORA_CM:
                 add("arma_fora_da_mao", osso, v, ARMA_FORA_CM, q, "cm", f"a pegada da arma ({chave}) fica {v:.0f} cm fora da mão da malha")
+        dedos = getattr(self, "_ultimos_dedos", None) or {}
+        for n, m in dedos.items():
+            tipo_dedo, junta = self.dedos[n][0], self.dedos[n][1]
+            lim_tras, lim_lado, lim_torcao = DEDO_LIMITES["thumb" if tipo_dedo == "thumb" else "dedo"][junta]
+            polegar = tipo_dedo == "thumb"
+            for chave, lim, tipo, texto in (("tras", lim_tras, "dedo_para_tras", "dobra {v:.0f}° para trás (o dedo só fecha para a palma)"),
+                                            ("lado", lim_lado, "dedo_de_lado", "abre {v:.0f}° para o lado"),
+                                            ("torcao", lim_torcao, "dedo_torcido", "torce {v:.0f}° em volta do próprio eixo"),
+                                            ("fecha", None if polegar else DEDO_FECHA_MAX, "dedo_fecha_demais", "fecha {v:.0f}° (passa do punho fechado)")):
+                v, q = m.get(chave, (0.0, None))
+                if lim is not None and v > lim:
+                    add(tipo, n, v, lim, q, "graus", f"dedo {n} " + texto.format(v=v) + f" (máximo {lim:.0f}°)")
+        treme = getattr(self, "_ultima_tremedeira", None) or {}
+        for n, (fracao, vezes, q) in treme.items():
+            if fracao > TREME_FRACAO and vezes >= TREME_MIN_VEZES and n not in self.dedos:
+                add("tremedeira", n, fracao * 100, TREME_FRACAO * 100, q, "%",
+                    f"{n} treme: inverte o giro em {fracao * 100:.0f}% dos quadros em que mexe ({vezes} vezes); o movimento não é fluido")
         prob.sort(key=lambda x: -x["valor"] / max(x["limite"], 1e-6))
         medidas = {
             "torcao_max_graus": {n: round(v, 1) for n, (v, _) in sorted(torcao.items(), key=lambda kv: -kv[1][0])[:6]},
@@ -687,6 +812,15 @@ class Conferencia:
             medidas["mao_pe_solto_cm"] = {n: round(v, 1) for n, (v, _) in regua["solta"].items()}
         if regua["arma"]:
             medidas["arma_longe_da_mao_cm"] = {k: round(v, 1) for k, (v, _, _) in regua["arma"].items()}
+        if self.dedos_por_mao:
+            medidas["dedos_por_mao"] = dict(self.dedos_por_mao)
+        if dedos:
+            fora_polegar = [m for n, m in dedos.items() if self.dedos[n][0] != "thumb"]
+            pior_dedo = {k: max((m.get(k, (0.0, None))[0] for m in fora_polegar), default=0.0) for k in ("tras", "lado", "torcao", "fecha")}
+            medidas["dedos_max_graus"] = {k: round(v, 1) for k, v in pior_dedo.items()}
+        if treme:
+            n, (fr, vz, _) = max(treme.items(), key=lambda kv: kv[1][0])
+            medidas["tremedeira_max"] = {"osso": n, "fracao": fr, "vezes": vz}
         medidas["locomocao_no_lugar"] = bool(getattr(self, "ultima_locomocao", False))
         medidas["velocidade_da_passada_m_s"] = getattr(self, "velocidade_do_chao", 0.0)
         return {"nome": nome, "quadros": len(quadros), "laco": laco, "aprovado": not prob, "problemas": prob[:12], "medidas": medidas}

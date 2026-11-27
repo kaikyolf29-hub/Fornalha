@@ -27,7 +27,7 @@ jobs:
   item:
     name: Item ${{ matrix.nome }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 350
+    timeout-minutes: 359
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +78,7 @@ jobs:
           FORNALHA_TESTE_TIPO: ${{ matrix.tipo }}
           FORNALHA_TESTE_ALTURA_M: ${{ matrix.altura }}
           FORNALHA_TESTE_COMFYUI: "8188"
-          FORNALHA_TESTE_HORAS: "3"
+          FORNALHA_TESTE_HORAS: "4"
           FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/item-saida
           RUST_BACKTRACE: "1"
         run: cargo test -p fornalha-core --test item_real -- --nocapture

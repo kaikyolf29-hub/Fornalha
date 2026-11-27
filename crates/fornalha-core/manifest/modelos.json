@@ -682,6 +682,30 @@
       "nota": "Termos, seção 5(b): a Hyper3D não limita o uso da saída; a tabela de planos dá exportação e uso livres nos planos pagos (no grátis, não). A política de retenção da API diz que entradas e saídas não são usadas para treinar."
     },
     {
+      "id": "claude-api",
+      "nome": "Claude pela API da Anthropic (cérebro por API: Haiku, Sonnet, Opus)",
+      "funcao": "cerebro",
+      "onde": "api",
+      "licenca": "Termos Comerciais da Anthropic",
+      "url_licenca": "https://www.anthropic.com/legal/commercial-terms",
+      "uso_comercial": "sim",
+      "nota": "Termos Comerciais (em vigor desde 17/06/2025), seção B: a Anthropic cede ao cliente os direitos sobre as saídas e não treina modelos com o conteúdo do cliente. Cobrança por token (conta no Console). Conferido em 27/11/2026."
+    },
+    {
+      "id": "gemini-api",
+      "nome": "Gemini pela API do Google (cérebro por API: Flash-Lite, Flash, Gemini 4)",
+      "funcao": "cerebro",
+      "onde": "api",
+      "licenca": "Termos da API do Gemini",
+      "url_licenca": "https://ai.google.dev/gemini-api/terms",
+      "uso_comercial": "sim",
+      "obrigacoes": [
+        "No plano grátis o Google usa as entradas e as respostas para melhorar os produtos e pessoas podem ler: não mande nada pessoal ou secreto. No plano pago, não.",
+        "Só para maiores de 18 anos; no Espaço Econômico Europeu, só o plano pago para apps oferecidos a usuários de lá."
+      ],
+      "nota": "Termos da API do Gemini: o Google não reivindica a propriedade do conteúdo gerado; uso profissional ou comercial. Conferido em 27/11/2026."
+    },
+    {
       "id": "mixamo",
       "nome": "Mixamo",
       "funcao": "animacao",

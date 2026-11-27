@@ -360,6 +360,42 @@ mod nucleo {
         }
     }
 
+    /// Cérebro por API (Claude, Gemini): ligar, guardar a chave e escolher o modelo — só a pessoa, pela janela.
+    async fn cerebro_api(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        let id = v["provedor"].as_str().unwrap_or("");
+        let r = if v["atualizar_lista"] == true {
+            fornalha_core::cerebro_api::atualizar_modelos(&c.fornalha.paths, id).await
+        } else {
+            fornalha_core::cerebro_api::definir(
+                &c.fornalha.paths,
+                id,
+                v["ligada"].as_bool(),
+                v["chave"].as_str().map(String::from),
+                v["modelo"].as_str().map(String::from),
+            )
+        };
+        match r {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
+    /// "Pedir à IA": o cérebro por API conduz as ferramentas (gasta o crédito da pessoa: só pela janela).
+    async fn pedir_ia(State(c): State<Canal>, Json(v): Json<Value>) -> Response {
+        if v["parar"] == true {
+            c.fornalha.conversa_ia().parar();
+            return Json(c.fornalha.conversa_ia().ver()).into_response();
+        }
+        match fornalha_core::cerebro_api::pedir(c.fornalha.clone(), v["pedido"].as_str().unwrap_or(""), v["teto_usd"].as_f64()) {
+            Ok(v) => Json(v).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"erro": e}))).into_response(),
+        }
+    }
+
+    async fn ver_pedido_ia(State(c): State<Canal>) -> Json<Value> {
+        Json(c.fornalha.conversa_ia().ver())
+    }
+
     /// Canal exclusivo da janela: a mesma API (como "pessoa") + rotas que só a pessoa usa.
     async fn servir_canal_janela(app: AppHandle) {
         let st = app.state::<Estado>();
@@ -376,6 +412,8 @@ mod nucleo {
                     .route("/janela/pacote", post(baixar_pacote))
                     .route("/janela/programa", post(baixar_programa))
                     .route("/janela/api", post(api_paga))
+                    .route("/janela/cerebro", post(cerebro_api))
+                    .route("/janela/pedir-ia", post(pedir_ia).get(ver_pedido_ia))
                     .route("/janela/comfyui", post(comfyui))
                     .with_state(canal),
             )

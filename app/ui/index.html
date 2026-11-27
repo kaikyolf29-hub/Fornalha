@@ -283,6 +283,21 @@
       <h1>Agentes</h1>
       <p class="lead">O Claude Code, o Codex ou qualquer agente usam a Fornalha pelos mesmos comandos que você.</p>
       <div id="comandos"></div>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Cérebro por API (opcional, pago)</h2></div>
+        <p class="nota" style="margin:0 0 10px">Uma alternativa a mais: o Claude (API da Anthropic) ou o Gemini (API do Google) fazem o papel do cérebro quando o Ignis não está aberto (ficha do personagem, plano do pedido) e conduzem as ferramentas da Fornalha em "Pedir à IA". Desligados por padrão; um por vez. A chave fica só neste computador e cada pedido mostra o gasto. Veja o preço e os termos antes de ligar.</p>
+        <div id="cerebros" class="lista"></div>
+      </section>
+      <section class="painel">
+        <div class="titulo-painel"><h2>Pedir à IA</h2></div>
+        <p class="nota" style="margin:0 0 10px">Escreva o que quer; o cérebro ligado acima faz usando as ferramentas da Fornalha, uma etapa por vez, e para no teto de gasto. Ele conhece as regras do corpo (5 dedos por mão, juntas que dobram para um lado, sem física, movimento fluido) e confere o movimento antes de entregar.</p>
+        <textarea id="ia-pedido" rows="3" placeholder="ex.: faça um ferreiro que martela na bigorna, aplique o movimento e confira" style="width:100%;box-sizing:border-box"></textarea>
+        <div class="acoes"><label class="linha-campo">Teto de gasto deste pedido
+            <select id="ia-teto"><option value="0.1">US$ 0,10</option><option value="0.5" selected>US$ 0,50</option><option value="1">US$ 1</option><option value="2">US$ 2</option><option value="5">US$ 5</option></select></label>
+          <button class="botao quente" id="ia-pedir">Pedir</button><button class="botao" id="ia-parar" hidden>Parar</button></div>
+        <p class="nota" id="ia-situacao"></p>
+        <div id="ia-passos" class="lista"></div>
+      </section>
       <section class="painel"><h2>Ferramentas</h2><div id="ferramentas" class="lista colunas"></div></section>
     </section>
 

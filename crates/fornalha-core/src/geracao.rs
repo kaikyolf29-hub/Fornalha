@@ -514,8 +514,8 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
     let inimigo = eh_inimigo(&papel);
     let descricao = a.descricao.clone().unwrap_or_default();
     let mut cerebro = Value::Null;
-    let cap = ignis::capacidades(f.porta_ignis()).await;
-    if cap["conectado"] == true && cap["conversa"].as_array().is_some_and(|v| !v.is_empty()) {
+    let mut cerebro_usado = None;
+    if let Some(cer) = crate::cerebro_api::qual(f).await {
         let esquema = json!({
             "type": "object", "additionalProperties": false,
             "properties": {
@@ -537,12 +537,17 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
             a.nome.as_ref().map(|n| format!(", nome {n}")).unwrap_or_default(),
             if descricao.is_empty() { String::new() } else { format!(", {descricao}") }
         );
-        match ignis::conversar_json(f.porta_ignis(), None, sistema, &pedido, &esquema).await {
-            Ok(v) => cerebro = v,
-            Err(e) => avisos.push(format!("O cérebro (Ignis) não escreveu a ficha ({}); usei as regras da Fornalha.", e.mensagem)),
+        match cer.conversar_json(f, sistema, &pedido, &esquema).await {
+            Ok(v) => {
+                cerebro = v;
+                cerebro_usado = Some(cer.id());
+            }
+            Err(e) => avisos.push(format!("O cérebro ({}) não escreveu a ficha ({}); usei as regras da Fornalha.", cer.nome(), e.mensagem)),
         }
     } else {
-        avisos.push("O Ignis não está aberto (ou sem modelo de conversa): a ficha saiu das regras da Fornalha, sem o cérebro.".into());
+        avisos.push(
+            "Sem cérebro (o Ignis não está aberto e nenhum cérebro por API está ligado): a ficha saiu das regras da Fornalha.".into(),
+        );
     }
     let pal = paleta(p);
     let c = |chave: &str| cerebro[chave].as_str().map(String::from);
@@ -604,7 +609,7 @@ async fn montar_ficha(f: &Fornalha, p: &Projeto, a: &ArgsPersonagem, avisos: &mu
         "capa": a.capa.or(cerebro["capa"].as_bool()).unwrap_or(!inimigo),
         "capuz": a.capuz.or(cerebro["capuz"].as_bool()).unwrap_or(false),
         "fala": a.fala.clone().or_else(|| c("fala")).unwrap_or_default(),
-        "cerebro": if cerebro.is_null() { Value::Null } else { json!("ignis") },
+        "cerebro": cerebro_usado,
         "controles": {
             "cabelo": a.cabelo, "barba": a.barba, "idade": a.idade, "genero": a.genero, "corpo_humano": a.corpo_humano,
             "rosto": a.rosto, "cor_olhos": a.cor_olhos, "sobrancelha": a.sobrancelha, "roupa": a.roupa, "pele": a.pele,

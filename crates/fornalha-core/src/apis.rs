@@ -62,20 +62,24 @@ pub const PROVEDORES_3D: [Provedor; 3] = [
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-struct Guardado {
-    ligadas: Vec<String>,
-    chaves: BTreeMap<String, String>,
+pub(crate) struct Guardado {
+    pub(crate) ligadas: Vec<String>,
+    pub(crate) chaves: BTreeMap<String, String>,
+    /// Modelo escolhido por API (o cérebro por API: Claude, Gemini).
+    pub(crate) modelos: BTreeMap<String, String>,
+    /// Lista de modelos que a própria API devolveu (botão "Atualizar lista").
+    pub(crate) listas: BTreeMap<String, Vec<String>>,
 }
 
 fn arquivo(paths: &Paths) -> PathBuf {
     paths.data_dir.join("chaves_api.json")
 }
 
-fn ler(paths: &Paths) -> Guardado {
+pub(crate) fn ler(paths: &Paths) -> Guardado {
     std::fs::read_to_string(arquivo(paths)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
-fn gravar(paths: &Paths, g: &Guardado) -> Resultado<()> {
+pub(crate) fn gravar(paths: &Paths, g: &Guardado) -> Resultado<()> {
     let arq = arquivo(paths);
     if let Some(d) = arq.parent() {
         std::fs::create_dir_all(d).map_err(|e| Erro::io(d, e))?;

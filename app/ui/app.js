@@ -1009,9 +1009,77 @@ async function pintarAgentes() {
     ["API local", "Para scripts: lista as ferramentas; chame com POST /fornalha/ferramentas/{nome}.", mcp.replace("/mcp", "/fornalha/ferramentas")],
   ];
   pinta($("comandos"), blocos.map(([t, s, cmd]) => `<div class="comando"><div class="item"><div><strong>${esc(t)}</strong><small>${esc(s)}</small></div><button class="botao" data-copiar="${esc(cmd)}">Copiar</button></div><pre>${esc(cmd)}</pre></div>`).join(""));
+  pintarCerebros();
+  pintarPedidoIa(await api("GET", "/janela/pedir-ia").catch(() => null));
   const lista = await api("GET", "/fornalha/ferramentas").catch(() => ({ ferramentas: [] }));
   pinta($("ferramentas"), lista.ferramentas.map((f) => `<div class="item"><div><strong class="mono">${esc(f.nome)}</strong><small>${esc(f.titulo)}</small></div></div>`).join(""));
 }
+
+// cérebro por API (Claude, Gemini): a chave e o ligar só pela janela; um por vez
+function pintarCerebros() {
+  const lista = (estado && estado.cerebro_api) || [];
+  pinta($("cerebros"), lista.map((c) => {
+    const ids = [...c.modelos.map((m) => m.id), ...(c.da_api || []).filter((id) => !c.modelos.some((m) => m.id === id))];
+    if (!ids.includes(c.modelo)) ids.push(c.modelo);
+    const nome = (id) => { const m = c.modelos.find((x) => x.id === id); return m ? m.nome : id; };
+    const opcoes = ids.map((id) => `<option value="${esc(id)}" ${id === c.modelo ? "selected" : ""}>${esc(nome(id))}</option>`).join("");
+    return `<div class="item"><div><strong>${esc(c.nome)}${c.ligada ? " — ligado" : ""}</strong>
+      <small>${esc(c.preco)}</small><small>${esc(c.termos)} <a href="#" data-link="${esc(c.url_termos)}">Termos</a> · <a href="#" data-link="${esc(c.url_precos)}">Preços</a> · <a href="#" data-link="${esc(c.url_chave)}">Onde pegar a chave</a></small>
+      <span style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><select data-cerebro-modelo="${esc(c.id)}" style="flex:1;min-width:160px">${opcoes}</select>
+      <button class="botao" data-cerebro-lista="${esc(c.id)}" ${c.tem_chave ? "" : "disabled"} title="Pergunta à API quais modelos a sua chave enxerga">Atualizar lista</button></span>
+      <span style="display:flex;gap:8px;margin-top:6px"><input type="password" id="chave-cerebro-${esc(c.id)}" placeholder="${c.tem_chave ? "chave guardada" : "cole a chave aqui"}" autocomplete="off" style="flex:1;min-width:0">
+      <button class="botao" data-cerebro-chave="${esc(c.id)}">Salvar chave</button></span></div>
+      <div class="lado"><label class="chave"><input type="checkbox" data-cerebro-ligar="${esc(c.id)}" ${c.ligada ? "checked" : ""} ${c.tem_chave ? "" : "disabled"}><span>Ligado</span></label></div></div>`;
+  }).join(""));
+}
+$("cerebros").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-cerebro-chave],[data-cerebro-lista]");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.cerebroChave) {
+      const id = b.dataset.cerebroChave, campo = $("chave-cerebro-" + id);
+      await api("POST", "/janela/cerebro", { provedor: id, chave: campo.value }); campo.value = "";
+      mensagem("Chave guardada neste computador.");
+    } else {
+      await api("POST", "/janela/cerebro", { provedor: b.dataset.cerebroLista, atualizar_lista: true });
+      mensagem("Lista de modelos atualizada pela API.");
+    }
+  } catch (err) { mensagem(err.message, "erro"); }
+  carregar("agentes");
+});
+$("cerebros").addEventListener("change", async (e) => {
+  const sel = e.target.closest("[data-cerebro-modelo]"), lig = e.target.closest("[data-cerebro-ligar]");
+  try {
+    if (sel) { await api("POST", "/janela/cerebro", { provedor: sel.dataset.cerebroModelo, modelo: sel.value }); mensagem("Modelo escolhido."); }
+    else if (lig) { await api("POST", "/janela/cerebro", { provedor: lig.dataset.cerebroLigar, ligada: lig.checked }); mensagem(lig.checked ? "Cérebro por API ligado (o outro foi desligado)." : "Cérebro por API desligado."); }
+    else return;
+  } catch (err) { mensagem(err.message, "erro"); if (lig) lig.checked = !lig.checked; }
+  carregar("agentes");
+});
+let vigiaIa = null;
+const ROTULO_IA = { texto: "IA", ferramenta: "chamou", resultado: "resultado", erro: "erro", aviso: "aviso" };
+function pintarPedidoIa(e) {
+  if (!e) return;
+  const g = e.gasto || {};
+  const dinheiro = (v, casas) => Number(v || 0).toFixed(casas).replace(".", ",");
+  const gasto = g.com_preco ? `US$ ${dinheiro(g.usd, 4)} de US$ ${dinheiro(e.teto_usd, 2)}` : `${(g.entrada || 0) + (g.saida || 0)} tokens (modelo fora da tabela de preços)`;
+  $("ia-situacao").textContent = e.rodando ? `Trabalhando (${e.modelo})… gasto até agora: ${gasto}`
+    : e.pedido ? `Último pedido (${e.modelo}): ${e.erro ? "parou com erro" : "terminou"}. Gasto: ${gasto}.` : "";
+  $("ia-pedir").hidden = !!e.rodando; $("ia-parar").hidden = !e.rodando;
+  const passos = (e.passos || []).slice(-60);
+  pinta($("ia-passos"), (e.resposta && !e.rodando ? `<div class="item"><div><strong>Resposta</strong><small style="white-space:pre-wrap">${esc(e.resposta)}</small></div></div>` : "")
+    + passos.slice().reverse().map((p) => `<div class="item"><div><strong>${esc(ROTULO_IA[p.tipo] || p.tipo)}</strong><small class="${p.tipo === "texto" ? "" : "mono"}" style="white-space:pre-wrap">${esc(p.texto)}</small></div></div>`).join(""));
+  clearTimeout(vigiaIa);
+  if (e.rodando) vigiaIa = setTimeout(async () => { if (!$("est-agentes").hidden) pintarPedidoIa(await api("GET", "/janela/pedir-ia").catch(() => null)); }, 1500);
+}
+$("ia-pedir").addEventListener("click", async () => {
+  try { pintarPedidoIa(await api("POST", "/janela/pedir-ia", { pedido: $("ia-pedido").value, teto_usd: Number($("ia-teto").value) })); }
+  catch (err) { mensagem(err.message, "erro"); }
+});
+$("ia-parar").addEventListener("click", async () => {
+  try { pintarPedidoIa(await api("POST", "/janela/pedir-ia", { parar: true })); } catch (err) { mensagem(err.message, "erro"); }
+});
 
 // ---------- Ajustes ----------
 function temaAtual() { try { return localStorage.getItem("fornalha.tema") || "auto"; } catch (_) { return "auto"; } }

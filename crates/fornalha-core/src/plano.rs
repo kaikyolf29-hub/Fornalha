@@ -10,7 +10,6 @@ use serde_json::{json, Value};
 use crate::erro::{Erro, Resultado};
 use crate::fila::{self, Quando, FERRAMENTAS_DA_FILA};
 use crate::forja;
-use crate::ignis;
 use crate::projeto::Projeto;
 use crate::servico::Fornalha;
 
@@ -153,7 +152,7 @@ pub fn plano_por_regras(pedido: &str) -> Vec<Value> {
     passos
 }
 
-async fn plano_pelo_cerebro(f: &Fornalha, p: &Projeto, pedido: &str) -> Resultado<Vec<Value>> {
+async fn plano_pelo_cerebro(f: &Fornalha, cerebro: &crate::cerebro_api::Cerebro, p: &Projeto, pedido: &str) -> Resultado<Vec<Value>> {
     let ferramentas: Vec<Value> = crate::ferramentas::lista()
         .into_iter()
         .filter(|t| FERRAMENTAS_DA_FILA.contains(&t.nome))
@@ -180,7 +179,7 @@ async fn plano_pelo_cerebro(f: &Fornalha, p: &Projeto, pedido: &str) -> Resultad
         serde_json::to_string(&ferramentas).unwrap_or_default()
     );
     let pedido = format!("{}.\nPedido: {pedido}", crate::geracao::texto_do_projeto(p));
-    let v = ignis::conversar_json(f.porta_ignis(), None, &sistema, &pedido, &esquema).await?;
+    let v = cerebro.conversar_json(f, &sistema, &pedido, &esquema).await?;
     Ok(v["passos"].as_array().cloned().unwrap_or_default())
 }
 
@@ -287,10 +286,11 @@ pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Valu
     let p = f.projeto(a.projeto.as_deref())?;
     let mut avisos = Vec::new();
     let mut origem = "regras";
-    let cap = ignis::capacidades(f.porta_ignis()).await;
     let mut passos = Vec::new();
-    if cap["conectado"] == true && cap["conversa"].as_array().is_some_and(|v| !v.is_empty()) {
-        match plano_pelo_cerebro(f, &p, &a.pedido).await {
+    let mut cerebro_usado = None;
+    if let Some(cerebro) = crate::cerebro_api::qual(f).await {
+        cerebro_usado = Some(cerebro.id());
+        match plano_pelo_cerebro(f, &cerebro, &p, &a.pedido).await {
             Ok(v) => {
                 passos = sanear(v, &a.pedido, &p.raiz, &mut avisos);
                 if !passos.is_empty() {
@@ -298,10 +298,12 @@ pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Valu
                 }
                 origem = "cerebro";
             }
-            Err(e) => avisos.push(format!("O cérebro não fez o plano ({}); usei as regras da Fornalha.", e.mensagem)),
+            Err(e) => avisos.push(format!("O cérebro ({}) não fez o plano ({}); usei as regras da Fornalha.", cerebro.nome(), e.mensagem)),
         }
     } else {
-        avisos.push("O Ignis não está aberto: o plano saiu das regras da Fornalha, sem o cérebro.".into());
+        avisos.push(
+            "Sem cérebro (o Ignis não está aberto e nenhum cérebro por API está ligado): o plano saiu das regras da Fornalha.".into(),
+        );
     }
     if passos.is_empty() {
         passos = plano_por_regras(&a.pedido);
@@ -322,7 +324,10 @@ pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Valu
     let mut tarefas = Vec::new();
     if let Some(q) = quando {
         let grupo = format!("plano_{}", crate::util::id_aleatorio(6));
-        let quem_faz = if origem == "cerebro" { format!("cerebro, a pedido de {quem}") } else { quem.to_string() };
+        let quem_faz = match (&cerebro_usado, origem) {
+            (Some(c), "cerebro") => format!("cerebro ({c}), a pedido de {quem}"),
+            _ => quem.to_string(),
+        };
         for s in &passos {
             let mut args = s["argumentos"].clone();
             args["projeto"] = json!(p.raiz);
@@ -339,7 +344,7 @@ pub async fn planejar(f: &Fornalha, a: ArgsPedido, quem: &str) -> Resultado<Valu
         }
     }
     Ok(json!({
-        "pedido": a.pedido, "origem": origem, "passos": passos, "tarefas": tarefas,
+        "pedido": a.pedido, "origem": origem, "cerebro": if origem == "cerebro" { json!(cerebro_usado) } else { Value::Null }, "passos": passos, "tarefas": tarefas,
         "quando": quando.map(|q| if q == Quando::Noite { "noite" } else { "agora" }).unwrap_or("so_o_plano"),
         "avisos": avisos,
     }))

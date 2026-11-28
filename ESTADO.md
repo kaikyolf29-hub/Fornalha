@@ -72,6 +72,14 @@ Só melhorar o que a pessoa vê; o que já funciona fica como está.
   passo** (8 passos ≈ 14 h). Construção grande vai por peças (`pecas`, blockout, kit de masmorra) ou pela
   placa NVIDIA/API; o CI dos itens ficou com a espada e o baú (5 h para o 3D). **Para o definitivo:** o
   `generate_3d` de construção grande no processador avisar antes (tempo estimado) e sugerir as peças.
+- **Baú pelo caminho grátis passou no CI (run 46106060056, 28/11):** 5 h 40 no total no CI de 4 núcleos
+  (conceito 17 min, malha do TRELLIS.2 4 h 31, quatro vistas e limpeza; 20 mil triângulos, 0,70 × 1,14 ×
+  0,80 m). A forma ficou fiel (tampa curva, faixas com rebites, pés, cadeado e duas travas). **Defeito achado
+  e corrigido:** o conceito do Z-Image saiu em três quartos e as quatro vistas o pintavam como se fosse a
+  frente — a frente ficava "de vidro" com o cadeado em dobro (pior que a malha crua). Para **objetos**, a
+  frente agora vem da própria malha, refinada pelo Z-Image como os lados e as costas
+  (`vistas::REFINAR_OBJETO`, `fc_projetar` não alinha o conceito em objeto); o conceito já guiou a malha.
+  Provado aqui na malha do CI (sem o Z-Image: a frente sai limpa); falta o CI com o refino da frente.
 - **Contrato com a Erethea (recado dela de 27/11, para o pacote de IA dela):** cada projeto ganha
   `ai/contrato_da_engine.json` (refeito quando o projeto é criado ou aberto) e a ferramenta nova
   `get_engine_contract` (48 no MCP): eixos (+Y para cima, personagem olhando para +Z, `_l` em +X, metros,

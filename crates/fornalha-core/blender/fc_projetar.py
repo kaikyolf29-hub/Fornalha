@@ -361,8 +361,13 @@ def tarefa_vistas(t):
         if nome == "frente":
             alfa_frente = a[..., 0]
         saida["vistas"][nome] = {"imagem": arq, "confianca": arq_conf, "direcao": list(d)}
-    if t.get("conceito") and alfa_frente is not None:
-        assunto = t.get("assunto", "personagem")
+    assunto = t.get("assunto", "personagem")
+    if t.get("conceito") and alfa_frente is not None and assunto == "objeto":
+        # objeto: o conceito costuma sair em três quartos (o baú do CI de 28/11) e, pintado como se fosse a
+        # frente, deixava a frente "de vidro" e o cadeado em dobro; o conceito já guiou a malha da IA, então a
+        # frente vem da própria malha, refinada como os lados e as costas
+        saida["alinhamento"] = {"usado": False, "motivo": "objeto: a frente vem da malha refinada (o conceito pode estar em três quartos)"}
+    elif t.get("conceito") and alfa_frente is not None:
         r = _conceito_na_vista(t["conceito"], alfa_frente, assunto)
         if r is not None and r[1]["silhueta_igual"] < float(t.get("silhueta_minima", 0.75)):
             saida["alinhamento"] = dict(r[1], usado=False)

@@ -24,6 +24,23 @@ pub const REFINAR: [(&str, &str, f64); 4] = [
     ("rosto", "extreme close-up portrait of the face, front view, sharp detailed eyes, skin pores", 0.42),
 ];
 
+/// Objeto: a frente também é refinada (o conceito do objeto costuma sair em três quartos e não entra como
+/// frente; ele já guiou a malha da IA) e não há rosto.
+pub const REFINAR_OBJETO: [(&str, &str, f64); 4] = [
+    ("frente", "front view", 0.35),
+    ("esquerda", "left side view, full body profile", 0.35),
+    ("costas", "back view, full body seen from behind", 0.35),
+    ("direita", "right side view, full body profile", 0.35),
+];
+
+/// As vistas que o motor de imagem refina para cada assunto.
+pub fn vistas_a_refinar(assunto: Assunto) -> &'static [(&'static str, &'static str, f64)] {
+    match assunto {
+        Assunto::Personagem => &REFINAR,
+        Assunto::Objeto => &REFINAR_OBJETO,
+    }
+}
+
 /// O que está nas vistas: um personagem (com o close do rosto) ou um item do jogo (arma, baú, casa...).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Assunto {
@@ -127,7 +144,7 @@ pub async fn refinar_textura_de(
     let mut refinadas = serde_json::Map::new();
     let mut avisos: Vec<String> = Vec::new();
     if let Some(porta) = porta {
-        for (k, (nome, como, denoise)) in REFINAR.iter().enumerate() {
+        for (k, (nome, como, denoise)) in vistas_a_refinar(assunto).iter().enumerate() {
             let Some(v) = vistas["vistas"].get(*nome) else { continue };
             let Some(arq) = v["imagem"].as_str() else { continue };
             let Ok(png) = std::fs::read(arq) else { continue };
@@ -192,6 +209,14 @@ mod testes {
     fn pedido_de_objeto_fala_de_objeto() {
         let p = pedido_da_vista_de("baú de madeira", "left side view, full body profile", Assunto::Objeto);
         assert!(p.contains("the same object") && p.contains("left side view, profile") && !p.contains("character"));
+    }
+
+    #[test]
+    fn objeto_refina_a_frente_e_nao_tem_rosto() {
+        let o = vistas_a_refinar(Assunto::Objeto);
+        assert!(o.iter().any(|(n, _, _)| *n == "frente") && o.iter().all(|(n, _, _)| *n != "rosto"));
+        assert!(vistas_a_refinar(Assunto::Personagem).iter().all(|(n, _, _)| *n != "frente"));
+        assert!(pedido_da_vista_de("baú", REFINAR_OBJETO[0].1, Assunto::Objeto).contains("front view"));
     }
 
     #[test]

@@ -263,11 +263,22 @@ function pintarColuna() {
   if ((rec.conversa || []).length) partesIgnis.push("cérebro");
   if ((rec.imagem || []).length) partesIgnis.push("imagem");
   if ((rec.voz || []).length) partesIgnis.push("voz");
-  const engine = biblia && biblia.engine === "erethea" ? prog.erethea : prog.godot;
+  // a Erethea é a engine principal: aparece sempre; a Godot só quando o projeto é dela ou como reserva
+  const ere = prog.erethea || {}, god = prog.godot || {};
+  const projetoGodot = biblia && biblia.engine === "godot";
+  const versao = (p, padrao) => (p.versao ? p.versao : padrao);
+  let engines;
+  if (projetoGodot) {
+    engines = linha(god.achado, "Godot", god.achado ? versao(god, "achada") + " (este projeto)" : "não encontrada");
+  } else {
+    engines = linha(ere.achado, "Erethea Engine", ere.achado ? versao(ere, "achada")
+      : god.achado ? "não encontrada: o jogo testa na Godot por enquanto (Máquina → Programas)" : "não encontrada (Máquina → Programas → Baixar ou Escolher)");
+    if (god.achado) engines += linha(true, "Godot", versao(god, "achada") + " (reserva)");
+  }
   pinta($("ferramentas-estado"), `<h3>Oficina</h3>
     ${linha(ig.conectado, "Ignis", ig.conectado ? (partesIgnis.length ? partesIgnis.join(", ") : "aberto, sem modelos preparados") : "fechado: sem cérebro, imagem e voz")}
     ${linha(prog.blender && prog.blender.achado, "Blender", prog.blender && prog.blender.achado ? prog.blender.versao || "achado" : "não encontrado")}
-    ${linha(engine && engine.achado, engine ? engine.nome : "Engine", engine && engine.achado ? engine.versao || "achada" : "não encontrada")}`);
+    ${engines}`);
   if (estado) pinta($("rodape"), `<strong>Pronta para agentes</strong><span class="mono">${esc(estado.endereco_mcp.replace("http://", ""))}</span>`);
 }
 

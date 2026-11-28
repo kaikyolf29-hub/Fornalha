@@ -40,10 +40,8 @@ jobs:
             tipo: arma
             altura: "1.1"
             pedido: "Espada longa medieval de aço polido, lâmina reta com sulco no meio, guarda em cruz dourada, cabo de couro marrom e pomo redondo."
-          - nome: casa
-            tipo: objeto
-            altura: "6.0"
-            pedido: "Casa medieval pequena de pedra com telhado de madeira escura, porta de madeira e duas janelas, chaminé de pedra."
+          # a casa saiu da lista: no processador o refino da forma dela leva ~1 h 47 por passo (8 passos = ~14 h,
+          # CI de 28/11); construção grande vai por peças (pecas, blockout, kit de masmorra) ou pela placa/API
     env:
       FORNALHA_HOME: ${{ github.workspace }}-home
     steps:
@@ -78,7 +76,7 @@ jobs:
           FORNALHA_TESTE_TIPO: ${{ matrix.tipo }}
           FORNALHA_TESTE_ALTURA_M: ${{ matrix.altura }}
           FORNALHA_TESTE_COMFYUI: "8188"
-          FORNALHA_TESTE_HORAS: "4"
+          FORNALHA_TESTE_HORAS: "5"
           FORNALHA_TESTE_SAIDA: ${{ runner.temp }}/item-saida
           RUST_BACKTRACE: "1"
         run: cargo test -p fornalha-core --test item_real -- --nocapture

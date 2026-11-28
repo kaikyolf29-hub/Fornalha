@@ -65,6 +65,13 @@ Só melhorar o que a pessoa vê; o que já funciona fica como está.
   grátis usa os dados e pessoas podem ler). **Provado** contra um servidor falso em 127.0.0.1 que fala
   como as duas APIs (`tests/cerebro_api.rs`); **falta provar com a chave de verdade** (o criador tem
   ~US$ 100 de crédito na Anthropic).
+- **Itens no CI com menos passos (run 46073386335, 28/11):** a **espada** passou de novo. O **baú** chegou
+  perto: refino da forma em 2 h 23 (8 passos de ~18 min) e a textura em 5 de 8 passos (~10 min cada) quando
+  bateu as 4 h — faltavam ~30 min; no app (limite de 8 h no fluxo reduzido) e no Ryzen 5 5500 ele deve
+  sair. A **casa** não cabe no processador: forma básica em 1 h 07, mas o refino a 1024 levou **1 h 47 por
+  passo** (8 passos ≈ 14 h). Construção grande vai por peças (`pecas`, blockout, kit de masmorra) ou pela
+  placa NVIDIA/API; o CI dos itens ficou com a espada e o baú (5 h para o 3D). **Para o definitivo:** o
+  `generate_3d` de construção grande no processador avisar antes (tempo estimado) e sugerir as peças.
 - **Contrato com a Erethea (recado dela de 27/11, para o pacote de IA dela):** cada projeto ganha
   `ai/contrato_da_engine.json` (refeito quando o projeto é criado ou aberto) e a ferramenta nova
   `get_engine_contract` (48 no MCP): eixos (+Y para cima, personagem olhando para +Z, `_l` em +X, metros,

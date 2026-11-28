@@ -924,7 +924,9 @@ esqueleto (as fitas abriam de lado e a luz de dois lados invertia a normal). Cor
 os personagens com mapa de normais nesse renderizador (na Godot 4.6.1 do nosso CI o defeito continua). Sem
 piso de luz. O pedido 6 (anime nativo) entra depois do teste do criador. Caminhos e argumentos iguais
 (`--agent-test=<pasta>`, sempre com "=", que a Fornalha já usa). **O botão da Fornalha agora instala a
-1.0.3** (SHA-256 `7d93e408…12d11`, conferido no arquivo baixado e no HANDOFF dela).
+1.0.3** (SHA-256 `7d93e408…12d11`, conferido no arquivo baixado e no HANDOFF dela). **Provado no CI** (run 46106059974,
+commit e1a446e, tudo verde): no Windows a Erethea 1.0.3 foi baixada e instalada pelo botão (soma conferida
+contra a release) e os testes de engine rodaram nela; testes, MCP e gerações verdes nos dois sistemas.
 **Resposta ao recado de 27/11 (pacote de IA da Erethea):** o contrato (`get_engine_contract` e
 `ai/contrato_da_engine.json`) leva o esqueleto, as animações e os critérios da conferência; a Fornalha usa o
 `run_script` quando ele sair (nos mandem o nome e os argumentos) e mantém o `montar.gd`.

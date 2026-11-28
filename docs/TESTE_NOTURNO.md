@@ -55,12 +55,15 @@ duas vão ser atualizadas depois deste teste: o relatório é a lista do que cor
 
 ## 2. Ferramentas (os mesmos botões da janela, pela linha de comando)
 1. `fornalha-cli detectar` → anote a placa, o caminho escolhido (esperado: **vulkan** na RX 580) e o nível sugerido.
-2. `fornalha-cli baixar-programa blender`, `... godot` e `... erethea`. A Erethea vem pelo instalador público
+2. `fornalha-cli baixar-programa blender` e `... erethea` (pula o que já estiver achado). **Não baixe a Godot:**
+   o criador usa a Erethea, que é a engine de todo projeto da Fornalha; a Godot só entraria como reserva sem a
+   Erethea. Se a Erethea do criador (em `C:\Fornalha\Erethea`) for a 1.0.3, use ela; se for mais antiga,
+   instale a 1.0.3 pelo botão. A Erethea vem pelo instalador público
    **1.0.3**, com a soma conferida (corrige o cabelo fio a fio escuro na coroa e o mapa de normais no
    renderizador de compatibilidade); o MCP dela liga sozinho na porta 11481 em projetos com
    `game.project.json`. Se houver outra Erethea neste PC (noutra pasta), anote o caminho e a versão, mas
-   teste com a do botão. Na janela, a barra lateral (Oficina) tem de mostrar **Erethea Engine** com a versão
-   (a Godot só como "reserva"): tire um print.
+   use a 1.0.3. Na janela, a barra lateral (Oficina) tem de mostrar **Erethea Engine** com a versão: tire um
+   print.
 3. `fornalha-cli baixar-pacote makehuman`, `... animacoes`, `... materiais`, `... accad` (o `100style` tem
    1,5 GB: só se sobrar tempo).
 4. Motor de imagem: `fornalha-cli comfyui instalar` (esperado: motor Vulkan com os modelos gguf, ~6 GB). Teste:

@@ -23,6 +23,9 @@ Só melhorar o que a pessoa vê; o que já funciona fica como está.
   Python 3.10+ instalado (o do Blender serve para o motor Vulkan e os pacotes, não para o ambiente do
   ComfyUI); no PC do criador o botão só disse "Precisa do Python 3.10…". Dizer isso antes do clique, com o
   link e o "Add to PATH", ou a Fornalha instalar o Python sozinha (winget, só para o usuário).
+- **"Baixar de novo" confunde:** ao lado de "Instalado" parece erro. No definitivo: "Instalado ✓" em
+  destaque, um "Reparar" discreto só quando faltar arquivo, e erro de verdade com a mensagem na linha e
+  "Tentar de novo".
 - **Licenças mais intuitivas:** um botão claro de aceitar (e de desfazer) no lugar da caixinha; o que cada
   aceite libera, dito na hora.
 - **Instalador definitivo de um clique, assinado:** o Controle Inteligente de Aplicativos do Windows 11

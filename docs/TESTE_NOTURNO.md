@@ -19,6 +19,15 @@ de manhã e leva a parte da Fornalha para o chat da Fornalha e a parte da Erethe
   só durante o teste e volte o valor anterior no fim (anote o valor antes).
 
 ## 0. Preparar (≈ 10 min)
+0. **Pasta única:** o criador deixa tudo em `C:\Fornalha`, com a variável de usuário `FORNALHA_HOME=C:\Fornalha`
+   (feita com `setx` antes de abrir esta sessão). Confira com
+   `[Environment]::GetEnvironmentVariable('FORNALHA_HOME','User')`; se o terminal desta sessão ainda não tiver
+   a variável, defina nele (`$env:FORNALHA_HOME='C:\Fornalha'`) antes de qualquer `fornalha-cli`. Com ela, a
+   configuração fica em `C:\Fornalha\config`, os programas, motores, pacotes e registros em
+   `C:\Fornalha\dados` (ferramentas: Blender, Godot, Erethea; comfyui; pacotes) e os projetos em
+   `C:\Fornalha\dados\projetos`. Clone o repositório em `C:\Fornalha\codigo` e grave o relatório e as
+   provas em `C:\Fornalha\Noite 27-11`. A Fornalha aberta na bandeja precisa ter sido aberta **depois** do
+   `setx` (senão ela usa as pastas antigas): se estiver em dúvida, feche (bandeja → Sair) e abra de novo.
 1. Repositório: `git clone https://github.com/kaikyolf29-hub/Fornalha` (ou `git pull` se já existir) e
    `git checkout claude/eloquent-brahmagupta-75ilfh`. Leia `ESTADO.md` (a rodada de 27/11), `TESTE_DO_CRIADOR.md`
    (seções 0, 0b, 9f e 9g) e este arquivo.
@@ -65,7 +74,7 @@ de manhã e leva a parte da Fornalha para o chat da Fornalha e a parte da Erethe
    de imagem dela). Não prepare modelo que peça aceite de licença.
 
 ## 3. Testes (em ordem; anote o tempo de cada um)
-Use uma pasta de teste nova (por exemplo `Documentos\Fornalha\Noite 27-11`) e chame as ferramentas com
+Use uma pasta de teste nova (`C:\Fornalha\Noite 27-11`) e chame as ferramentas com
 `fornalha-cli chamar <ferramenta> "<json>"` (ou pelo MCP em `http://127.0.0.1:11480/mcp`).
 1. **Uso do processador:** `fornalha-cli chamar get_status "{}"` funciona; com a Fornalha gerando (teste 3.3),
    veja `Get-Process blender | Select-Object Name, PriorityClass` → esperado **BelowNormal**. Anote também o
@@ -98,7 +107,7 @@ Use uma pasta de teste nova (por exemplo `Documentos\Fornalha\Noite 27-11`) e ch
    → esperado `origem: "cerebro"` e `cerebro: "api:<modelo>"`. Custa centavos. Não mexa na chave.
 
 ## 4. Relatório (no fim, mesmo que algo tenha falhado)
-Grave `Documentos\Fornalha\Noite 27-11\RELATORIO.md` e mostre o texto inteiro no chat, em duas partes:
+Grave `C:\Fornalha\Noite 27-11\RELATORIO.md` e mostre o texto inteiro no chat, em duas partes:
 - **Para a Fornalha:** cada item do 1 ao 3 com passou/falhou/não testado, o tempo, a prova (caminho do
   arquivo) e, se falhou, a mensagem de erro inteira e o final do registro (`dados\...\*.log`).
 - **Para a Erethea:** o que é dela (abrir o projeto, a ponte, `montar.gd`, `--agent-test`, cabelo fio a fio

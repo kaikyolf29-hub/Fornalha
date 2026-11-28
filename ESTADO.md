@@ -11,6 +11,22 @@ mapa; 3) guia para a IA dentro de cada projeto de jogo e a prova com um jogo peq
 Pendente da rodada anterior: a projeção do conceito na malha (`fc_projetar.py`) foi feita numa sessão
 de outra conta e não chegou ao repositório até 25/11.
 
+### Pedidos do criador para a versão definitiva (28/11, instalando no PC dele)
+Só melhorar o que a pessoa vê; o que já funciona fica como está.
+- **Ver o que está acontecendo em tudo** (Máquina, Licenças e o resto): cada botão mostra que começou, o
+  andamento e, se falhar, o erro em português na própria linha. Achado no PC: os **pacotes de conteúdo**
+  precisam do Python do Blender; sem o Blender baixado o clique em Baixar não fazia nada visível (o erro some
+  num aviso rápido e o `pacote.log` só aparece enquanto baixa). Desabilitar o botão com "baixe o Blender
+  primeiro" e mostrar a última linha do registro quando falhar. O mesmo cuidado no motor de imagem, no 3D
+  pela IA e nos programas.
+- **Licenças mais intuitivas:** um botão claro de aceitar (e de desfazer) no lugar da caixinha; o que cada
+  aceite libera, dito na hora.
+- **Instalador definitivo de um clique, assinado:** o Controle Inteligente de Aplicativos do Windows 11
+  bloqueou o instalador sem assinatura (o criador desligou a proteção para testar) e o navegador Brave
+  avisou como malicioso. Assinatura digital (Fase 5) na Fornalha e na Erethea — mandar o mesmo pedido à Erethea.
+- **Versão visível na janela:** todo instalador sai como 0.1.0, e o reinstalador só diz "Já instalado". Mostrar
+  na janela (Ajustes e rodapé) a versão com a data e o código da compilação, para a pessoa saber se atualizou.
+
 ### Rodada da noite (27/11): uso do processador, cérebro por API (Claude e Gemini), regras do corpo
 - **Uso do processador (Ajustes):** todo trabalho pesado (Blender, modelos de placa, ComfyUI do 3D no
   processador) roda **sempre em prioridade baixa** (Windows: abaixo do normal; Linux: nice 10), então a

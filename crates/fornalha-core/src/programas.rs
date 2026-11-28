@@ -93,14 +93,14 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
             ),
             tamanho: "≈ 70 MB",
         },
+        // 1.0.3 (28/11/2026): corrige o cabelo fio a fio e o mapa de normais no renderizador de compatibilidade
+        // (o pedido 7); SHA-256 do HANDOFF da Erethea, conferido no arquivo baixado e no CI pela release
         (Programa::Erethea, true) => Download {
             programa,
             versao: ERETHEA_VERSAO,
             url: "https://github.com/kaikyolf29-hub/-Erethea-Engine/releases/download/v1.0.3/erethea-setup-x86_64.exe",
             espelhos: &[],
             arquivo: "erethea-setup-x86_64.exe",
-            // 1.0.3 (28/11/2026): corrige o cabelo fio a fio e o mapa de normais no renderizador de compatibilidade
-            // (o pedido 7); SHA-256 do HANDOFF da Erethea, conferido no arquivo baixado
             soma: Soma::Sha256("7d93e40822fc3d125a6316cbfce4ecedc129cabff8236e1aaf1e146067b12d11"),
             tamanho: "≈ 100 MB",
         },

@@ -161,7 +161,7 @@ jobs:
         run: |
           src=crates/fornalha-core/src/programas.rs
           versao=$(grep -o 'ERETHEA_VERSAO: &str = "[^"]*"' $src | grep -o '"[^"]*"' | tr -d '"')
-          fixada=$(grep -A1 'arquivo: "erethea-setup-x86_64.exe"' $src | grep -o '[0-9a-f]\{64\}')
+          fixada=$(grep -A3 'arquivo: "erethea-setup-x86_64.exe"' $src | grep -o '[0-9a-f]\{64\}' | head -1)
           publicada=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/kaikyolf29-hub/-Erethea-Engine/releases/tags/v$versao" \
             | python -c "import json,sys; r=json.load(sys.stdin); print(next(a['digest'] for a in r['assets'] if a['name']=='erethea-setup-x86_64.exe').split(':')[-1])")
           echo "Erethea $versao: soma fixada $fixada, publicada $publicada"

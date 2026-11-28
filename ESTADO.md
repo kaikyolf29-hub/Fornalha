@@ -23,6 +23,14 @@ Só melhorar o que a pessoa vê; o que já funciona fica como está.
   Python 3.10+ instalado (o do Blender serve para o motor Vulkan e os pacotes, não para o ambiente do
   ComfyUI); no PC do criador o botão só disse "Precisa do Python 3.10…". Dizer isso antes do clique, com o
   link e o "Add to PATH", ou a Fornalha instalar o Python sozinha (winget, só para o usuário).
+- **Andamento dos downloads grandes:** o 100STYLE (1,5 GB) mostrou só "Baixando…" e a hora em que começou;
+  mostrar a porcentagem, o tamanho baixado e a velocidade (vale para pacotes, programas, motor de imagem e 3D).
+- **Botão que não diz se começou:** no "Instalar o 3D pela IA" o botão ficou cinza e a linha continuou "não
+  instalado" (o erro do Python apareceu só no aviso do topo); mostrar o estado na própria linha logo depois
+  do clique (começando, instalando com o andamento, erro com o motivo e "Tentar de novo").
+- **Programa novo sem reiniciar a Fornalha:** depois de instalar o Python a pessoa teve de fechar e abrir a
+  Fornalha para ela enxergar; reler o PATH do usuário (registro do Windows) na hora de procurar o Python, o
+  Blender e a Erethea.
 - **"Baixar de novo" confunde:** ao lado de "Instalado" parece erro. No definitivo: "Instalado ✓" em
   destaque, um "Reparar" discreto só quando faltar arquivo, e erro de verdade com a mensagem na linha e
   "Tentar de novo".

@@ -42,7 +42,7 @@ pub struct Download {
 
 pub const BLENDER_VERSAO: &str = "5.3.0";
 pub const GODOT_VERSAO: &str = "4.6.1";
-pub const ERETHEA_VERSAO: &str = "1.0.2";
+pub const ERETHEA_VERSAO: &str = "1.0.3";
 
 /// O download do programa para o sistema (a Erethea só no Windows: é o build público que existe).
 pub fn download(programa: Programa, windows: bool) -> Option<Download> {
@@ -96,10 +96,12 @@ pub fn download(programa: Programa, windows: bool) -> Option<Download> {
         (Programa::Erethea, true) => Download {
             programa,
             versao: ERETHEA_VERSAO,
-            url: "https://github.com/kaikyolf29-hub/-Erethea-Engine/releases/download/v1.0.2/erethea-setup-x86_64.exe",
+            url: "https://github.com/kaikyolf29-hub/-Erethea-Engine/releases/download/v1.0.3/erethea-setup-x86_64.exe",
             espelhos: &[],
             arquivo: "erethea-setup-x86_64.exe",
-            soma: Soma::Sha256("82f5b737ea80a519c596f159d445eb2a2e01f1354e79697c0b00c7f63d286f9f"),
+            // 1.0.3 (28/11/2026): corrige o cabelo fio a fio e o mapa de normais no renderizador de compatibilidade
+            // (o pedido 7); SHA-256 do HANDOFF da Erethea, conferido no arquivo baixado
+            soma: Soma::Sha256("7d93e40822fc3d125a6316cbfce4ecedc129cabff8236e1aaf1e146067b12d11"),
             tamanho: "≈ 100 MB",
         },
         (Programa::Erethea, false) => return None,

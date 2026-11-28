@@ -179,11 +179,11 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
    conceito, o 3D pela IA no processador, as quatro vistas e o item limpo em Items/ (ou Weapons/). **Me
    diga:** o tempo no Ryzen 5 5500 e uma nota de 0 a 100 comparando com o conceito.
 3. **Cabelo fio a fio na Erethea** (personagem humano de cabelo comprido no nível Máximo, montado na
-   Erethea 1.0.2 ou mais nova). **Esperado:** na Erethea o cabelo aparece fio a fio (os cards somem); na
-   Godot comum, os cards de sempre. **Olhe:** a coroa perto da risca (aqui, sem placa, ela saiu escura: me
-   diga se na RX 580 também sai).
+   Erethea 1.0.3 ou mais nova). **Esperado:** na Erethea o cabelo aparece fio a fio (os cards somem); na
+   Godot comum, os cards de sempre. **Olhe:** a coroa perto da risca (saía escura no renderizador de compatibilidade; a
+   Erethea 1.0.3 corrigiu: me diga se na RX 580 ficou clara).
 4. **Erethea pelo botão** (Máquina → Programas → Erethea → *Baixar*). **Esperado:** baixa o instalador
-   1.0.2, confere a soma e instala sem perguntar dentro da pasta da Fornalha.
+   1.0.3, confere a soma e instala sem perguntar dentro da pasta da Fornalha.
 
 ## 9g. Uso do processador, cérebro por API, regras do corpo e o teste dos dois juntos (novo na noite de 27/11)
 1. **Trabalhar enquanto a Fornalha gera** (Ajustes → Uso do processador → *Metade dos núcleos*; peça um item
@@ -202,7 +202,7 @@ Num chat com o MCP da Fornalha (Claude Code, Codex, Gemini, Cursor…), mande a 
 4. **Regras do corpo:** num personagem com dedos (humano realista), `check_motion` com `corrigir`.
    **Esperado:** no resultado, `regras_do_corpo` e, em cada clipe, `dedos_por_mao: 5`; captura do ACCAD que
    tremia sai suavizada. **Olhe** no Estúdio 3D as mãos no soco e no "pegar": dedo nenhum dobrado para trás.
-5. **Os dois juntos (Fornalha + Erethea):** com a Erethea 1.0.2 ou mais nova instalada pelo botão,
+5. **Os dois juntos (Fornalha + Erethea):** com a Erethea 1.0.3 ou mais nova instalada pelo botão,
    (a) crie um projeto pequeno na Fornalha (um personagem humano Máximo com cabelo comprido, um baú e a vila
    de blockout); (b) `import_to_engine` e `run_test` com a Erethea escolhida; (c) abra o projeto no editor da
    Erethea: o personagem anda, o cabelo aparece fio a fio, o mapa monta sozinho (`montar.gd`); (d) ligue os

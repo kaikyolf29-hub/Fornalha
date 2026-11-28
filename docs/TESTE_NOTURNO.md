@@ -49,14 +49,8 @@ de manhã e leva a parte da Fornalha para o chat da Fornalha e a parte da Erethe
 ## 2. Ferramentas (pelos mesmos botões da janela, pela linha de comando)
 1. `fornalha-cli detectar` → anote placa, caminho escolhido (esperado: **vulkan** na RX 580) e nível sugerido.
 2. `fornalha-cli baixar-programa blender`, `... godot` e `... erethea` (pula o que já estiver achado; a Erethea
-   vem pelo instalador público 1.0.2 ou mais novo, com a soma conferida). **Erethea mais nova que a 1.0.2:**
-   a Erethea estava preparando um instalador novo com correções (27/11). Veja
-   https://github.com/kaikyolf29-hub/-Erethea-Engine/releases: se houver versão mais nova que a v1.0.2, baixe
-   o `erethea-setup-x86_64.exe` dela, confira o SHA-256 com o "digest" da página da release (`Get-FileHash`)
-   e instale no mesmo lugar do botão, sem perguntas:
-   `erethea-setup-x86_64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /DIR="<pasta de dados da Fornalha>\ferramentas\erethea"`
-   (a pasta de dados aparece em `get_status` → `downloads_de_programas` ou no caminho do Blender baixado).
-   Anote no relatório a versão usada e o SHA-256. Se não houver versão nova, use o botão (1.0.2). Se já houver outra Erethea neste PC
+   vem pelo instalador público **1.0.3**, com a soma conferida; a 1.0.3 corrige o cabelo fio a fio escuro na
+   coroa e o mapa de normais no renderizador de compatibilidade). Se já houver outra Erethea neste PC
    (compilada pelo criador, noutra pasta), anote o caminho e a versão dela no relatório, mas teste com a
    instalada pelo botão. Na janela, a barra lateral (Oficina) tem de mostrar **Erethea Engine** com a versão
    (a Godot só aparece como "reserva"): tire um print.

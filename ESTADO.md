@@ -880,6 +880,13 @@ está abaixo: cabelo fio a fio (#40), pele que segue a superfície (#39), terren
 #50), sombras por ray tracing e de contato, materiais do glTF que a Godot ignora (coat, anisotropia, sheen
 do cabelo e da córnea da Fornalha, #44) e a ponte de 26/11 (#54: roda o `montar.gd` do projeto quando há
 `World/mapa/mapa.json`). Os pedidos 10 a 12 dela para a Fornalha foram atendidos (ver a rodada da noite).
+**Resposta da Erethea (28/11): saiu a 1.0.3.** O pedido 7 (coroa escura no cabelo fio a fio) era defeito da
+Godot no renderizador de compatibilidade: o esqueleto aplicado na placa perdia a tangente de toda malha com
+esqueleto (as fitas abriam de lado e a luz de dois lados invertia a normal). Corrigido na 1.0.3, junto com
+os personagens com mapa de normais nesse renderizador (na Godot 4.6.1 do nosso CI o defeito continua). Sem
+piso de luz. O pedido 6 (anime nativo) entra depois do teste do criador. Caminhos e argumentos iguais
+(`--agent-test=<pasta>`, sempre com "=", que a Fornalha já usa). **O botão da Fornalha agora instala a
+1.0.3** (SHA-256 `7d93e408…12d11`, conferido no arquivo baixado e no HANDOFF dela).
 **Resposta ao recado de 27/11 (pacote de IA da Erethea):** o contrato (`get_engine_contract` e
 `ai/contrato_da_engine.json`) leva o esqueleto, as animações e os critérios da conferência; a Fornalha usa o
 `run_script` quando ele sair (nos mandem o nome e os argumentos) e mantém o `montar.gd`.

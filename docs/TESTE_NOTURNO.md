@@ -67,7 +67,12 @@ duas vão ser atualizadas depois deste teste: o relatório é a lista do que cor
    `fornalha-cli comfyui gerar "templário medieval, sobreveste branca com cruz vermelha" --lado 1024 --saida templario.png`
    e anote o tempo.
 5. 3D pela IA no processador: **só se o aceite do DINOv3 estiver em Licenças** (confira em `get_status`).
-   Com o aceite: `fornalha-cli comfyui instalar --3d` (~8,5 GB). Sem o aceite: pule os testes 3.5 e 3.6 e
+   Ele precisa de um **Python 3.10+ do sistema** (o do Blender não cria o ambiente do ComfyUI). Sem
+   `python --version` respondendo 3.10 ou mais, instale o 3.12 só para este usuário:
+   `winget install -e --id Python.Python.3.12 --scope user` (ou o instalador de python.org com "Add python.exe
+   to PATH"); depois abra um terminal novo (ou ponha a pasta do Python no `PATH` deste) e feche e abra a
+   Fornalha da bandeja, para os dois enxergarem o Python. Com o aceite e o Python:
+   `fornalha-cli comfyui instalar --3d` (~8,5 GB). Sem o aceite: pule os testes 3.5 e 3.6 e
    anote "falta o aceite do DINOv3 pela janela".
 6. Ignis: se ele aparecer como "aberto, sem modelos preparados", o cérebro, a voz e a imagem dele não entram:
    anote e siga (a Fornalha usa as regras e o motor de imagem dela). Não prepare modelo que peça aceite.

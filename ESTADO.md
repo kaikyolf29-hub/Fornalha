@@ -19,6 +19,10 @@ Só melhorar o que a pessoa vê; o que já funciona fica como está.
   num aviso rápido e o `pacote.log` só aparece enquanto baixa). Desabilitar o botão com "baixe o Blender
   primeiro" e mostrar a última linha do registro quando falhar. O mesmo cuidado no motor de imagem, no 3D
   pela IA e nos programas.
+- **Python do sistema para o 3D pela IA:** o botão "Instalar o 3D pela IA (no processador)" precisa de um
+  Python 3.10+ instalado (o do Blender serve para o motor Vulkan e os pacotes, não para o ambiente do
+  ComfyUI); no PC do criador o botão só disse "Precisa do Python 3.10…". Dizer isso antes do clique, com o
+  link e o "Add to PATH", ou a Fornalha instalar o Python sozinha (winget, só para o usuário).
 - **Licenças mais intuitivas:** um botão claro de aceitar (e de desfazer) no lugar da caixinha; o que cada
   aceite libera, dito na hora.
 - **Instalador definitivo de um clique, assinado:** o Controle Inteligente de Aplicativos do Windows 11
